@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #EE0033;
+  --color-primary-hover: #CC002C;
+  --color-secondary: #0F172A;
+  --color-accent: #EE0033;
+  --color-viettel-red: #EE0033;
+  --color-viettel-dark: #0F172A;
+  --color-viettel-light: #F5F5F5;
+
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-shake: shake 0.4s ease-in-out;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-2px);
+    }
+    75% {
+      transform: translateX(2px);
+    }
+  }
+}
+
+/* Custom CSS utilities and scrollbar */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background: #FFFFFF;
+    color: #475569;
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #F5F5F5;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #EE0033;
+  }
+}
+
+/* Base panel overrides - replacing glassmorphism with clean Viettel paneling */
+.glass-panel {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+}
+
+.glass-panel-light {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+}
+
+.text-gradient-viettel {
+  color: #EE0033;
+}
+
+.bg-gradient-viettel {
+  background: #EE0033;
+}
+
+.bg-gradient-dark-card {
+  background: #FFFFFF;
+}
+
+.card-hover-effect {
+  transition: all 0.2s ease-in-out;
+}
+
+.card-hover-effect:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  border-color: #EE0033;
+}
+
+/* Custom utility class to hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
