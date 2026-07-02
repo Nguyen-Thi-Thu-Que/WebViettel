@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { Wifi, Phone, ArrowLeft, ArrowRightLeft, CreditCard, Sparkles, Info, HelpCircle, Loader2 } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
-import { MOCK_PACKAGES } from '../utils/mockData';
 
 export default function PackageDetail() {
   const { id } = useParams<{ id: string }>();
@@ -90,10 +89,10 @@ export default function PackageDetail() {
     setShowConfirm(true);
   };
 
-  const handleConfirmSubscribe = () => {
+  const handleConfirmSubscribe = async () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = subscribePackage(pkg);
+    try {
+      const res = await subscribePackage(pkg);
       setIsSubmitting(false);
       setShowConfirm(false);
       if (res.success) {
@@ -101,12 +100,15 @@ export default function PackageDetail() {
       } else {
         showToast('error', res.message);
       }
-    }, 800);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setShowConfirm(false);
+      showToast('error', err.message || 'Lỗi đăng ký gói cước.');
+    }
   };
 
   // Find related packages
-  const listForRelated = packages.length > 0 ? packages : MOCK_PACKAGES;
-  const relatedPackages = listForRelated
+  const relatedPackages = packages
     .filter(p => p.id !== pkg.id && (p.phan_loai_goi === pkg.phan_loai_goi || Math.abs(p.gia - pkg.gia) <= 50000))
     .slice(0, 3);
 

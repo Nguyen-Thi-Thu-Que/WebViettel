@@ -1,9 +1,6 @@
 import { create } from 'zustand';
 import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers } from '../types';
-import { MOCK_USERS, MOCK_TRANSACTIONS, MOCK_FAQS, DEFAULT_CHATBOT_CONFIG, MOCK_PACKAGES } from '../utils/mockData';
-import { processChatMessage } from '../utils/chatbotEngine';
-import { packageApi } from '../services/api';
-
+import { packageApi, authApi, transactionApi, faqApi, chatbotApi } from '../services/api';
 
 // ==========================================
 // 1. AUTH STORE
@@ -12,221 +9,192 @@ interface AuthState {
   currentUser: User | null;
   transactions: Transaction[];
   faqs: FAQ[];
-  login: (phoneNumber: string, role?: 'customer' | 'admin') => boolean;
+  loading: boolean;
+  error: string | null;
+  login: (phoneNumber: string, password?: string) => Promise<boolean>;
+  registerUser: (name: string, phoneNumber: string, email: string, password?: string) => Promise<boolean>;
   logout: () => void;
-  updateProfile: (name: string, email: string) => void;
-  changePassword: (oldPw: string, newPw: string) => boolean;
-  deposit: (amount: number, method: string) => void;
-  subscribePackage: (pkg: Package) => { success: boolean; message: string };
-  unsubscribePackage: (packageId: string) => void;
+  fetchMe: () => Promise<void>;
+  fetchTransactions: () => Promise<void>;
+  fetchFAQs: () => Promise<void>;
+  updateProfile: (name: string, email: string) => Promise<boolean>;
+  changePassword: (oldPw: string, newPw: string) => Promise<boolean>;
+  deposit: (amount: number, method: string) => Promise<boolean>;
+  subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
+  unsubscribePackage: (packageId: string) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  currentUser: MOCK_USERS[0], // Default logged-in user
-  transactions: MOCK_TRANSACTIONS,
-  faqs: MOCK_FAQS,
+  currentUser: null,
+  transactions: [],
+  faqs: [],
+  loading: false,
+  error: null,
 
-  login: (phoneNumber, role) => {
-    // Look up existing user by phone number (autodetect role)
-    const existing = MOCK_USERS.find(u => u.phoneNumber === phoneNumber);
-    if (existing) {
-      set({ currentUser: existing });
+  login: async (phoneNumber, password) => {
+    set({ loading: true, error: null });
+    try {
+      const data = await authApi.login(phoneNumber, password);
+      localStorage.setItem('token', data.token);
+      set({ currentUser: data.user, loading: false });
+      
+      // Auto fetch other details
+      get().fetchTransactions().catch(() => {});
+      get().fetchFAQs().catch(() => {});
+      
       return true;
+    } catch (err: any) {
+      set({ 
+        error: err.response?.data?.message || 'Thông tin đăng nhập không chính xác.',
+        loading: false 
+      });
+      return false;
     }
-    
-    // Create new mock user if not exists
-    const newUserRole = role || 'customer';
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      name: newUserRole === 'admin' ? 'Quản trị viên mới' : 'Khách hàng mới',
-      phoneNumber,
-      email: `${phoneNumber}@gmail.com`,
-      balance: newUserRole === 'admin' ? 0 : 50000,
-      activePackages: [],
-      role: newUserRole
-    };
-    set({ currentUser: newUser });
-    return true;
+  },
+
+  registerUser: async (name, phoneNumber, email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const data = await authApi.register(name, phoneNumber, email, password);
+      localStorage.setItem('token', data.token);
+      set({ currentUser: data.user, loading: false });
+      return true;
+    } catch (err: any) {
+      set({
+        error: err.response?.data?.message || 'Đăng ký tài khoản thất bại.',
+        loading: false
+      });
+      return false;
+    }
   },
 
   logout: () => {
-    set({ currentUser: null });
+    localStorage.removeItem('token');
+    set({ currentUser: null, transactions: [], faqs: [] });
   },
 
-  updateProfile: (name, email) => {
-    const { currentUser } = get();
-    if (!currentUser) return;
-    set({
-      currentUser: {
-        ...currentUser,
-        name,
-        email
+  fetchMe: async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const user = await authApi.getMe();
+      set({ currentUser: user });
+    } catch (err) {
+      console.error("Error fetching current user profile:", err);
+    }
+  },
+
+  fetchTransactions: async () => {
+    try {
+      const txs = await transactionApi.fetchTransactions();
+      set({ transactions: txs });
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+    }
+  },
+
+  fetchFAQs: async () => {
+    try {
+      const list = await faqApi.fetchFAQs();
+      set({ faqs: list });
+    } catch (err) {
+      console.error("Error fetching FAQs:", err);
+    }
+  },
+
+  updateProfile: async (name, email) => {
+    try {
+      const user = await authApi.updateProfile(name, email);
+      set({ currentUser: user });
+      return true;
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      return false;
+    }
+  },
+
+  changePassword: async (oldPw, newPw) => {
+    try {
+      return await authApi.changePassword(oldPw, newPw);
+    } catch (err) {
+      console.error("Error changing password:", err);
+      return false;
+    }
+  },
+
+  deposit: async (amount, method) => {
+    try {
+      const result = await authApi.deposit(amount, method);
+      set(state => ({
+        currentUser: state.currentUser ? {
+          ...state.currentUser,
+          balance: result.balance
+        } : null
+      }));
+      get().fetchTransactions().catch(() => {});
+      return true;
+    } catch (err) {
+      console.error("Error depositing wallet:", err);
+      return false;
+    }
+  },
+
+  subscribePackage: async (pkg) => {
+    try {
+      const result = await authApi.subscribePackage(pkg.id);
+      
+      set(state => {
+        if (!state.currentUser) return state;
+        
+        const isAlreadyActive = state.currentUser.activePackages.some(ap => ap.packageId === result.activePackage.packageId);
+        const updatedPackages = isAlreadyActive 
+          ? state.currentUser.activePackages 
+          : [...state.currentUser.activePackages, result.activePackage];
+
+        return {
+          currentUser: {
+            ...state.currentUser,
+            balance: result.balance,
+            activePackages: updatedPackages
+          }
+        };
+      });
+      get().fetchTransactions().catch(() => {});
+      return { success: true, message: `Đăng ký thành công gói cước ${pkg.ten}!` };
+    } catch (err: any) {
+      const msg = err.response?.data?.message || `Lỗi đăng ký gói cước ${pkg.ten}.`;
+      return { success: false, message: msg };
+    }
+  },
+
+  unsubscribePackage: async (packageId) => {
+    try {
+      const success = await authApi.unsubscribePackage(packageId);
+      if (success) {
+        set(state => ({
+          currentUser: state.currentUser ? {
+            ...state.currentUser,
+            activePackages: state.currentUser.activePackages.filter(p => p.packageId !== packageId)
+          } : null
+        }));
+        get().fetchTransactions().catch(() => {});
+        return true;
       }
-    });
-  },
-
-  changePassword: () => {
-    return true; // Mock success
-  },
-
-  deposit: (amount, method) => {
-    const { currentUser } = get();
-    if (!currentUser) return;
-
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`,
-      userId: currentUser.id,
-      type: 'deposit',
-      amount,
-      paymentMethod: method,
-      status: 'success',
-      createdAt: new Date().toISOString()
-    };
-
-    set(state => ({
-      currentUser: state.currentUser ? {
-        ...state.currentUser,
-        balance: state.currentUser.balance + amount
-      } : null,
-      transactions: [newTx, ...state.transactions]
-    }));
-  },
-
-  subscribePackage: (pkg) => {
-    const { currentUser } = get();
-    if (!currentUser) {
-      return { success: false, message: 'Vui lòng đăng nhập để đăng ký gói cước.' };
+      return false;
+    } catch (err) {
+      console.error("Error unsubscribing package:", err);
+      return false;
     }
-
-    if (currentUser.balance < pkg.gia) {
-      return { success: false, message: 'Số dư tài khoản không đủ. Vui lòng nạp thêm tiền.' };
-    }
-
-    // Check if already active
-    const isAlreadyActive = currentUser.activePackages.some(ap => ap.packageId === pkg.id);
-    if (isAlreadyActive) {
-      return { success: false, message: `Bạn đang sử dụng gói ${pkg.ten} rồi.` };
-    }
-
-    const activatedAt = new Date().toISOString();
-    const durationDays = parseInt(pkg.chu_ky_ngay) || 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-
-    const newActivePkg = {
-      packageId: pkg.id,
-      activatedAt,
-      expiresAt
-    };
-
-    const newTx: Transaction = {
-      id: `tx_${Date.now()}`,
-      userId: currentUser.id,
-      type: 'subscribe',
-      amount: pkg.gia,
-      packageName: pkg.ten,
-      status: 'success',
-      createdAt: activatedAt
-    };
-
-    set(state => ({
-      currentUser: state.currentUser ? {
-        ...state.currentUser,
-        balance: state.currentUser.balance - pkg.gia,
-        activePackages: [...state.currentUser.activePackages, newActivePkg]
-      } : null,
-      transactions: [newTx, ...state.transactions]
-    }));
-
-    return { success: true, message: `Đăng ký thành công gói cước ${pkg.ten}!` };
-  },
-
-  unsubscribePackage: (packageId) => {
-    const { currentUser } = get();
-    if (!currentUser) return;
-
-    set(state => ({
-      currentUser: state.currentUser ? {
-        ...state.currentUser,
-        activePackages: state.currentUser.activePackages.filter(p => p.packageId !== packageId)
-      } : null
-    }));
   }
 }));
 
-// Helper function to filter MOCK_PACKAGES client-side when backend API is unavailable
-function filterMockPackages(params: Record<string, any>) {
-  let filtered = [...MOCK_PACKAGES];
-
-  if (params.search) {
-    const s = params.search.toLowerCase();
-    filtered = filtered.filter(p => 
-      p.ten.toLowerCase().includes(s) || 
-      p.id.toLowerCase().includes(s) || 
-      (p.uudaitrong && p.uudaitrong.toLowerCase().includes(s))
-    );
-  }
-
-  if (params.category && params.category !== 'all') {
-    const cat = params.category.toLowerCase();
-    filtered = filtered.filter(p => p.phan_loai_goi.toLowerCase() === cat);
-  }
-
-  if (params.price && params.price !== 'all') {
-    if (params.price === 'under_50') filtered = filtered.filter(p => p.gia < 50000);
-    else if (params.price === '50_100') filtered = filtered.filter(p => p.gia >= 50000 && p.gia <= 100000);
-    else if (params.price === '100_200') filtered = filtered.filter(p => p.gia > 100000 && p.gia <= 200000);
-    else if (params.price === 'above_200') filtered = filtered.filter(p => p.gia > 200000);
-  }
-
-  if (params.duration && params.duration !== 'all') {
-    const dur = params.duration.toLowerCase();
-    filtered = filtered.filter(p => {
-      const days = parseInt(p.chu_ky_ngay) || 30;
-      if (dur === 'daily') return days <= 1;
-      if (dur === 'weekly') return days > 1 && days <= 15;
-      if (dur === 'monthly') return days > 15 && days <= 90;
-      return days > 90;
-    });
-  }
-
-  if (params.voice === 'yes') {
-    filtered = filtered.filter(p => p.free_noi_mang !== '0' && p.free_noi_mang !== '');
-  } else if (params.voice === 'no') {
-    filtered = filtered.filter(p => p.free_noi_mang === '0' || p.free_noi_mang === '');
-  }
-
-  if (params.sms === 'yes') {
-    filtered = filtered.filter(p => p.sms !== '0' && p.sms !== '');
-  } else if (params.sms === 'no') {
-    filtered = filtered.filter(p => p.sms === '0' || p.sms === '');
-  }
-
-  if (params.target) {
-    const t = params.target.toLowerCase();
-    filtered = filtered.filter(p => p.dieu_kien_dang_ky.toLowerCase().includes(t));
-  }
-
-  // sorting
-  if (params.sort === 'price_asc') {
-    filtered.sort((a, b) => a.gia - b.gia);
-  } else if (params.sort === 'price_desc') {
-    filtered.sort((a, b) => b.gia - a.gia);
-  }
-
-  const page = params.page || 1;
-  const limit = params.limit || 8;
-  const startIndex = (page - 1) * limit;
-  const paginated = filtered.slice(startIndex, startIndex + limit);
-
-  return {
-    packages: paginated,
-    totalPages: Math.ceil(filtered.length / limit),
-    totalItems: filtered.length
-  };
+// Automatically fetch user profile on store startup if token is available
+if (typeof window !== 'undefined') {
+  useAuthStore.getState().fetchMe().catch(() => {});
 }
 
 // ==========================================
-// 2. PACKAGE STORE (INCLUDING COMPARE & CRUD)
+// 2. PACKAGE STORE
 // ==========================================
 interface PackageState {
   packages: Package[];
@@ -285,30 +253,19 @@ export const usePackageStore = create<PackageState>((set) => ({
     set({ loading: true, error: null });
     try {
       const data = await packageApi.fetchPackages(params);
-      if (data && data.packages && data.packages.length > 0) {
-        set({ 
-          packages: data.packages, 
-          totalPages: data.totalPages, 
-          totalItems: data.totalItems,
-          loading: false 
-        });
-      } else {
-        console.warn("API returned empty package list. Falling back to MOCK_PACKAGES...");
-        const fallback = filterMockPackages(params);
-        set({
-          packages: fallback.packages,
-          totalPages: fallback.totalPages,
-          totalItems: fallback.totalItems,
-          loading: false
-        });
-      }
+      set({ 
+        packages: data.packages, 
+        totalPages: data.totalPages, 
+        totalItems: data.totalItems,
+        loading: false 
+      });
     } catch (err: any) {
-      console.error("Error fetching packages from API, falling back to MOCK_PACKAGES:", err);
-      const fallback = filterMockPackages(params);
+      console.error("Error fetching packages from API:", err);
       set({
-        packages: fallback.packages,
-        totalPages: fallback.totalPages,
-        totalItems: fallback.totalItems,
+        error: err.response?.data?.message || 'Không thể tải danh sách gói cước.',
+        packages: [],
+        totalPages: 1,
+        totalItems: 0,
         loading: false
       });
     }
@@ -318,25 +275,13 @@ export const usePackageStore = create<PackageState>((set) => ({
     set({ loading: true, error: null, currentPackage: null });
     try {
       const pkg = await packageApi.fetchPackageById(id);
-      if (pkg && pkg.id) {
-        set({ currentPackage: pkg, loading: false });
-      } else {
-        console.warn(`Package ${id} not found in API. Falling back to MOCK_PACKAGES...`);
-        const mockPkg = MOCK_PACKAGES.find(p => p.id === id);
-        if (mockPkg) {
-          set({ currentPackage: mockPkg, loading: false });
-        } else {
-          set({ error: 'Gói cước không tồn tại.', loading: false });
-        }
-      }
+      set({ currentPackage: pkg, loading: false });
     } catch (err: any) {
-      console.error(`Error fetching package ${id} from API, falling back to MOCK_PACKAGES:`, err);
-      const mockPkg = MOCK_PACKAGES.find(p => p.id === id);
-      if (mockPkg) {
-        set({ currentPackage: mockPkg, loading: false });
-      } else {
-        set({ error: 'Gói cước không tồn tại.', loading: false });
-      }
+      console.error(`Error fetching package ${id} from API:`, err);
+      set({ 
+        error: err.response?.data?.message || 'Không thể tải chi tiết gói cước.', 
+        loading: false 
+      });
     }
   },
 
@@ -418,10 +363,11 @@ export const usePackageStore = create<PackageState>((set) => ({
 interface ChatbotState {
   messages: ChatMessage[];
   isOpen: boolean;
-  config: ChatbotConfig;
+  config: ChatbotConfig | null;
   setIsOpen: (isOpen: boolean) => void;
-  sendMessage: (text: string) => void;
-  updateConfig: (config: ChatbotConfig) => void;
+  sendMessage: (text: string) => Promise<void>;
+  fetchConfig: () => Promise<void>;
+  updateConfig: (config: ChatbotConfig) => Promise<boolean>;
   clearHistory: () => void;
 }
 
@@ -432,14 +378,14 @@ const INITIAL_WELCOME_MSG: ChatMessage = {
   createdAt: new Date().toISOString()
 };
 
-export const useChatbotStore = create<ChatbotState>((set, get) => ({
+export const useChatbotStore = create<ChatbotState>((set) => ({
   messages: [INITIAL_WELCOME_MSG],
   isOpen: false,
-  config: DEFAULT_CHATBOT_CONFIG,
+  config: null,
 
   setIsOpen: (isOpen) => set({ isOpen }),
 
-  sendMessage: (text) => {
+  sendMessage: async (text) => {
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}_user`,
       sender: 'user',
@@ -449,11 +395,8 @@ export const useChatbotStore = create<ChatbotState>((set, get) => ({
 
     set(state => ({ messages: [...state.messages, userMsg] }));
 
-    // Simulate Bot response delay
-    setTimeout(() => {
-      const { config } = get();
-      const botResponse = processChatMessage(text, config);
-
+    try {
+      const botResponse = await chatbotApi.sendMessage(text);
       const botMsg: ChatMessage = {
         id: `msg_${Date.now()}_bot`,
         sender: 'bot',
@@ -461,12 +404,38 @@ export const useChatbotStore = create<ChatbotState>((set, get) => ({
         suggestedAction: botResponse.suggestedAction,
         createdAt: new Date().toISOString()
       };
-
       set(state => ({ messages: [...state.messages, botMsg] }));
-    }, 600);
+    } catch (err) {
+      console.error("Error sending message to chatbot:", err);
+      const botMsg: ChatMessage = {
+        id: `msg_${Date.now()}_bot_err`,
+        sender: 'bot',
+        text: 'Rất tiếc, tôi đang gặp lỗi kết nối hệ thống chatbot. Vui lòng thử lại sau ít phút.',
+        createdAt: new Date().toISOString()
+      };
+      set(state => ({ messages: [...state.messages, botMsg] }));
+    }
   },
 
-  updateConfig: (newConfig) => set({ config: newConfig }),
+  fetchConfig: async () => {
+    try {
+      const data = await chatbotApi.fetchConfig();
+      set({ config: data });
+    } catch (err) {
+      console.error("Error fetching chatbot config:", err);
+    }
+  },
+
+  updateConfig: async (newConfig) => {
+    try {
+      const data = await chatbotApi.updateConfig(newConfig);
+      set({ config: data });
+      return true;
+    } catch (err) {
+      console.error("Error updating chatbot config:", err);
+      return false;
+    }
+  },
 
   clearHistory: () => set({ messages: [INITIAL_WELCOME_MSG] })
 }));

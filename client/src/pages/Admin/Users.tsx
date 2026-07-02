@@ -1,22 +1,35 @@
-import { useState } from 'react';
-import { Users, Edit2, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Edit2, X, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store';
+import { userApi } from '../../services/api';
 import type { User } from '../../types';
 
 export default function AdminUsers() {
   const { currentUser } = useAuthStore();
+  const [usersList, setUsersList] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
-  // Mock users list (derived from mock database + logged-in state changes)
-  const [usersList, setUsersList] = useState<User[]>([
-    { id: 'user_01', name: 'Nguyễn Văn A', phoneNumber: '0987654321', email: 'vana@gmail.com', balance: useAuthStore.getState().currentUser?.id === 'user_01' ? useAuthStore.getState().currentUser!.balance : 150000, activePackages: useAuthStore.getState().currentUser?.id === 'user_01' ? useAuthStore.getState().currentUser!.activePackages : [{ packageId: 'mxh100', activatedAt: '2026-06-15T08:00:00Z', expiresAt: '2026-07-15T08:00:00Z' }], role: 'customer' },
-    { id: 'admin_01', name: 'Lê Văn Quản Trị', phoneNumber: '0900000001', email: 'admin@viettel.vn', balance: 0, activePackages: [], role: 'admin' },
-    { id: 'user_02', name: 'Trần Thị B', phoneNumber: '0912345678', email: 'thib@gmail.com', balance: 500000, activePackages: [{ packageId: 'sd135', activatedAt: '2026-06-20T10:00:00Z', expiresAt: '2026-07-20T10:00:00Z' }], role: 'customer' },
-    { id: 'user_03', name: 'Phạm Văn C', phoneNumber: '0966778899', email: 'vanc@gmail.com', balance: 20000, activePackages: [], role: 'customer' }
-  ]);
-
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newBalance, setNewBalance] = useState('0');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const data = await userApi.fetchUsers();
+      setUsersList(data);
+    } catch (err: any) {
+      console.error("Lỗi khi tải danh sách người dùng:", err);
+      showToast('error', 'Không thể tải danh sách người dùng thuê bao.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -28,7 +41,7 @@ export default function AdminUsers() {
     setNewBalance(user.balance.toString());
   };
 
-  const handleSaveBalance = (e: React.FormEvent) => {
+  const handleSaveBalance = async (e: React.FormEvent) => {
     e.preventDefault();
     const balanceVal = parseInt(newBalance);
     if (isNaN(balanceVal) || balanceVal < 0) {
@@ -37,20 +50,39 @@ export default function AdminUsers() {
     }
 
     if (editingUser) {
-      // Modify in list
-      setUsersList(prev => prev.map(u => u.id === editingUser.id ? { ...u, balance: balanceVal } : u));
-      
-      // If editing currently logged in user, update store
-      if (currentUser && currentUser.id === editingUser.id) {
-        useAuthStore.setState(state => ({
-          currentUser: state.currentUser ? { ...state.currentUser, balance: balanceVal } : null
-        }));
+      setIsSubmitting(true);
+      try {
+        const success = await userApi.updateUserBalance(editingUser.id, balanceVal);
+        if (success) {
+          showToast('success', `Đã cập nhật số dư cho thuê bao ${editingUser.phoneNumber} thành ${balanceVal.toLocaleString()}đ.`);
+          setEditingUser(null);
+          
+          // Re-load users list
+          await loadUsers();
+          
+          // If editing currently logged in user, update auth store profile
+          if (currentUser && currentUser.id === editingUser.id) {
+            useAuthStore.getState().fetchMe().catch(() => {});
+          }
+        } else {
+          showToast('error', 'Cập nhật số dư thất bại.');
+        }
+      } catch (err: any) {
+        showToast('error', err.response?.data?.message || 'Lỗi khi cập nhật số dư ví.');
+      } finally {
+        setIsSubmitting(false);
       }
-
-      showToast('success', `Đã cập nhật số dư cho thuê bao ${editingUser.phoneNumber} thành ${balanceVal.toLocaleString()}đ.`);
-      setEditingUser(null);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-xs font-semibold text-slate-500 space-y-3">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span>Đang tải thông tin danh sách người dùng...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 relative animate-fade-in text-xs font-semibold">
@@ -75,56 +107,60 @@ export default function AdminUsers() {
       {/* User Records Table */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                <th className="p-4">Họ và tên</th>
-                <th className="p-4">Số điện thoại</th>
-                <th className="p-4">Địa chỉ Email</th>
-                <th className="p-4">Số dư ví điện tử</th>
-                <th className="p-4">Gói đang dùng</th>
-                <th className="p-4">Vai trò</th>
-                <th className="p-4 text-center">Điều chỉnh</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {usersList.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-bold text-slate-900">{user.name}</td>
-                  <td className="p-4 font-mono font-medium">{user.phoneNumber}</td>
-                  <td className="p-4 text-slate-500 font-medium">{user.email}</td>
-                  <td className="p-4 font-bold text-emerald-600">
-                    {new Intl.NumberFormat('vi-VN').format(user.balance)}đ
-                  </td>
-                  <td className="p-4 text-slate-550 text-[11px] font-semibold">
-                    {user.activePackages.length > 0 ? (
-                      <span className="text-slate-800 font-bold">
-                        {user.activePackages.map(ap => ap.packageId.toUpperCase()).join(', ')}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-medium">Chưa đăng ký</span>
-                    )}
-                  </td>
-                  <td className="p-4 uppercase font-bold text-[9px]">
-                    {user.role === 'admin' ? (
-                      <span className="text-primary bg-red-50 border border-red-100 px-2 py-0.5 rounded">ADMIN</span>
-                    ) : (
-                      <span className="text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">CS</span>
-                    )}
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleEditBalanceClick(user)}
-                      className="p-2 hover:bg-slate-50 rounded-lg text-primary hover:text-red-800 transition-colors focus:outline-none"
-                      title="Sửa số dư"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
+          {usersList.length > 0 ? (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                  <th className="p-4">Họ và tên</th>
+                  <th className="p-4">Số điện thoại</th>
+                  <th className="p-4">Địa chỉ Email</th>
+                  <th className="p-4">Số dư ví điện tử</th>
+                  <th className="p-4">Gói đang dùng</th>
+                  <th className="p-4">Vai trò</th>
+                  <th className="p-4 text-center">Điều chỉnh</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {usersList.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 font-bold text-slate-900">{user.name}</td>
+                    <td className="p-4 font-mono font-medium">{user.phoneNumber}</td>
+                    <td className="p-4 text-slate-550 font-medium">{user.email}</td>
+                    <td className="p-4 font-bold text-emerald-650">
+                      {new Intl.NumberFormat('vi-VN').format(user.balance)}đ
+                    </td>
+                    <td className="p-4 text-slate-550 text-[11px] font-semibold">
+                      {user.activePackages.length > 0 ? (
+                        <span className="text-slate-800 font-bold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
+                          {user.activePackages.map(ap => ap.packageId.toUpperCase()).join(', ')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">Chưa đăng ký</span>
+                      )}
+                    </td>
+                    <td className="p-4 uppercase font-bold text-[9px]">
+                      {user.role === 'admin' ? (
+                        <span className="text-primary bg-red-50 border border-red-100 px-2 py-0.5 rounded">ADMIN</span>
+                      ) : (
+                        <span className="text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">CS</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => handleEditBalanceClick(user)}
+                        className="p-2 hover:bg-slate-50 rounded-lg text-primary hover:text-red-800 transition-colors focus:outline-none cursor-pointer"
+                        title="Sửa số dư"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-10 text-center text-slate-550">Danh sách người dùng hiện đang trống.</div>
+          )}
         </div>
       </div>
 
@@ -135,6 +171,7 @@ export default function AdminUsers() {
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h4 className="text-sm font-extrabold text-slate-900">Điều chỉnh số dư ví</h4>
               <button
+                disabled={isSubmitting}
                 onClick={() => setEditingUser(null)}
                 className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors focus:outline-none"
               >
@@ -143,7 +180,7 @@ export default function AdminUsers() {
             </div>
 
             <form onSubmit={handleSaveBalance} className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-slate-600 space-y-1 font-semibold">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-slate-605 space-y-1 font-semibold">
                 <p>• Người dùng: <strong className="text-slate-900 font-bold">{editingUser.name}</strong></p>
                 <p>• Số điện thoại: <strong className="text-slate-900 font-bold font-mono">{editingUser.phoneNumber}</strong></p>
               </div>
@@ -152,25 +189,28 @@ export default function AdminUsers() {
                 <label className="font-bold text-slate-500 uppercase tracking-wider">Số dư mới (VND)</label>
                 <input
                   type="number"
+                  disabled={isSubmitting}
                   value={newBalance}
                   onChange={(e) => setNewBalance(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-lg py-2 px-3 text-slate-700 focus:outline-none transition-colors"
+                  className="w-full bg-slate-55 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-lg py-2 px-3 text-slate-700 focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="flex space-x-3 pt-2 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setEditingUser(null)}
-                  className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors font-bold focus:outline-none"
+                  className="flex-1 py-2 bg-slate-55 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors font-bold focus:outline-none"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors focus:outline-none"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors focus:outline-none cursor-pointer"
                 >
-                  Lưu số dư
+                  {isSubmitting ? 'Đang lưu...' : 'Lưu số dư'}
                 </button>
               </div>
             </form>

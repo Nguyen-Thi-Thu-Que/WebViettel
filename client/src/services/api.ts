@@ -1,5 +1,5 @@
-import axios from 'axios';
-import type { Package } from '../types';
+import axiosInstance from './axiosInstance';
+import type { Package, User, FAQ, Transaction, ChatbotConfig } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -121,9 +121,10 @@ export function toEnglishPackage(vnPkg: Partial<Package>): any {
   };
 }
 
+// 1. Package APIs
 export const packageApi = {
   fetchPackages: async (params: Record<string, any>): Promise<FetchPackagesResponse> => {
-    const response = await axios.get<any>(API_BASE_URL, { params });
+    const response = await axiosInstance.get<any>(API_BASE_URL, { params });
     const rawData = response.data;
     return {
       packages: (rawData.packages || []).map(toVietnamesePackage),
@@ -135,23 +136,23 @@ export const packageApi = {
   },
 
   fetchPackageById: async (id: string): Promise<Package> => {
-    const response = await axios.get<any>(`${API_BASE_URL}/${id}`);
+    const response = await axiosInstance.get<any>(`${API_BASE_URL}/${id}`);
     return toVietnamesePackage(response.data);
   },
 
   fetchFilterOptions: async (): Promise<FilterOptions> => {
-    const response = await axios.get<FilterOptions>(`${API_BASE_URL}/filter`);
+    const response = await axiosInstance.get<FilterOptions>(`${API_BASE_URL}/filter`);
     return response.data;
   },
 
   fetchCategories: async (): Promise<{ id: string; name: string; count: number }[]> => {
-    const response = await axios.get(`${API_BASE_URL}/categories`);
+    const response = await axiosInstance.get(`${API_BASE_URL}/categories`);
     return response.data;
   },
 
   createPackage: async (pkg: Omit<Package, 'id' | 'phan_khuc_gia'>): Promise<{ success: boolean; package: Package }> => {
     const englishPkg = toEnglishPackage(pkg);
-    const response = await axios.post<{ success: boolean; package: any }>(API_BASE_URL, englishPkg);
+    const response = await axiosInstance.post<{ success: boolean; package: any }>(API_BASE_URL, englishPkg);
     return {
       success: response.data.success,
       package: toVietnamesePackage(response.data.package),
@@ -160,7 +161,7 @@ export const packageApi = {
 
   updatePackage: async (id: string, pkg: Partial<Package>): Promise<{ success: boolean; package: Package }> => {
     const englishPkg = toEnglishPackage(pkg);
-    const response = await axios.put<{ success: boolean; package: any }>(`${API_BASE_URL}/${id}`, englishPkg);
+    const response = await axiosInstance.put<{ success: boolean; package: any }>(`${API_BASE_URL}/${id}`, englishPkg);
     return {
       success: response.data.success,
       package: toVietnamesePackage(response.data.package),
@@ -168,7 +169,134 @@ export const packageApi = {
   },
 
   deletePackage: async (id: string): Promise<{ success: boolean; message: string }> => {
-    const response = await axios.delete<{ success: boolean; message: string }>(`${API_BASE_URL}/${id}`);
+    const response = await axiosInstance.delete<{ success: boolean; message: string }>(`${API_BASE_URL}/${id}`);
     return response.data;
   },
+};
+
+// 2. Authentication and Profile APIs
+export const authApi = {
+  login: async (phoneNumber: string, password?: string): Promise<{ token: string; user: User }> => {
+    const response = await axiosInstance.post<{ success: boolean; message: string; data: { token: string; user: User } }>('/api/auth/login', {
+      phoneNumber,
+      password: password || 'password123'
+    });
+    return response.data.data;
+  },
+
+  register: async (name: string, phoneNumber: string, email: string, password?: string): Promise<{ token: string; user: User }> => {
+    const response = await axiosInstance.post<{ success: boolean; message: string; data: { token: string; user: User } }>('/api/auth/register', {
+      name,
+      phoneNumber,
+      email,
+      password: password || 'password123'
+    });
+    return response.data.data;
+  },
+
+  getMe: async (): Promise<User> => {
+    const response = await axiosInstance.get<{ success: boolean; data: { user: User } }>('/api/auth/me');
+    return response.data.data.user;
+  },
+
+  updateProfile: async (name: string, email: string): Promise<User> => {
+    const response = await axiosInstance.put<{ success: boolean; data: { user: User } }>('/api/auth/profile', { name, email });
+    return response.data.data.user;
+  },
+
+  changePassword: async (oldPw: string, newPw: string): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>('/api/auth/change-password', {
+      oldPassword: oldPw,
+      newPassword: newPw
+    });
+    return response.data.success;
+  },
+
+  deposit: async (amount: number, method: string): Promise<{ balance: number }> => {
+    const response = await axiosInstance.post<{ success: boolean; data: { balance: number } }>('/api/auth/deposit', { amount, method });
+    return response.data.data;
+  },
+
+  subscribePackage: async (packageId: string): Promise<{ balance: number; activePackage: any }> => {
+    const response = await axiosInstance.post<{ success: boolean; data: { balance: number; activePackage: any } }>('/api/auth/subscribe', { packageId });
+    return response.data.data;
+  },
+
+  unsubscribePackage: async (packageId: string): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>(`/api/auth/unsubscribe/${packageId}`);
+    return response.data.success;
+  }
+};
+
+// 3. Transactions APIs
+export const transactionApi = {
+  fetchTransactions: async (): Promise<Transaction[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Transaction[] }>('/api/transactions');
+    return response.data.data;
+  },
+
+  fetchAdminStats: async (): Promise<{
+    totalUsersCount: number;
+    totalPackagesCount: number;
+    totalRevenueVal: number;
+    totalSubscriptionsCount: number;
+    recentTransactions: any[];
+  }> => {
+    const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/stats');
+    return response.data.data;
+  }
+};
+
+// 4. FAQ APIs
+export const faqApi = {
+  fetchFAQs: async (): Promise<FAQ[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: FAQ[] }>('/api/faqs');
+    return response.data.data;
+  },
+
+  createFAQ: async (faq: Omit<FAQ, 'id'>): Promise<FAQ> => {
+    const response = await axiosInstance.post<{ success: boolean; data: FAQ }>('/api/faqs', faq);
+    return response.data.data;
+  },
+
+  updateFAQ: async (id: string, faq: Partial<FAQ>): Promise<FAQ> => {
+    const response = await axiosInstance.put<{ success: boolean; data: FAQ }>(`/api/faqs/${id}`, faq);
+    return response.data.data;
+  },
+
+  deleteFAQ: async (id: string): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>(`/api/faqs/${id}`);
+    return response.data.success;
+  }
+};
+
+// 5. Chatbot APIs
+export const chatbotApi = {
+  sendMessage: async (message: string): Promise<{ text: string; suggestedAction?: any }> => {
+    const response = await axiosInstance.post<{ success: boolean; data: { text: string; suggestedAction?: any } }>('/api/chatbot/message', { message });
+    return response.data.data;
+  },
+
+  fetchConfig: async (): Promise<ChatbotConfig> => {
+    const response = await axiosInstance.get<{ success: boolean; data: ChatbotConfig }>('/api/chatbot/config');
+    return response.data.data;
+  },
+
+  updateConfig: async (config: ChatbotConfig): Promise<ChatbotConfig> => {
+    const response = await axiosInstance.put<{ success: boolean; data: ChatbotConfig }>('/api/chatbot/config', config);
+    return response.data.data;
+  }
+};
+
+// 6. User Management APIs (Admin)
+export const userApi = {
+  fetchUsers: async (): Promise<User[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: User[] }>('/api/users');
+    return response.data.data;
+  },
+
+  updateUserBalance: async (userId: string, balance: number): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}/balance`, { balance });
+    return response.data.success;
+  }
 };

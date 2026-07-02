@@ -26,7 +26,7 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, transactions, deposit, unsubscribePackage, updateProfile } = useAuthStore();
+  const { currentUser, transactions, deposit, unsubscribePackage, updateProfile, changePassword } = useAuthStore();
   const { packages } = usePackageStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'info';
@@ -46,6 +46,9 @@ export default function Profile() {
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
+    } else {
+      useAuthStore.getState().fetchTransactions().catch(() => {});
+      useAuthStore.getState().fetchFAQs().catch(() => {});
     }
   }, [currentUser, navigate]);
 
@@ -84,9 +87,14 @@ export default function Profile() {
     showToast('success', 'Cập nhật thông tin cá nhân thành công!');
   };
 
-  const onPasswordSubmit = () => {
-    showToast('success', 'Thay đổi mật khẩu thành công!');
-    resetPasswordForm();
+  const onPasswordSubmit = async (data: PasswordFormValues) => {
+    const success = await changePassword(data.oldPassword, data.newPassword);
+    if (success) {
+      showToast('success', 'Thay đổi mật khẩu thành công!');
+      resetPasswordForm();
+    } else {
+      showToast('error', 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu cũ.');
+    }
   };
 
   const handleDepositClick = (e: React.FormEvent) => {

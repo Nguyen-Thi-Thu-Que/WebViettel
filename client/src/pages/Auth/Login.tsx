@@ -30,18 +30,16 @@ export default function Login() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      phoneNumber: '0987654321', // Pre-fill with customer mock
+      phoneNumber: '0987654321', // Pre-fill with customer seed
       password: 'password123'
     }
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const onSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
     setErrorMsg('');
-
-    // Simulate API request delay
-    setTimeout(() => {
-      const success = login(data.phoneNumber);
+    try {
+      const success = await login(data.phoneNumber, data.password);
       setIsSubmitting(false);
       if (success) {
         const user = useAuthStore.getState().currentUser;
@@ -51,9 +49,12 @@ export default function Login() {
           navigate('/');
         }
       } else {
-        setErrorMsg('Thông tin đăng nhập không chính xác. Thuê bao của bạn chưa được kích hoạt ảo.');
+        setErrorMsg('Thông tin đăng nhập không chính xác.');
       }
-    }, 700);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMsg(useAuthStore.getState().error || err.message || 'Đã xảy ra lỗi đăng nhập hệ thống.');
+    }
   };
 
   return (
@@ -81,7 +82,7 @@ export default function Login() {
               type="text"
               placeholder="Ví dụ: 0987654321"
               {...register('phoneNumber')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.phoneNumber ? 'border-red-550 focus:border-red-550' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -108,7 +109,7 @@ export default function Login() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Nhập mật khẩu..."
               {...register('password')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.password ? 'border-red-550 focus:border-red-550' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-10 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -149,10 +150,10 @@ export default function Login() {
 
       {/* Testing Quick Guide */}
       <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-[10px] text-slate-500 font-medium leading-relaxed">
-        <p className="font-bold text-slate-700 mb-1">Gợi ý đăng nhập thử nghiệm:</p>
-        <p>• Khách hàng: <span className="font-bold text-slate-900">0987654321</span> hoặc <span className="font-bold text-slate-900">0912345678</span></p>
-        <p>• Quản trị viên (Admin): <span className="font-bold text-slate-900">0900000001</span></p>
-        <p className="text-[9px] text-slate-400 mt-1">(*) Mật khẩu nhập bất kỳ tối thiểu 6 ký tự (ví dụ: password123).</p>
+        <p className="font-bold text-slate-700 mb-1">Tài khoản thử nghiệm hệ thống:</p>
+        <p>• Khách hàng: <span className="font-bold text-slate-900">0987654321</span> (Mật khẩu: <span className="font-bold text-slate-900">password123</span>)</p>
+        <p>• Khách hàng VIP: <span className="font-bold text-slate-900">0912345678</span> (Mật khẩu: <span className="font-bold text-slate-900">password123</span>)</p>
+        <p>• Admin: <span className="font-bold text-slate-900">0900000001</span> (Mật khẩu: <span className="font-bold text-slate-900">admin123</span>)</p>
       </div>
     </div>
   );

@@ -24,10 +24,11 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { registerUser } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const {
     register,
@@ -37,17 +38,25 @@ export default function Register() {
     resolver: zodResolver(registerSchema)
   });
 
-  const onSubmit = (data: RegisterFormValues) => {
+  const onSubmit = async (data: RegisterFormValues) => {
     setIsSubmitting(true);
-    // Simulate API registration delay
-    setTimeout(() => {
-      login(data.phoneNumber, 'customer'); // Auto-register & mock login
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const success = await registerUser(data.name, data.phoneNumber, data.email, data.password);
       setIsSubmitting(false);
-      setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...');
-      setTimeout(() => {
-        navigate('/');
-      }, 1500);
-    }, 800);
+      if (success) {
+        setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...');
+        setTimeout(() => {
+          navigate('/');
+        }, 1500);
+      } else {
+        setErrorMsg(useAuthStore.getState().error || 'Đăng ký không thành công.');
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMsg(err.message || 'Lỗi hệ thống khi đăng ký.');
+    }
   };
 
   return (
@@ -65,6 +74,14 @@ export default function Register() {
         </div>
       )}
 
+      {/* Error Alert Box */}
+      {errorMsg && (
+        <div className="flex items-center space-x-2 text-red-755 bg-red-50 border border-red-200 p-3.5 rounded-lg text-xs font-medium">
+          <AlertCircle className="w-4 h-4 shrink-0 text-primary" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       {/* Register Form */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Name Input */}
@@ -75,7 +92,7 @@ export default function Register() {
               type="text"
               placeholder="Ví dụ: Nguyễn Văn A"
               {...register('name')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.name ? 'border-red-550 focus:border-red-550' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -97,7 +114,7 @@ export default function Register() {
               type="text"
               placeholder="Ví dụ: 0987654321"
               {...register('phoneNumber')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.phoneNumber ? 'border-red-550 focus:border-red-550' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -119,7 +136,7 @@ export default function Register() {
               type="email"
               placeholder="Ví dụ: vana@gmail.com"
               {...register('email')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.email ? 'border-red-555 focus:border-red-555' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -141,7 +158,7 @@ export default function Register() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Tối thiểu 6 ký tự..."
               {...register('password')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.password ? 'border-red-555 focus:border-red-555' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-10 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />
@@ -170,7 +187,7 @@ export default function Register() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Nhập lại mật khẩu..."
               {...register('confirmPassword')}
-              className={`w-full bg-slate-50 border ${
+              className={`w-full bg-slate-55 border ${
                 errors.confirmPassword ? 'border-red-555 focus:border-red-555' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
               } rounded-lg py-2 pl-9 pr-10 text-xs text-slate-700 placeholder-slate-400 focus:outline-none transition-colors`}
             />

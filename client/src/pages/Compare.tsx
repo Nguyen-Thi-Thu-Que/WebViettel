@@ -42,11 +42,11 @@ export default function Compare() {
     setConfirmSubscribePkg(pkg);
   };
 
-  const handleConfirmSubscribe = () => {
+  const handleConfirmSubscribe = async () => {
     if (!confirmSubscribePkg) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = subscribePackage(confirmSubscribePkg);
+    try {
+      const res = await subscribePackage(confirmSubscribePkg);
       setIsSubmitting(false);
       setConfirmSubscribePkg(null);
       if (res.success) {
@@ -54,7 +54,11 @@ export default function Compare() {
       } else {
         showToast('error', res.message);
       }
-    }, 800);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setConfirmSubscribePkg(null);
+      showToast('error', err.message || 'Lỗi đăng ký gói cước.');
+    }
   };
 
   const isValid = (val: any) => {

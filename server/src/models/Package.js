@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const packageSchema = new mongoose.Schema({
-  id: { type: Number, required: true, unique: true },
+  package_id: { type: Number, required: true, unique: true, alias: 'id' },
   ma_goi: { type: String, required: true, index: true },
   ten: { type: String, required: true },
   dohot: { type: String, default: 'normal' },

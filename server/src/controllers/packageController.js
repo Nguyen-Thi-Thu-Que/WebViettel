@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Package = require('../models/Package');
 
 // Mapping function: Tiếng Việt (DB) -> Tiếng Anh (Frontend)
@@ -6,7 +7,7 @@ function mapToEnglish(pkg) {
   const doc = pkg.toObject ? pkg.toObject() : pkg;
   
   // Trích xuất mã gói cước làm ID string
-  const idStr = doc.ma_goi ? doc.ma_goi.toLowerCase() : `pkg_${doc.id}`;
+  const idStr = doc.ma_goi ? doc.ma_goi.toLowerCase() : `pkg_${doc.package_id}`;
   
   // Trích xuất duration và durationDays
   const durationDays = parseInt(doc.chu_ky_ngay) || 30;
@@ -62,8 +63,9 @@ function mapToEnglish(pkg) {
   }
 
   // Tạo các giá trị giả lập ổn định cho rating và registrationsCount dựa trên id
-  const rating = (4.3 + ((doc.id * 7) % 7) / 10).toFixed(1);
-  const registrationsCount = 5000 + ((doc.id * 123) % 495000);
+  const pkgId = doc.package_id || doc.id || 0;
+  const rating = (4.3 + ((pkgId * 7) % 7) / 10).toFixed(1);
+  const registrationsCount = 5000 + ((pkgId * 123) % 495000);
 
   // Terms array
   const terms = [
@@ -87,7 +89,7 @@ function mapToEnglish(pkg) {
   return {
     id: idStr, // string ID cho frontend
     dbId: doc._id, // lưu MongoDB _id
-    numericId: doc.id, // lưu id số gốc
+    numericId: doc.package_id || doc.id, // lưu id số gốc
     ma_goi: doc.ma_goi,
     name: doc.ten,
     price: doc.gia,
@@ -261,8 +263,8 @@ exports.getPackages = async (req, res) => {
       // Project computed fields for stable sorting
       {
         $addFields: {
-          rating: { $add: [4.2, { $divide: [ { $mod: ["$id", 8] }, 10 ] }] },
-          registrationsCount: { $add: [ 2000, { $mod: [ { $multiply: ["$id", 456] }, 250000 ] } ] }
+          rating: { $add: [4.2, { $divide: [ { $mod: ["$package_id", 8] }, 10 ] }] },
+          registrationsCount: { $add: [ 2000, { $mod: [ { $multiply: ["$package_id", 456] }, 250000 ] } ] }
         }
       }
     ];
@@ -274,9 +276,9 @@ exports.getPackages = async (req, res) => {
     } else if (sortOpt === 'price_desc') {
       pipeline.push({ $sort: { gia: -1 } });
     } else if (sortOpt === 'rating') {
-      pipeline.push({ $sort: { rating: -1, id: 1 } });
+      pipeline.push({ $sort: { rating: -1, package_id: 1 } });
     } else { // default 'popular'
-      pipeline.push({ $sort: { registrationsCount: -1, id: 1 } });
+      pipeline.push({ $sort: { registrationsCount: -1, package_id: 1 } });
     }
 
     // Pagination
@@ -413,10 +415,18 @@ exports.getPackageById = async (req, res) => {
     }
     
     if (!pkg) {
+      let numericId = -1;
+      if (idParam.startsWith('pkg_')) {
+        const parsed = parseInt(idParam.replace('pkg_', ''));
+        if (!isNaN(parsed)) numericId = parsed;
+      } else if (!isNaN(idParam)) {
+        numericId = parseInt(idParam);
+      }
+
       pkg = await Package.findOne({
         $or: [
-          { ma_goi: idParam.toUpperCase() },
-          { id: isNaN(idParam) ? -1 : parseInt(idParam) }
+          { ma_goi: new RegExp(`^${idParam}$`, 'i') },
+          { package_id: numericId }
         ]
       });
     }
@@ -442,12 +452,12 @@ exports.createPackage = async (req, res) => {
     }
 
     // Find next numeric id
-    const lastPkg = await Package.findOne().sort({ id: -1 });
-    const nextId = lastPkg ? lastPkg.id + 1 : 1;
+    const lastPkg = await Package.findOne().sort({ package_id: -1 });
+    const nextId = lastPkg ? lastPkg.package_id + 1 : 1;
 
     // Convert from English to Vietnamese
     const vnData = mapToVietnamese(englishData);
-    vnData.id = nextId;
+    vnData.package_id = nextId;
 
     // Double check unique package code
     const existing = await Package.findOne({ ma_goi: vnData.ma_goi });
@@ -479,11 +489,20 @@ exports.updatePackage = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(idParam)) {
       pkg = await Package.findById(idParam);
     }
+
     if (!pkg) {
+      let numericId = -1;
+      if (idParam.startsWith('pkg_')) {
+        const parsed = parseInt(idParam.replace('pkg_', ''));
+        if (!isNaN(parsed)) numericId = parsed;
+      } else if (!isNaN(idParam)) {
+        numericId = parseInt(idParam);
+      }
+
       pkg = await Package.findOne({
         $or: [
-          { ma_goi: idParam.toUpperCase() },
-          { id: isNaN(idParam) ? -1 : parseInt(idParam) }
+          { ma_goi: new RegExp(`^${idParam}$`, 'i') },
+          { package_id: numericId }
         ]
       });
     }
@@ -519,10 +538,18 @@ exports.deletePackage = async (req, res) => {
       pkg = await Package.findById(idParam);
     }
     if (!pkg) {
+      let numericId = -1;
+      if (idParam.startsWith('pkg_')) {
+        const parsed = parseInt(idParam.replace('pkg_', ''));
+        if (!isNaN(parsed)) numericId = parsed;
+      } else if (!isNaN(idParam)) {
+        numericId = parseInt(idParam);
+      }
+
       pkg = await Package.findOne({
         $or: [
-          { ma_goi: idParam.toUpperCase() },
-          { id: isNaN(idParam) ? -1 : parseInt(idParam) }
+          { ma_goi: new RegExp(`^${idParam}$`, 'i') },
+          { package_id: numericId }
         ]
       });
     }

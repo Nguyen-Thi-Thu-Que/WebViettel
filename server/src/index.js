@@ -3,14 +3,68 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
+// Routes Imports
 const packageRoutes = require('./routes/packageRoutes');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const faqRoutes = require('./routes/faqRoutes');
+const chatbotRoutes = require('./routes/chatbotRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
+
+// Global Error Handler Import
+const globalErrorHandler = require('./middlewares/errorMiddleware');
+
+// Seed Services
+const faqService = require('./services/faqService');
+const chatbotService = require('./services/chatbotService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
-// Middleware
-app.use(cors());
+// Security Middlewares (Helmet Equivalent Security Headers)
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+
+// Basic Rate Limiter for Production API Protection
+const rateLimitMap = new Map();
+const apiRateLimiter = (req, res, next) => {
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const now = Date.now();
+  const limitWindow = 60000; // 1 minute
+  const maxRequests = 120; // Max 120 requests/minute per IP
+  
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, []);
+  }
+  
+  const requestTimes = rateLimitMap.get(ip);
+  const activeRequests = requestTimes.filter(time => now - time < limitWindow);
+  activeRequests.push(now);
+  rateLimitMap.set(ip, activeRequests);
+  
+  if (activeRequests.length > maxRequests) {
+    return res.status(429).json({
+      success: false,
+      message: 'Hệ thống phát hiện yêu cầu quá tần suất cho phép (Rate Limit). Vui lòng thử lại sau.'
+    });
+  }
+  next();
+};
+app.use('/api/', apiRateLimiter);
+
+// Standard CORS configuration
+app.use(cors({
+  origin: '*', // We can change this to front-end origin if desired
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -23,6 +77,10 @@ if (!mongoUri) {
 mongoose.connect(mongoUri, { dbName: 'goicuocviettel' })
   .then(() => {
     console.log("Successfully connected to MongoDB database: goicuocviettel");
+    
+    // Auto-seed FAQs and Chatbot Configuration on server startup if collections are empty
+    faqService.checkAndSeedFAQs().catch(err => console.error("FAQ seed failed:", err));
+    chatbotService.checkAndSeedChatbot().catch(err => console.error("Chatbot seed failed:", err));
   })
   .catch((err) => {
     console.error("Database connection failure:", err);
@@ -34,26 +92,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// API Routes
+// API Routes mounting
 app.use('/api/packages', packageRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/faqs', faqRoutes);
+app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/transactions', transactionRoutes);
 
 // Base route
 app.get('/', (req, res) => {
   res.json({
     name: "Viettel Mobile Package Management Backend API",
     status: "active",
-    version: "1.0.0"
+    version: "1.1.0"
   });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Server error logger:", err.stack);
-  res.status(500).json({
-    success: false,
-    message: err.message || "Đã xảy ra lỗi máy chủ nội bộ."
-  });
-});
+// Global Error Handler Middleware
+app.use(globalErrorHandler);
 
 // Start Server
 app.listen(PORT, () => {

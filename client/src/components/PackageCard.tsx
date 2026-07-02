@@ -48,9 +48,8 @@ const PackageCard = React.memo(function PackageCard({ pkg, onSubscribeSuccess, o
 
   const handleConfirmSubscribe = async () => {
     setIsSubmitting(true);
-    // Mimic API delay
-    setTimeout(() => {
-      const res = subscribePackage(pkg);
+    try {
+      const res = await subscribePackage(pkg);
       setIsSubmitting(false);
       setShowConfirm(false);
       if (res.success) {
@@ -58,7 +57,11 @@ const PackageCard = React.memo(function PackageCard({ pkg, onSubscribeSuccess, o
       } else {
         if (onSubscribeError) onSubscribeError(res.message);
       }
-    }, 800);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setShowConfirm(false);
+      if (onSubscribeError) onSubscribeError(err.message || 'Có lỗi xảy ra.');
+    }
   };
 
   return (

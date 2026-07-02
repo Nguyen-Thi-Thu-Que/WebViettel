@@ -1,17 +1,19 @@
-import { useState } from 'react';
-import { Bot, Save, Plus, Trash2, Edit2, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, Save, Plus, Trash2, Edit2, X, Loader2 } from 'lucide-react';
 import { useChatbotStore, usePackageStore } from '../../store';
 import type { ChatbotConfig } from '../../types';
 
 export default function AdminChatbot() {
-  const { config, updateConfig } = useChatbotStore();
-  const { packages } = usePackageStore();
+  const { config, fetchConfig, updateConfig } = useChatbotStore();
+  const { packages, fetchPackages } = usePackageStore();
 
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Local config states
-  const [systemPrompt, setSystemPrompt] = useState(config.systemPrompt);
-  const [keywordsList, setKeywordsList] = useState<ChatbotConfig['trainingKeywords']>(config.trainingKeywords);
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [keywordsList, setKeywordsList] = useState<ChatbotConfig['trainingKeywords']>([]);
 
   // Modal states for keyword CRUD
   const [showModal, setShowModal] = useState(false);
@@ -19,6 +21,24 @@ export default function AdminChatbot() {
   const [kwVal, setKwVal] = useState('');
   const [respVal, setRespVal] = useState('');
   const [pkgVal, setPkgVal] = useState('');
+
+  useEffect(() => {
+    const initializeData = async () => {
+      setLoading(true);
+      await fetchConfig();
+      await fetchPackages({ limit: 100 });
+      setLoading(false);
+    };
+    initializeData();
+  }, [fetchConfig, fetchPackages]);
+
+  // Sync config from store to local states
+  useEffect(() => {
+    if (config) {
+      setSystemPrompt(config.systemPrompt);
+      setKeywordsList(config.trainingKeywords || []);
+    }
+  }, [config]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -68,14 +88,29 @@ export default function AdminChatbot() {
     showToast('success', 'Đã xóa từ khóa huấn luyện.');
   };
 
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
+    setIsSaving(true);
     const newConfig: ChatbotConfig = {
       systemPrompt: systemPrompt.trim(),
       trainingKeywords: keywordsList
     };
-    updateConfig(newConfig);
-    showToast('success', 'Đã lưu và cập nhật cấu hình Huấn luyện AI Chatbot thành công!');
+    const success = await updateConfig(newConfig);
+    setIsSaving(false);
+    if (success) {
+      showToast('success', 'Đã lưu và cập nhật cấu hình Huấn luyện AI Chatbot thành công!');
+    } else {
+      showToast('error', 'Lưu cấu hình thất bại.');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-xs font-semibold text-slate-500 space-y-3">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span>Đang tải thông tin cấu hình AI Chatbot...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 relative animate-fade-in text-xs font-semibold">
@@ -95,14 +130,15 @@ export default function AdminChatbot() {
             <Bot className="w-6 h-6 text-primary mr-2" />
             Cấu hình trợ lý ảo AI Chatbot
           </h1>
-          <p className="text-slate-550 text-xs mt-0.5 font-semibold">Huấn luyện từ khóa đối khớp và prompts hành vi hệ thống cho Trợ lý ảo Viettel.</p>
+          <p className="text-slate-555 text-xs mt-0.5 font-semibold">Huấn luyện từ khóa đối khớp và prompts hành vi hệ thống cho Trợ lý ảo Viettel.</p>
         </div>
         <button
+          disabled={isSaving}
           onClick={handleSaveConfig}
-          className="flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-lg text-xs transition-colors focus:outline-none"
+          className="flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-lg text-xs transition-colors focus:outline-none cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>Lưu cấu hình</span>
+          <span>{isSaving ? 'Đang lưu...' : 'Lưu cấu hình'}</span>
         </button>
       </div>
 
@@ -114,7 +150,7 @@ export default function AdminChatbot() {
           rows={3}
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
-          className="w-full bg-slate-55 border border-slate-200 rounded-lg p-4 text-xs text-slate-700 focus:outline-none focus:border-primary/50 focus:bg-white resize-none font-semibold leading-relaxed transition-colors"
+          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-700 focus:outline-none focus:border-primary/50 focus:bg-white resize-none font-semibold leading-relaxed transition-colors"
         />
       </section>
 
@@ -127,7 +163,7 @@ export default function AdminChatbot() {
           </div>
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center space-x-1 bg-white border border-slate-250 hover:bg-slate-50 text-slate-600 hover:text-slate-950 px-3.5 py-2 rounded-lg text-xs transition-colors font-bold focus:outline-none"
+            className="flex items-center space-x-1 bg-white border border-slate-250 hover:bg-slate-50 text-slate-605 hover:text-slate-950 px-3.5 py-2 rounded-lg text-xs transition-colors font-bold focus:outline-none cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Thêm từ khóa</span>
@@ -137,7 +173,7 @@ export default function AdminChatbot() {
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-55 border-b border-slate-200 text-slate-605 font-bold">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                 <th className="p-3 w-1/4">Từ khóa bắt được</th>
                 <th className="p-3">Câu trả lời phản hồi của Chatbot</th>
                 <th className="p-3 w-1/5">Gói cước liên kết</th>
@@ -161,14 +197,14 @@ export default function AdminChatbot() {
                   <td className="p-3 flex items-center justify-center space-x-2">
                     <button
                       onClick={() => handleOpenEditModal(idx)}
-                      className="p-2 hover:bg-slate-50 rounded-lg text-blue-650 hover:text-blue-800 transition-colors focus:outline-none"
+                      className="p-2 hover:bg-slate-50 rounded-lg text-blue-650 hover:text-blue-800 transition-colors focus:outline-none cursor-pointer"
                       title="Sửa"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleKeywordDelete(idx)}
-                      className="p-2 hover:bg-red-50 rounded-lg text-primary hover:text-red-800 transition-colors focus:outline-none"
+                      className="p-2 hover:bg-red-50 rounded-lg text-primary hover:text-red-800 transition-colors focus:outline-none cursor-pointer"
                       title="Xóa"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -250,7 +286,7 @@ export default function AdminChatbot() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors focus:outline-none"
+                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors focus:outline-none cursor-pointer"
                 >
                   {editingIndex !== null ? 'Lưu chỉnh sửa' : 'Thêm mới'}
                 </button>
