@@ -1,22 +1,24 @@
 export interface Package {
-  id: string;
-  name: string;
-  price: number;
-  duration: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  durationDays: number;
-  dataLimit: string; // e.g. "1.5 GB/ngày" or "Không giới hạn" or "30 GB"
-  dataPerDayGb?: number; // raw value for sorting/filtering
-  voiceFreeInternalMin: number; // e.g. 1000 mins
-  voiceFreeExternalMin: number; // e.g. 50 mins
-  socialFreeApps: string[]; // e.g. ["TikTok", "YouTube", "Facebook"]
-  description: string;
-  terms: string[];
-  conditions: string;
-  isPopular: boolean;
-  category: 'data' | 'voice' | 'combo' | 'social';
-  rating: number; // e.g. 4.8
-  registrationsCount: number; // e.g. 152000
-  tags: string[]; // e.g. ["Hot", "TikTok FREE", "Giá rẻ"]
+  id: string; // unique identifier (maps to ma_goi or database numeric id)
+  ten: string;
+  dohot: string; // e.g. "Hot" or "normal"
+  phan_loai_goi: string; // e.g. "Data", "Combo", "Social", "Thoại"
+  gia: number;
+  phan_khuc_gia: string; // e.g. "Gia_re", "Trung_binh", "Cao_cap"
+  data_theo_ngay: string;
+  free_ngoai_mang: string;
+  free_noi_mang: string;
+  tienich: string;
+  sms: string;
+  dieu_kien_dang_ky: string;
+  chinh_sach_ap_dung: string;
+  noi_dung_ngoai: string;
+  tien_ich_free: string;
+  uudaitrong: string;
+  chu_ky_ngay: string;
+  dangky: string;
+  huygiahan: string;
+  huygoicuoc: string;
 }
 
 export interface User {

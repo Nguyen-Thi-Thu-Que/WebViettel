@@ -234,7 +234,7 @@ export default function AdminChatbot() {
                   <option value="survey">Wizard Khảo sát</option>
                   {packages.map(p => (
                     <option key={p.id} value={p.id}>
-                      Gói {p.name}
+                      Gói {p.ten}
                     </option>
                   ))}
                 </select>

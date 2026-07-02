@@ -9,7 +9,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const popularPackages = packages.filter(p => p.isPopular).slice(0, 4);
+  const popularPackages = packages.filter(p => p.dohot !== 'normal').slice(0, 4);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });

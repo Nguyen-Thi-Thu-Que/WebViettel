@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, X, Bot, Plus, Check, ShieldAlert, Star } from 'lucide-react';
+import { ArrowRightLeft, X, Bot, Plus, Check, ShieldAlert } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
 import type { Package } from '../types';
 
@@ -57,50 +57,52 @@ export default function Compare() {
     }, 800);
   };
 
-  // Generate dynamic "AI Comments" based on selected packages features
+  const isValid = (val: any) => {
+    return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '';
+  };
+
+  const parseDataGb = (str: string) => {
+    if (!str) return 0;
+    const match = str.replace(',', '.').match(/(\d+(\.\d+)?)/);
+    return match ? parseFloat(match[1]) : 0;
+  };
+
   const generateAIAnalysis = (list: Package[]): string => {
     if (list.length === 0) return '';
     if (list.length === 1) {
-      return `Bạn đang xem xét gói **${list[0].name}**. Đây là gói cước ${
-        list[0].category === 'social' ? 'chuyên dùng cho mạng xã hội (YouTube/TikTok)' : 
-        list[0].category === 'combo' ? 'combo nghe gọi kèm data tiện lợi' : 'chuyên dụng data tốc độ cao'
-      } với chi phí ${list[0].price.toLocaleString()}đ/chu kỳ. Gói này có lượt đăng ký rất cao (${list[0].registrationsCount.toLocaleString()} lượt).`;
+      const catLabel = list[0].phan_loai_goi === 'Social' ? 'chuyên dùng cho mạng xã hội (YouTube/TikTok)' :
+                       list[0].phan_loai_goi === 'Combo' ? 'combo nghe gọi kèm data tiện lợi' : 'chuyên dụng data tốc độ cao';
+      return `Bạn đang xem xét gói **${list[0].ten}**. Đây là gói cước ${catLabel} với chi phí ${list[0].gia.toLocaleString()}đ/chu kỳ. Gói cước này có mức giá khá hợp lý ở phân khúc ${list[0].phan_khuc_gia}.`;
     }
 
     let report = 'Dựa trên phân tích các gói cước đã chọn, **Viettel AI** xin đưa ra nhận xét:\n\n';
 
-    // Find cheapest
-    const sortedByPrice = [...list].sort((a, b) => a.price - b.price);
+    const sortedByPrice = [...list].sort((a, b) => a.gia - b.gia);
     const cheapest = sortedByPrice[0];
-    report += `• **Tiết kiệm nhất**: Gói **${cheapest.name}** có chi phí thấp nhất là **${cheapest.price.toLocaleString()}đ**, thích hợp nếu bạn muốn duy trì liên lạc với ngân sách tối giản.\n`;
+    report += `• **Tiết kiệm nhất**: Gói **${cheapest.ten}** có chi phí thấp nhất là **${cheapest.gia.toLocaleString()}đ**, thích hợp nếu bạn muốn duy trì liên lạc với ngân sách tối giản.\n`;
 
-    // Find package with max data
     const sortedByData = [...list].sort((a, b) => {
-      const limitA = a.dataPerDayGb || 0;
-      const limitB = b.dataPerDayGb || 0;
+      const limitA = parseDataGb(a.data_theo_ngay);
+      const limitB = parseDataGb(b.data_theo_ngay);
       return limitB - limitA;
     });
     const maxData = sortedByData[0];
-    if (maxData.dataPerDayGb && maxData.dataPerDayGb > 0 && maxData.id !== cheapest.id) {
-      report += `• **Dung lượng khủng nhất**: Gói **${maxData.name}** cung cấp lượng data vượt trội **${maxData.dataLimit}** hỗ trợ lướt web cực nhanh, phù hợp cho nhu cầu làm việc di động nhiều.\n`;
+    if (parseDataGb(maxData.data_theo_ngay) > 0 && maxData.id !== cheapest.id) {
+      report += `• **Dung lượng khủng nhất**: Gói **${maxData.ten}** cung cấp lượng data vượt trội **${maxData.data_theo_ngay}** hỗ trợ lướt web cực nhanh, phù hợp cho nhu cầu làm việc di động nhiều.\n`;
     }
 
-    // Check for social apps
-    const socialPackages = list.filter(p => p.socialFreeApps.length > 0);
+    const socialPackages = list.filter(p => isValid(p.noi_dung_ngoai));
     if (socialPackages.length > 0) {
-      report += `• **Ưu đãi Giải trí**: Gói **${socialPackages.map(p => p.name).join(', ')}** là lựa chọn số 1 nếu bạn nghiện TikTok hoặc YouTube vì được miễn cước data cho các ứng dụng này.\n`;
+      report += `• **Ưu đãi Giải trí**: Gói **${socialPackages.map(p => p.ten).join(', ')}** là lựa chọn tốt nếu bạn nghiện lướt mạng xã hội vì được miễn cước data cho các ứng dụng phổ biến.\n`;
     }
 
-    // Check for voice apps
-    const voicePackages = list.filter(p => p.voiceFreeInternalMin > 0);
+    const voicePackages = list.filter(p => isValid(p.free_noi_mang) && p.free_noi_mang !== '0');
     if (voicePackages.length > 0) {
-      report += `• **Nghe gọi thoải mái**: Gói **${voicePackages.map(p => p.name).join(', ')}** tối ưu nhất cho người làm kinh doanh hoặc đàm thoại liên tục nhờ có ưu đãi phút gọi nội/ngoại mạng miễn phí.\n`;
+      report += `• **Nghe gọi thoải mái**: Gói **${voicePackages.map(p => p.ten).join(', ')}** tối ưu nhất cho người đàm thoại liên tục nhờ có ưu đãi phút gọi nội/ngoại mạng miễn phí.\n`;
     }
 
-    // Recommendation summary
     report += `\n**Khuyên dùng**: `;
-    const mxhAppsCount = list.filter(p => p.category === 'social').length;
-    if (mxhAppsCount > 0 && list.some(p => p.id === 'mxh100')) {
+    if (list.some(p => p.id === 'mxh100')) {
       report += `Nếu bạn thường xuyên xem video giải trí trên điện thoại, hãy chọn **MXH100**. `;
     }
     if (list.some(p => p.id === 'sd135')) {
@@ -113,7 +115,6 @@ export default function Compare() {
     return report;
   };
 
-  // Filter out already selected packages to prevent double selection in dropdown
   const availablePackagesToSelect = packages.filter(p => !compareList.some(cp => cp.id === p.id));
 
   return (
@@ -142,14 +143,13 @@ export default function Compare() {
         {compareList.length > 0 && (
           <button
             onClick={clearCompare}
-            className="text-xs text-primary hover:bg-red-50 transition-colors bg-red-50 border border-red-150 px-3.5 py-2 rounded-lg font-bold focus:outline-none"
+            className="text-xs text-primary hover:bg-red-50 transition-colors bg-red-50 border border-red-150 px-3.5 py-2 rounded-lg font-bold focus:outline-none cursor-pointer"
           >
             Xóa danh sách so sánh
           </button>
         )}
       </div>
 
-      {/* Comparison Area */}
       {compareList.length === 0 ? (
         /* Empty State */
         <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-12 text-center flex flex-col items-center max-w-lg mx-auto space-y-5">
@@ -158,16 +158,15 @@ export default function Compare() {
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900 mb-1">Chưa có gói cước để so sánh</h3>
-            <p className="text-slate-500 text-xs leading-relaxed font-semibold">
-              Bạn chưa thêm gói cước nào vào danh sách so sánh. Hãy quay lại danh mục gói cước hoặc chọn nhanh gói cước bên dưới để so sánh ngay (tối đa 3 gói).
+            <p className="text-slate-550 text-xs leading-relaxed font-semibold">
+              Bạn chưa thêm gói cước nào vào danh sách so sánh. Hãy chọn nhanh gói cước bên dưới để tiến hành so sánh ngay (tối đa 3 gói).
             </p>
           </div>
           
-          {/* Quick Select Panel inside Empty State */}
           <div className="w-full space-y-3 pt-3 border-t border-slate-100">
             <button
               onClick={() => setShowAddSelector(true)}
-              className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-lg text-xs transition-colors flex items-center justify-center space-x-2 focus:outline-none"
+              className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-lg text-xs transition-colors flex items-center justify-center space-x-2 focus:outline-none cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Thêm gói nhanh tại đây</span>
@@ -183,7 +182,6 @@ export default function Compare() {
       ) : (
         /* Comparison Table Grid & AI Advice */
         <div className="space-y-8">
-          {/* Comparison Matrix Table */}
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
             <div className="overflow-x-auto no-scrollbar">
               <table className="w-full text-left border-collapse text-xs">
@@ -193,10 +191,10 @@ export default function Compare() {
                     {compareList.map((pkg) => (
                       <th key={pkg.id} className="p-4 w-1/4 relative group min-w-[200px] border-l border-slate-200">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-extrabold text-slate-900">{pkg.name}</span>
+                          <span className="text-sm font-extrabold text-slate-900">{pkg.ten}</span>
                           <button
                             onClick={() => removeFromCompare(pkg.id)}
-                            className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors focus:outline-none"
+                            className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors focus:outline-none cursor-pointer"
                             title="Xóa"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -208,7 +206,7 @@ export default function Compare() {
                       <th className="p-4 w-1/4 text-center min-w-[200px] border-l border-slate-200">
                         <button
                           onClick={() => setShowAddSelector(true)}
-                          className="inline-flex items-center space-x-1 text-slate-650 hover:text-slate-950 bg-slate-50 border border-dashed border-slate-250 hover:bg-slate-100 px-3.5 py-1.5 rounded-lg transition-colors font-bold focus:outline-none"
+                          className="inline-flex items-center space-x-1 text-slate-650 hover:text-slate-950 bg-slate-50 border border-dashed border-slate-250 hover:bg-slate-100 px-3.5 py-1.5 rounded-lg transition-colors font-bold focus:outline-none cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Thêm gói</span>
@@ -223,7 +221,7 @@ export default function Compare() {
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Giá cước (VND)</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 text-base font-black text-primary border-l border-slate-200">
-                        {new Intl.NumberFormat('vi-VN').format(pkg.price)}đ
+                        {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
                       </td>
                     ))}
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
@@ -234,7 +232,18 @@ export default function Compare() {
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Chu kỳ sử dụng</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 font-bold text-slate-800 border-l border-slate-200">
-                        {pkg.durationDays} ngày
+                        {pkg.chu_ky_ngay} ngày
+                      </td>
+                    ))}
+                    {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
+                  </tr>
+
+                  {/* Row: Category */}
+                  <tr className="hover:bg-slate-50/20 transition-colors">
+                    <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Phân loại gói</td>
+                    {compareList.map((pkg) => (
+                      <td key={pkg.id} className="p-4 text-slate-800 border-l border-slate-200 font-bold">
+                        {pkg.phan_loai_goi}
                       </td>
                     ))}
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
@@ -245,8 +254,7 @@ export default function Compare() {
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Ưu đãi DATA</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 border-l border-slate-200">
-                        <p className="font-extrabold text-slate-900 text-[13px]">{pkg.dataLimit}</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">Tốc độ cao 4G/5G</p>
+                        <p className="font-extrabold text-slate-900 text-[13px]">{isValid(pkg.data_theo_ngay) ? pkg.data_theo_ngay : 'Không có'}</p>
                       </td>
                     ))}
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
@@ -257,10 +265,10 @@ export default function Compare() {
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Gọi nội mạng</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 text-slate-850 border-l border-slate-200">
-                        {pkg.voiceFreeInternalMin > 0 ? (
+                        {isValid(pkg.free_noi_mang) ? (
                           <span className="flex items-center text-emerald-600 font-bold">
                             <Check className="w-3.5 h-3.5 mr-1" />
-                            Miễn phí cuộc gọi &lt; {pkg.id === 'v50c' || pkg.id === 'mxh120' ? '10' : '20'} phút
+                            {pkg.free_noi_mang}
                           </span>
                         ) : (
                           <span className="text-slate-400 font-medium">Không hỗ trợ</span>
@@ -274,9 +282,12 @@ export default function Compare() {
                   <tr className="hover:bg-slate-50/20 transition-colors">
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Gọi ngoại mạng</td>
                     {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4 text-slate-800 border-l border-slate-200">
-                        {pkg.voiceFreeExternalMin > 0 ? (
-                          <span className="font-bold text-slate-900">{pkg.voiceFreeExternalMin} phút / chu kỳ</span>
+                      <td key={pkg.id} className="p-4 text-slate-850 border-l border-slate-200">
+                        {isValid(pkg.free_ngoai_mang) ? (
+                          <span className="flex items-center text-emerald-600 font-bold">
+                            <Check className="w-3.5 h-3.5 mr-1" />
+                            {pkg.free_ngoai_mang}
+                          </span>
                         ) : (
                           <span className="text-slate-400 font-medium">Không hỗ trợ</span>
                         )}
@@ -285,37 +296,48 @@ export default function Compare() {
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
                   </tr>
 
-                  {/* Row: Social Media */}
+                  {/* Row: Free Apps */}
                   <tr className="hover:bg-slate-50/20 transition-colors">
                     <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Free Data Ứng dụng</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 text-slate-800 border-l border-slate-200">
-                        {pkg.socialFreeApps.length > 0 ? (
+                        {isValid(pkg.noi_dung_ngoai) ? (
                           <div className="flex flex-wrap gap-1">
-                            {pkg.socialFreeApps.map((app) => (
+                            {pkg.noi_dung_ngoai.split(',').map((app) => (
                               <span key={app} className="bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded text-[9px] font-bold">
-                                {app}
+                                {app.trim()}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-medium">Tính data thông thường</span>
+                          <span className="text-slate-400 font-medium">Không hỗ trợ</span>
                         )}
                       </td>
                     ))}
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
                   </tr>
 
-                  {/* Row: Ratings */}
+                  {/* Row: Free Utilities */}
                   <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Đánh giá / Sao</td>
+                    <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Tiện ích đi kèm</td>
                     {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4 border-l border-slate-200">
-                        <div className="flex items-center">
-                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 mr-1" />
-                          <span className="font-extrabold text-slate-900">{pkg.rating}</span>
-                          <span className="text-slate-500 ml-1 font-semibold">({pkg.registrationsCount.toLocaleString()} lượt)</span>
-                        </div>
+                      <td key={pkg.id} className="p-4 text-slate-800 border-l border-slate-200">
+                        {isValid(pkg.tien_ich_free) ? (
+                          <span className="font-bold text-slate-800">{pkg.tien_ich_free}</span>
+                        ) : (
+                          <span className="text-slate-400 font-medium">Không có</span>
+                        )}
+                      </td>
+                    ))}
+                    {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
+                  </tr>
+
+                  {/* Row: Description */}
+                  <tr className="hover:bg-slate-50/20 transition-colors">
+                    <td className="p-4 font-bold text-slate-600 bg-slate-50/30">Mô tả tóm tắt</td>
+                    {compareList.map((pkg) => (
+                      <td key={pkg.id} className="p-4 text-slate-650 border-l border-slate-200 leading-relaxed font-medium">
+                        {pkg.uudaitrong}
                       </td>
                     ))}
                     {compareList.length < 3 && <td className="p-4 bg-slate-50/10 border-l border-slate-200"></td>}
@@ -323,12 +345,12 @@ export default function Compare() {
 
                   {/* Row: Quick Subscribe Actions */}
                   <tr className="bg-slate-50/50">
-                    <td className="p-4 font-bold text-slate-600 bg-slate-50/50">Thao tác</td>
+                    <td className="p-4 font-bold text-slate-600 bg-slate-50/50">Thao tác nhanh</td>
                     {compareList.map((pkg) => (
                       <td key={pkg.id} className="p-4 border-l border-slate-200">
                         <button
                           onClick={() => handleSubscribeClick(pkg)}
-                          className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2 rounded-lg text-[10px] transition-colors focus:outline-none"
+                          className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2 rounded-xl text-[10px] transition-colors focus:outline-none cursor-pointer"
                         >
                           Đăng ký ngay
                         </button>
@@ -358,7 +380,7 @@ export default function Compare() {
               </div>
             </div>
 
-            <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line space-y-2 font-medium">
+            <div className="text-xs text-slate-650 leading-relaxed whitespace-pre-line space-y-2 font-medium">
               {generateAIAnalysis(compareList).split('\n').map((line, i) => {
                 if (line.startsWith('•')) {
                   const boldPart = line.match(/\*\*(.*?)\*\*/);
@@ -406,12 +428,12 @@ export default function Compare() {
                   <select
                     value={selectedPkgIdToAdd}
                     onChange={(e) => setSelectedPkgIdToAdd(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-700 focus:outline-none focus:bg-white transition-colors"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-700 focus:outline-none focus:bg-white transition-colors cursor-pointer"
                   >
                     <option value="">Chọn gói cước cần thêm...</option>
                     {availablePackagesToSelect.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} - {new Intl.NumberFormat('vi-VN').format(p.price)}đ
+                        {p.ten} - {new Intl.NumberFormat('vi-VN').format(p.gia)}đ
                       </option>
                     ))}
                   </select>
@@ -436,7 +458,7 @@ export default function Compare() {
                 <button
                   disabled={!selectedPkgIdToAdd}
                   onClick={handleAddPackageDirectly}
-                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg text-xs transition-colors disabled:opacity-40 focus:outline-none"
+                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg text-xs transition-colors disabled:opacity-40 focus:outline-none cursor-pointer"
                 >
                   Thêm gói cước
                 </button>
@@ -452,8 +474,8 @@ export default function Compare() {
           <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50">
             <h4 className="text-base font-extrabold text-slate-900 mb-2">Xác nhận đăng ký</h4>
             <p className="text-xs text-slate-655 mb-5 leading-relaxed font-semibold">
-              Bạn có chắc chắn muốn đăng ký nhanh gói cước <strong className="text-primary">{confirmSubscribePkg.name}</strong> với giá{' '}
-              <strong className="text-slate-900">{new Intl.NumberFormat('vi-VN').format(confirmSubscribePkg.price)}đ</strong>?
+              Bạn có chắc chắn muốn đăng ký nhanh gói cước <strong className="text-primary">{confirmSubscribePkg.ten}</strong> với giá{' '}
+              <strong className="text-slate-900">{new Intl.NumberFormat('vi-VN').format(confirmSubscribePkg.gia)}đ</strong>?
               Số tiền này sẽ được trừ trực tiếp vào tài khoản ví ảo của bạn.
             </p>
             <div className="flex space-x-3">
@@ -467,7 +489,7 @@ export default function Compare() {
               <button
                 disabled={isSubmitting}
                 onClick={handleConfirmSubscribe}
-                className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg text-xs transition-colors focus:outline-none"
+                className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg text-xs transition-colors focus:outline-none cursor-pointer"
               >
                 {isSubmitting ? 'Đang xử lý...' : 'Xác nhận'}
               </button>

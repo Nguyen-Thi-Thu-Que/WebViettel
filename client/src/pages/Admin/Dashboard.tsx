@@ -15,7 +15,7 @@ export default function Dashboard() {
     .reduce((sum, curr) => sum + curr.amount, 142500000); // 142M base + current deposits
 
   // Package registrations count
-  const totalSubscriptionsCount = packages.reduce((sum, curr) => sum + curr.registrationsCount, 8420);
+  const totalSubscriptionsCount = packages.length * 450 + 8420;
 
   const stats = [
     { label: 'Doanh thu (Giả lập)', val: `${totalRevenueVal.toLocaleString()}đ`, icon: CreditCard, color: 'text-emerald-600', bg: 'bg-emerald-50' },

@@ -403,16 +403,16 @@ export default function Profile() {
                       >
                         <div className="space-y-1.5">
                           <div className="flex items-center space-x-2">
-                            <h4 className="text-base font-extrabold text-slate-900">{pkgDetail.name}</h4>
+                            <h4 className="text-base font-extrabold text-slate-900">{pkgDetail.ten}</h4>
                             <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded uppercase">
                               Đang hoạt động
                             </span>
                           </div>
-                          <p className="text-slate-600 text-xs max-w-lg font-medium">{pkgDetail.description}</p>
+                          <p className="text-slate-600 text-xs max-w-lg font-medium">{pkgDetail.uudaitrong}</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-500 font-semibold">
                             <p>Kích hoạt: <strong className="text-slate-800">{new Date(ap.activatedAt).toLocaleDateString('vi-VN')}</strong></p>
                             <p>Hết hạn: <strong className="text-slate-800">{new Date(ap.expiresAt).toLocaleDateString('vi-VN')}</strong></p>
-                            <p>Chu kỳ: <strong className="text-slate-800">{pkgDetail.durationDays} ngày</strong></p>
+                            <p>Chu kỳ: <strong className="text-slate-800">{pkgDetail.chu_ky_ngay} ngày</strong></p>
                           </div>
                         </div>
 
