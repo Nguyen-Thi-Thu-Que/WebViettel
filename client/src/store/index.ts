@@ -196,30 +196,83 @@ if (typeof window !== 'undefined') {
 // ==========================================
 // 2. PACKAGE STORE
 // ==========================================
+interface PackageFilters {
+  category: string;
+  price: string;
+  cycle: string;
+  network: string;
+  data: string;
+  call: string;
+  sms: string;
+  hot: string;
+  recommended: string;
+  target: string;
+  promo: string;
+}
+
 interface PackageState {
   packages: Package[];
   loading: boolean;
   error: string | null;
   totalPages: number;
   totalItems: number;
+  pagination: {
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalItems: number;
+  };
+  filters: PackageFilters;
+  search: string;
+  sort: string;
   compareList: Package[];
   currentPackage: Package | null;
   addToCompare: (pkg: Package) => { success: boolean; message: string };
   removeFromCompare: (packageId: string) => void;
   clearCompare: () => void;
-  fetchPackages: (params: Record<string, any>) => Promise<void>;
+  fetchPackages: (params?: Record<string, any>) => Promise<void>;
   fetchPackageById: (id: string) => Promise<void>;
   addPackage: (pkg: Omit<Package, 'id' | 'phan_khuc_gia'>) => Promise<boolean>;
   updatePackage: (id: string, updated: Partial<Package>) => Promise<boolean>;
   deletePackage: (id: string) => Promise<boolean>;
+  setFilter: (key: keyof PackageFilters, value: string) => void;
+  setSearch: (value: string) => void;
+  setSort: (value: string) => void;
+  setPage: (page: number) => void;
+  reset: () => void;
 }
 
-export const usePackageStore = create<PackageState>((set) => ({
+const INITIAL_FILTERS: PackageFilters = {
+  category: 'all',
+  price: 'all',
+  cycle: 'all',
+  network: 'all',
+  data: 'all',
+  call: 'all',
+  sms: 'all',
+  hot: 'all',
+  recommended: 'all',
+  target: '',
+  promo: 'all',
+};
+
+const INITIAL_PAGINATION = {
+  page: 1,
+  limit: 8,
+  totalPages: 1,
+  totalItems: 0,
+};
+
+export const usePackageStore = create<PackageState>((set, get) => ({
   packages: [],
   loading: false,
   error: null,
   totalPages: 1,
   totalItems: 0,
+  pagination: INITIAL_PAGINATION,
+  filters: INITIAL_FILTERS,
+  search: '',
+  sort: 'popular',
   compareList: [],
   currentPackage: null,
 
@@ -249,14 +302,75 @@ export const usePackageStore = create<PackageState>((set) => ({
     set({ compareList: [] });
   },
 
+  setFilter: (key, value) => {
+    set(state => ({
+      filters: { ...state.filters, [key]: value },
+      pagination: { ...state.pagination, page: 1 }
+    }));
+  },
+
+  setSearch: (value) => {
+    set(state => ({
+      search: value,
+      pagination: { ...state.pagination, page: 1 }
+    }));
+  },
+
+  setSort: (value) => {
+    set({ sort: value });
+  },
+
+  setPage: (page) => {
+    set(state => ({
+      pagination: { ...state.pagination, page }
+    }));
+  },
+
+  reset: () => {
+    set({
+      filters: INITIAL_FILTERS,
+      search: '',
+      sort: 'popular',
+      pagination: INITIAL_PAGINATION,
+      totalPages: 1,
+      totalItems: 0
+    });
+  },
+
   fetchPackages: async (params) => {
     set({ loading: true, error: null });
     try {
-      const data = await packageApi.fetchPackages(params);
+      const state = get();
+      const mergedParams = {
+        page: state.pagination.page,
+        limit: state.pagination.limit,
+        search: state.search,
+        category: state.filters.category,
+        price: state.filters.price,
+        cycle: state.filters.cycle,
+        network: state.filters.network,
+        data: state.filters.data,
+        call: state.filters.call,
+        sms: state.filters.sms,
+        hot: state.filters.hot,
+        recommended: state.filters.recommended,
+        target: state.filters.target,
+        promo: state.filters.promo,
+        sort: state.sort,
+        ...params
+      };
+
+      const data = await packageApi.fetchPackages(mergedParams);
       set({ 
         packages: data.packages, 
         totalPages: data.totalPages, 
         totalItems: data.totalItems,
+        pagination: {
+          page: data.page,
+          limit: data.limit,
+          totalPages: data.totalPages,
+          totalItems: data.totalItems
+        },
         loading: false 
       });
     } catch (err: any) {
@@ -266,6 +380,7 @@ export const usePackageStore = create<PackageState>((set) => ({
         packages: [],
         totalPages: 1,
         totalItems: 0,
+        pagination: INITIAL_PAGINATION,
         loading: false
       });
     }

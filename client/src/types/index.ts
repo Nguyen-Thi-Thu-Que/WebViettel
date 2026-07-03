@@ -19,6 +19,7 @@ export interface Package {
   dangky: string;
   huygiahan: string;
   huygoicuoc: string;
+  tags?: string[];
 }
 
 export interface User {

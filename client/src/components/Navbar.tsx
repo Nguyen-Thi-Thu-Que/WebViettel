@@ -61,9 +61,8 @@ export default function Navbar() {
             <Link
               key={link.path}
               to={link.path}
-              className={`hover:text-primary transition-colors py-1 relative ${
-                isActive ? 'text-primary font-bold' : ''
-              }`}
+              className={`hover:text-primary transition-colors py-1 relative ${isActive ? 'text-primary font-bold' : ''
+                }`}
             >
               {link.label}
               {isActive && (
@@ -238,9 +237,8 @@ export default function Navbar() {
                   key={link.path}
                   to={link.path}
                   onClick={() => setIsMenuOpen(false)}
-                  className={`hover:text-primary transition-colors py-1 ${
-                    isActive ? 'text-primary font-bold border-l-2 border-primary pl-2' : ''
-                  }`}
+                  className={`hover:text-primary transition-colors py-1 ${isActive ? 'text-primary font-bold border-l-2 border-primary pl-2' : ''
+                    }`}
                 >
                   {link.label}
                 </Link>

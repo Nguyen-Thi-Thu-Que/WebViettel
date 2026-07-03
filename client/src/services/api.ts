@@ -75,7 +75,8 @@ export function toVietnamesePackage(apiPkg: any): Package {
     chu_ky_ngay: String(apiPkg.durationDays || 30),
     dangky,
     huygiahan,
-    huygoicuoc
+    huygoicuoc,
+    tags: apiPkg.tags || []
   };
 }
 

@@ -162,8 +162,9 @@ exports.getPackages = async (req, res) => {
     const mongoQuery = {};
 
     // A. Keyword Search
-    if (req.query.search) {
-      const searchRegex = new RegExp(req.query.search, 'i');
+    const searchVal = req.query.search || req.query.q;
+    if (searchVal && searchVal.trim()) {
+      const searchRegex = new RegExp(searchVal.trim(), 'i');
       mongoQuery.$or = [
         { ten: searchRegex },
         { ma_goi: searchRegex },
@@ -174,7 +175,7 @@ exports.getPackages = async (req, res) => {
 
     // B. Category Filter (phan_loai_goi)
     if (req.query.category && req.query.category !== 'all') {
-      const cat = req.query.category;
+      const cat = req.query.category.toLowerCase();
       if (cat === 'data') {
         mongoQuery.phan_loai_goi = 'Data';
       } else if (cat === 'combo') {
@@ -182,7 +183,10 @@ exports.getPackages = async (req, res) => {
       } else if (cat === 'social') {
         mongoQuery.phan_loai_goi = 'Social';
       } else if (cat === 'voice') {
-        mongoQuery.phan_loai_goi = { $in: ['Combo', 'Thoại'] }; // voice can be combo
+        mongoQuery.phan_loai_goi = { $in: ['Combo', 'Thoại'] };
+      } else {
+        // Fallback exact regex check
+        mongoQuery.phan_loai_goi = new RegExp(`^${cat}$`, 'i');
       }
     }
 
@@ -200,61 +204,107 @@ exports.getPackages = async (req, res) => {
       }
     }
 
-    // D. Duration Filter (chu_ky_ngay)
-    if (req.query.duration && req.query.duration !== 'all') {
-      const dur = req.query.duration;
-      // Convert chu_ky_ngay to numeric comparisons in query
-      if (dur === 'daily') {
+    // D. Cycle / Duration Filter (chu_ky_ngay)
+    const cycleOpt = req.query.cycle || req.query.duration;
+    if (cycleOpt && cycleOpt !== 'all') {
+      if (cycleOpt === 'daily') {
         mongoQuery.$expr = { $lte: [{ $toInt: "$chu_ky_ngay" }, 1] };
-      } else if (dur === 'weekly') {
+      } else if (cycleOpt === 'weekly') {
         mongoQuery.$expr = { 
           $and: [
             { $gt: [{ $toInt: "$chu_ky_ngay" }, 1] },
             { $lte: [{ $toInt: "$chu_ky_ngay" }, 15] }
           ]
         };
-      } else if (dur === 'monthly') {
+      } else if (cycleOpt === 'monthly') {
         mongoQuery.$expr = { 
           $and: [
             { $gt: [{ $toInt: "$chu_ky_ngay" }, 15] },
             { $lte: [{ $toInt: "$chu_ky_ngay" }, 90] }
           ]
         };
-      } else if (dur === 'yearly') {
+      } else if (cycleOpt === 'yearly') {
         mongoQuery.$expr = { $gt: [{ $toInt: "$chu_ky_ngay" }, 90] };
       }
     }
 
-    // E. 5G/4G Filter (loai)
+    // E. 5G/4G Filter (loai / taggoiy)
     if (req.query.network && req.query.network !== 'all') {
-      mongoQuery.loai = new RegExp(req.query.network, 'i');
-    }
-
-    // F. Thoại Filter (has voice benefit)
-    if (req.query.voice === 'yes') {
-      mongoQuery.free_noi_mang = { $ne: '0' };
-    } else if (req.query.voice === 'no') {
-      mongoQuery.free_noi_mang = '0';
-    }
-
-    // G. SMS Filter (has SMS benefit)
-    if (req.query.sms === 'yes') {
-      mongoQuery.sms = { $ne: '0' };
-    } else if (req.query.sms === 'no') {
-      mongoQuery.sms = '0';
-    }
-
-    // H. Đối tượng áp dụng
-    if (req.query.target && req.query.target !== 'all') {
-      mongoQuery.doi_tuong_ap_dung = new RegExp(req.query.target, 'i');
-    }
-
-    // I. Khuyến mại (has utilities or extra social apps)
-    if (req.query.promo === 'yes') {
+      const netRegex = new RegExp(req.query.network, 'i');
       mongoQuery.$or = [
-        { noi_dung_ngoai: { $ne: '0' } },
-        { tienich: { $ne: '0' } }
+        { loai: netRegex },
+        { taggoiy: netRegex }
       ];
+    }
+
+    // F. Data Filter
+    if (req.query.data && req.query.data !== 'all') {
+      if (req.query.data === 'yes' || req.query.data === 'true') {
+        mongoQuery.data_theo_ngay = { $ne: '0', $exists: true };
+      } else if (req.query.data === 'no' || req.query.data === 'false') {
+        mongoQuery.$or = [
+          { data_theo_ngay: '0' },
+          { data_theo_ngay: '' },
+          { data_theo_ngay: null }
+        ];
+      }
+    }
+
+    // G. Call Filter (has voice benefit)
+    if (req.query.call && req.query.call !== 'all') {
+      if (req.query.call === 'yes' || req.query.call === 'true') {
+        mongoQuery.$or = [
+          { free_noi_mang: { $ne: '0', $exists: true } },
+          { free_ngoai_mang: { $ne: '0', $exists: true } }
+        ];
+      } else if (req.query.call === 'no' || req.query.call === 'false') {
+        mongoQuery.free_noi_mang = '0';
+        mongoQuery.free_ngoai_mang = '0';
+      }
+    }
+
+    // H. SMS Filter (has SMS benefit)
+    if (req.query.sms && req.query.sms !== 'all') {
+      if (req.query.sms === 'yes' || req.query.sms === 'true') {
+        mongoQuery.sms = { $ne: '0' };
+      } else if (req.query.sms === 'no' || req.query.sms === 'false') {
+        mongoQuery.sms = '0';
+      }
+    }
+
+    // I. Hot Filter
+    if (req.query.hot && req.query.hot !== 'all') {
+      if (req.query.hot === 'yes' || req.query.hot === 'true') {
+        mongoQuery.dohot = 'Hot';
+      } else if (req.query.hot === 'no' || req.query.hot === 'false') {
+        mongoQuery.dohot = { $ne: 'Hot' };
+      }
+    }
+
+    // J. Recommended Filter
+    if (req.query.recommended && req.query.recommended !== 'all') {
+      if (req.query.recommended === 'yes' || req.query.recommended === 'true') {
+        mongoQuery.$or = [
+          { dohot: 'Hot' },
+          { do_uu_tien: { $ne: '1' } },
+          { taggoiy: /gợi ý/i }
+        ];
+      }
+    }
+
+    // K. Target Filter (Audience target)
+    if (req.query.target && req.query.target.trim()) {
+      mongoQuery.doi_tuong_ap_dung = new RegExp(req.query.target.trim(), 'i');
+    }
+
+    // L. Promo Filter (App Promotion / free utilities)
+    if (req.query.promo && req.query.promo !== 'all') {
+      if (req.query.promo === 'yes' || req.query.promo === 'true') {
+        mongoQuery.$or = [
+          { noi_dung_ngoai: { $ne: '0' } },
+          { tienich: { $ne: '0' } }
+        ];
+      }
     }
 
     // Execute queries (using MongoDB aggregation to support computed sorting)
@@ -271,13 +321,19 @@ exports.getPackages = async (req, res) => {
 
     // Sorting Logic
     const sortOpt = req.query.sort || 'popular';
-    if (sortOpt === 'price_asc') {
-      pipeline.push({ $sort: { gia: 1 } });
-    } else if (sortOpt === 'price_desc') {
-      pipeline.push({ $sort: { gia: -1 } });
-    } else if (sortOpt === 'rating') {
+    const normalizedSort = sortOpt.toLowerCase().trim();
+
+    if (normalizedSort === 'price_asc' || normalizedSort === 'price asc') {
+      pipeline.push({ $sort: { gia: 1, package_id: 1 } });
+    } else if (normalizedSort === 'price_desc' || normalizedSort === 'price desc') {
+      pipeline.push({ $sort: { gia: -1, package_id: 1 } });
+    } else if (normalizedSort === 'name' || normalizedSort === 'name asc') {
+      pipeline.push({ $sort: { ten: 1, package_id: 1 } });
+    } else if (normalizedSort === 'newest' || normalizedSort === 'newest') {
+      pipeline.push({ $sort: { createdAt: -1, package_id: -1 } });
+    } else if (normalizedSort === 'recommended' || normalizedSort === 'recommended') {
       pipeline.push({ $sort: { rating: -1, package_id: 1 } });
-    } else { // default 'popular'
+    } else { // default 'popular' / 'most_registered'
       pipeline.push({ $sort: { registrationsCount: -1, package_id: 1 } });
     }
 
