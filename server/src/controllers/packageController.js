@@ -413,12 +413,21 @@ exports.getFilterOptions = async (req, res) => {
   try {
     // Get unique categories (phan_loai_goi)
     const phanLoaiValues = await Package.distinct('phan_loai_goi');
-    const categories = phanLoaiValues.map(v => {
-      if (v === 'Data') return { key: 'data', label: 'Data' };
-      if (v === 'Combo') return { key: 'combo', label: 'Combo' };
-      if (v === 'Social') return { key: 'social', label: 'Mạng xã hội' };
-      return { key: v.toLowerCase(), label: v };
+    const categoriesMap = new Map();
+    phanLoaiValues.forEach(v => {
+      if (!v) return;
+      const lower = v.toLowerCase();
+      if (lower === 'data') {
+        categoriesMap.set('data', { key: 'data', label: 'Data' });
+      } else if (lower === 'combo') {
+        categoriesMap.set('combo', { key: 'combo', label: 'Combo' });
+      } else if (lower === 'mxh' || lower === 'mxh') {
+        categoriesMap.set('mxh', { key: 'mxh', label: 'Mạng xã hội' });
+      } else {
+        categoriesMap.set(lower, { key: lower, label: v });
+      }
     });
+    const categories = Array.from(categoriesMap.values());
 
     // Get unique network technology types (loai)
     const loaiValues = await Package.distinct('loai');
@@ -436,36 +445,57 @@ exports.getFilterOptions = async (req, res) => {
         label: `${days} ngày`
       }));
 
-    // Get unique app promos and utilities dynamically
-    const distinctNoiDungNgoai = await Package.distinct('noi_dung_ngoai');
+    // Get unique app promos and utilities dynamically from tien_ich_free only
     const distinctTienIch = await Package.distinct('tien_ich_free');
 
     const combined = new Set();
-    const normalizeAndAdd = (arr) => {
-      arr.forEach(val => {
-        if (!val || val === '0') return;
-        val.split(',').forEach(item => {
-          const trimmed = item.trim();
-          if (trimmed && trimmed !== '0' && trimmed !== '0GB' && trimmed !== '0 GB') {
-            let normalized = trimmed;
-            const lower = trimmed.toLowerCase();
-            if (lower === 'youtube' || lower === 'yt') normalized = 'Youtube';
-            else if (lower === 'tiktok') normalized = 'TikTok';
-            else if (lower === 'facebook' || lower === 'fb') normalized = 'Facebook';
-            else if (lower === 'messenger') normalized = 'Messenger';
-            else if (lower === 'tv360') normalized = 'TV360';
-            else {
-              normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-            }
-            combined.add(normalized);
-          }
-        });
-      });
-    };
-    normalizeAndAdd(distinctNoiDungNgoai);
-    normalizeAndAdd(distinctTienIch);
+    distinctTienIch.forEach(val => {
+      if (!val || val === '0') return;
+      val.split(',').forEach(item => {
+        const trimmed = item.trim();
+        if (
+          !trimmed ||
+          trimmed === '0' ||
+          trimmed === '0GB' ||
+          trimmed === '0 GB' ||
+          trimmed === 'null' ||
+          trimmed === 'undefined'
+        ) {
+          return;
+        }
 
-    const appPromos = [...combined].sort();
+        // Exclude description details
+        const lower = trimmed.toLowerCase();
+        if (
+          lower.includes(':') ||
+          lower.includes('ngày') ||
+          lower.includes('tốc độ') ||
+          lower.includes('đổi') ||
+          lower.includes('tài khoản') ||
+          lower.includes('miễn phí') ||
+          lower.includes('truy cập') ||
+          lower.includes('gb')
+        ) {
+          return;
+        }
+
+        let normalized = trimmed;
+        if (lower === 'youtube' || lower === 'yt') normalized = 'Youtube';
+        else if (lower === 'tiktok') normalized = 'TikTok';
+        else if (lower === 'facebook' || lower === 'fb') normalized = 'Facebook';
+        else if (lower === 'messenger') normalized = 'Messenger';
+        else if (lower === 'tv360') normalized = 'TV360';
+        else if (lower === 'zalo') normalized = 'Zalo';
+        else if (lower === 'spotify') normalized = 'Spotify';
+        else if (lower === 'netflix') normalized = 'Netflix';
+        else {
+          normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+        }
+        combined.add(normalized);
+      });
+    });
+
+    const appPromos = [...combined].sort((a, b) => a.localeCompare(b));
 
     res.json({
       categories,
