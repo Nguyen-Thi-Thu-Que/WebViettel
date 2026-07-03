@@ -78,7 +78,8 @@ export function toVietnamesePackage(apiPkg: any): Package {
     huygoicuoc,
     tags: apiPkg.tags || [],
     ma_goi: apiPkg.ma_goi || '',
-    diem_noi_bat: apiPkg.diem_noi_bat || ''
+    diem_noi_bat: apiPkg.diem_noi_bat || '',
+    goi_thay_the: apiPkg.goi_thay_the || ''
   };
 }
 

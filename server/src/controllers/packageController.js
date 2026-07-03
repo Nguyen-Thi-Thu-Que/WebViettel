@@ -111,7 +111,8 @@ function mapToEnglish(pkg) {
     loaiMạng: doc.loai || '4G/5G',
     diem_noi_bat: doc.diem_noi_bat || '',
     tien_ich_free: doc.tien_ich_free || doc.tienich || '0',
-    noi_dung_ngoai: doc.noi_dung_ngoai || '0'
+    noi_dung_ngoai: doc.noi_dung_ngoai || '0',
+    goi_thay_the: doc.goi_thay_the || ''
   };
 }
 

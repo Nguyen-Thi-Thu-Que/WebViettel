@@ -245,7 +245,6 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer font-bold"
           >
             <option value="popular">Lượt đăng ký nhiều nhất</option>
-            <option value="recommended">Viettel AI khuyên dùng</option>
             <option value="newest">Mới cập nhật</option>
             <option value="price_asc">Giá cước: Thấp - Cao</option>
             <option value="price_desc">Giá cước: Cao - Thấp</option>

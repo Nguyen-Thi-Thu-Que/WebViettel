@@ -1,18 +1,76 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Wifi, Phone, ArrowLeft, ArrowRightLeft, CreditCard, Sparkles, Info, HelpCircle, Loader2 } from 'lucide-react';
+import { 
+  Wifi, 
+  Phone, 
+  ArrowLeft, 
+  ArrowRightLeft, 
+  CreditCard, 
+  Sparkles, 
+  Copy, 
+  Check, 
+  Globe, 
+  Gift, 
+  MessageSquare, 
+  AlertCircle,
+  ArrowRight
+} from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
 import SEO from '../components/SEO';
+import Breadcrumb from '../components/Breadcrumb';
+import { calculateSimilarity } from '../utils/similarity';
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-6 pb-16 animate-pulse text-left">
+      {/* Breadcrumb skeleton */}
+      <div className="h-4 bg-slate-200 rounded w-1/4 mb-6"></div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column Skeleton */}
+        <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
+          <div className="space-y-3">
+            <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+            <div className="h-8 bg-slate-200 rounded w-2/3"></div>
+          </div>
+          <div className="h-20 bg-slate-100 rounded-xl"></div>
+          <div className="pt-6 border-t border-slate-100 space-y-4">
+            <div className="h-8 bg-slate-200 rounded w-1/2"></div>
+            <div className="h-12 bg-slate-200 rounded w-full"></div>
+          </div>
+        </div>
+
+        {/* Right Column Skeleton */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
+            <div className="h-6 bg-slate-200 rounded w-1/4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="h-16 bg-slate-50 rounded-xl"></div>
+              <div className="h-16 bg-slate-50 rounded-xl"></div>
+              <div className="h-16 bg-slate-50 rounded-xl"></div>
+              <div className="h-16 bg-slate-50 rounded-xl"></div>
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+            <div className="h-6 bg-slate-200 rounded w-1/4"></div>
+            <div className="h-20 bg-slate-50 rounded-xl"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PackageDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { ma_goi } = useParams<{ ma_goi: string }>();
   const {
     currentPackage: pkg,
     loading,
     error,
     fetchPackageById,
     packages,
+    fetchPackages,
     addToCompare,
     compareList,
     removeFromCompare
@@ -22,51 +80,112 @@ export default function PackageDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  // Auto scroll to top on router parameter change
   useEffect(() => {
-    if (id) {
-      fetchPackageById(id);
+    if (ma_goi) {
+      fetchPackageById(ma_goi);
+    }
+    if (packages.length === 0) {
+      fetchPackages();
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [id, fetchPackageById]);
+  }, [ma_goi, fetchPackageById, packages.length, fetchPackages]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const handleCopy = (text: string, type: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopiedText(type);
+        showToast('success', `Đã sao chép: ${text}`);
+        setTimeout(() => setCopiedText(null), 2000);
+      })
+      .catch(err => {
+        console.error("Failed to copy:", err);
+        showToast('error', 'Không thể sao chép.');
+      });
+  };
+
+  const handleReload = () => {
+    if (ma_goi) {
+      fetchPackageById(ma_goi);
+    }
+  };
+
+  const isValid = (val: any) => {
+    if (
+      val === 0 ||
+      val === '0' ||
+      val === '0GB' ||
+      val === '0 GB' ||
+      val === null ||
+      val === undefined ||
+      val === '' ||
+      val === '_'
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   if (loading) {
+    return <DetailSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-xs font-semibold text-slate-500 space-y-4">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="animate-pulse">Đang tải thông tin chi tiết gói cước...</span>
+      <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-5 shadow-sm my-12 text-xs font-semibold animate-scale-up">
+        <AlertCircle className="w-12 h-12 text-primary mx-auto" />
+        <h3 className="text-lg font-extrabold text-slate-900">Không thể tải dữ liệu</h3>
+        <p className="text-slate-500 font-medium">
+          {error || 'Đã xảy ra lỗi kết nối khi lấy thông tin gói cước từ hệ thống Viettel.'}
+        </p>
+        <div className="flex justify-center space-x-3 pt-2">
+          <Link
+            to="/packages"
+            className="inline-flex items-center space-x-1.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Quay lại danh mục</span>
+          </Link>
+          <button
+            onClick={handleReload}
+            className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+            type="button"
+          >
+            Tải lại
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (error || !pkg) {
+  if (!pkg) {
     return (
-      <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-4 shadow-sm my-12 text-xs font-semibold animate-scale-up">
-        <h3 className="text-xl font-bold text-primary">Gói cước không tồn tại</h3>
-        <p className="text-slate-500 text-xs">
-          {error || 'Gói cước bạn tìm kiếm không có trong hệ thống dữ liệu Viettel hoặc đã tạm ngưng cung cấp.'}
+      <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-5 shadow-sm my-12 text-xs font-semibold animate-scale-up">
+        <AlertCircle className="w-12 h-12 text-primary mx-auto" />
+        <h3 className="text-lg font-extrabold text-slate-900">Không tìm thấy gói cước</h3>
+        <p className="text-slate-500 font-medium">
+          Gói cước di động bạn tìm kiếm không tồn tại trên hệ thống hoặc đã tạm ngừng đăng ký.
         </p>
         <Link
           to="/packages"
-          className="inline-flex items-center space-x-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition-colors"
+          className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Quay lại danh mục</span>
+          <span>Quay lại danh sách</span>
         </Link>
       </div>
     );
   }
 
-  const isValid = (val: any) => {
-    return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '';
-  };
-
   const isInCompare = compareList.some(p => p.id === pkg.id);
+  const isHot = pkg.dohot === 'Hot';
 
   const handleCompareToggle = () => {
     if (isInCompare) {
@@ -108,19 +227,41 @@ export default function PackageDetail() {
     }
   };
 
-  // Find related packages
+  // Find related packages sorted by similarity score + fallback to do_uu_tien
   const relatedPackages = packages
-    .filter(p => p.id !== pkg.id && (p.phan_loai_goi === pkg.phan_loai_goi || Math.abs(p.gia - pkg.gia) <= 50000))
+    .filter(p => p.id !== pkg.id)
+    .map(p => ({
+      pkg: p,
+      score: calculateSimilarity(pkg, p)
+    }))
+    .sort((a, b) => b.score - a.score || parseInt(b.pkg.ma_goi || '0') - parseInt(a.pkg.ma_goi || '0'))
+    .map(item => item.pkg)
     .slice(0, 3);
 
-  // Structured schemas: Product & FAQ schemas for SEO
-  const packageUrl = `${window.location.origin}/packages/${pkg.id}`;
+  // Map category code to user-friendly Vietnamese text
+  const getCategoryLabel = (cat: string) => {
+    if (!cat) return 'Data';
+    const lower = cat.toLowerCase();
+    if (lower === 'mxh' || lower === 'social') return 'Mạng xã hội';
+    if (lower === 'data') return 'Data';
+    if (lower === 'combo') return 'Combo';
+    if (lower === 'thoại' || lower === 'voice') return 'Thoại';
+    return cat;
+  };
+
+  // SEO dynamic values
+  const formattedPrice = new Intl.NumberFormat('vi-VN').format(pkg.gia);
+  const cycleLabel = `${pkg.chu_ky_ngay} ngày`;
+  const seoTitle = `${pkg.ma_goi || pkg.ten} - Gói cước Viettel ${formattedPrice}đ | Website`;
+  const seoDescription = `Đăng ký gói ${pkg.ma_goi || pkg.ten} Viettel giá ${formattedPrice}đ, nhận ưu đãi ${pkg.data_theo_ngay || 'data khủng'} trong chu kỳ ${cycleLabel}.`;
+  const canonicalUrl = `${window.location.origin}/goi-cuoc/${pkg.ma_goi || pkg.id}`;
+
   const detailSchemas = [
     {
       "@context": "https://schema.org",
       "@type": "Product",
       "name": `Gói Cước ${pkg.ten} Viettel`,
-      "description": pkg.uudaitrong || `Đăng ký gói cước ${pkg.ten} Viettel nhận ngay ưu đãi hấp dẫn.`,
+      "description": pkg.uudaitrong || seoDescription,
       "image": `${window.location.origin}/og-image.jpg`,
       "brand": {
         "@type": "Brand",
@@ -128,7 +269,7 @@ export default function PackageDetail() {
       },
       "offers": {
         "@type": "Offer",
-        "url": packageUrl,
+        "url": canonicalUrl,
         "price": pkg.gia,
         "priceCurrency": "VND",
         "availability": "https://schema.org/InStock",
@@ -137,117 +278,94 @@ export default function PackageDetail() {
           "name": "Viettel"
         }
       }
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": `Cú pháp đăng ký gói ${pkg.ten} Viettel?`,
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": `Soạn tin nhắn theo cú pháp: ${pkg.dangky || `${pkg.ten} gửi 191`}`
-          }
-        },
-        {
-          "@type": "Question",
-          "name": `Làm sao để hủy gói cước ${pkg.ten}?`,
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": `Hủy gia hạn soạn: ${pkg.huygiahan || 'HUY gửi 191'} hoặc hủy gói cước hoàn toàn soạn: ${pkg.huygoicuoc || 'HUYDATA gửi 191'}`
-          }
-        }
-      ]
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Trang chủ",
-          "item": window.location.origin
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "Gói cước",
-          "item": `${window.location.origin}/packages`
-        },
-        {
-          "@type": "ListItem",
-          "position": 3,
-          "name": pkg.ten,
-          "item": packageUrl
-        }
-      ]
     }
   ];
 
+  const breadcrumbItems = [
+    { label: 'Gói cước', path: '/packages' },
+    { label: pkg.ma_goi || pkg.ten }
+  ];
+
   return (
-    <div className="space-y-10 pb-16 relative animate-fade-in text-xs font-semibold">
+    <div className="space-y-6 pb-16 relative animate-fade-in text-xs font-semibold text-left">
       {/* SEO configuration */}
       <SEO
-        title={`Gói Cước ${pkg.ten} Viettel - Ưu Đãi ${pkg.data_theo_ngay || pkg.uudaitrong}`}
-        description={`Chi tiết gói cước di động ${pkg.ten} Viettel. Giá cước ${pkg.gia.toLocaleString()}đ cho chu kỳ ${pkg.chu_ky_ngay} ngày. Đăng ký ngay nhận data khủng ${pkg.data_theo_ngay} cùng các ưu đãi gọi thoại miễn phí.`}
+        title={seoTitle}
+        description={seoDescription}
         schema={detailSchemas}
       />
 
       {/* Toast Notification */}
       {toastMsg && (
-        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
-          }`}>
+        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-bold bg-white text-slate-800 border-l-primary`}>
           {toastMsg.text}
         </div>
       )}
 
-      {/* Back link */}
-      <div className="text-left">
-        <Link
-          to="/packages"
-          className="inline-flex items-center space-x-1.5 text-xs text-slate-400 hover:text-slate-900 transition-colors font-bold"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Quay lại danh sách gói cước</span>
-        </Link>
-      </div>
+      {/* Breadcrumbs */}
+      <Breadcrumb items={breadcrumbItems} />
+
+      {/* Alternative replacement package banner */}
+      {isValid(pkg.goi_thay_the) && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50/20 border border-red-100 rounded-2xl p-5 flex items-center justify-between text-left">
+          <div className="space-y-1">
+            <span className="text-[10px] text-primary font-bold uppercase tracking-wider block">Bạn có thể quan tâm</span>
+            <h4 className="text-sm font-extrabold text-slate-900">Gói cước thay thế: {pkg.goi_thay_the}</h4>
+            <p className="text-[11px] text-slate-500 font-medium">Gói cước này có nhiều ưu đãi phù hợp hơn dành cho bạn</p>
+          </div>
+          <Link
+            to={`/goi-cuoc/${pkg.goi_thay_the}`}
+            className="bg-primary hover:bg-primary-hover text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
+          >
+            <span>Xem ngay</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Main Details Panel */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Price and Primary Action Card */}
-        <div className="lg:col-span-1 bg-white border border-slate-100 shadow-sm rounded-2xl p-6 flex flex-col justify-between space-y-6">
+        <div className="lg:col-span-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-6 flex flex-col justify-between space-y-6 h-fit">
           <div className="space-y-4 text-left">
             <div className="flex justify-between items-center">
               <span className="bg-red-50 border border-red-100/60 text-primary text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                {pkg.phan_loai_goi}
+                {getCategoryLabel(pkg.phan_loai_goi)}
               </span>
-              {pkg.dohot !== 'normal' && (
+              {isHot && (
                 <div className="flex items-center text-[10px] text-primary font-bold bg-red-500/10 px-2 py-0.5 rounded border border-primary/20">
                   <Sparkles className="w-3.5 h-3.5 mr-1 fill-primary text-primary" />
-                  <span>NỔI BẬT</span>
+                  <span>HOT</span>
                 </div>
               )}
             </div>
 
-            <h2 className="text-3xl font-extrabold text-slate-900 leading-tight">{pkg.ten}</h2>
+            <h2 className="text-2xl font-extrabold text-slate-900 leading-tight">
+              {pkg.ma_goi ? `${pkg.ma_goi} - ${pkg.ten}` : pkg.ten}
+            </h2>
 
             {isValid(pkg.uudaitrong) && (
-              <p className="text-slate-600 text-xs leading-relaxed font-medium bg-red-50/20 p-4 rounded-xl border border-primary/10">
+              <p className="text-slate-600 text-xs leading-relaxed font-medium bg-red-50/10 p-4 rounded-xl border border-primary/10">
                 {pkg.uudaitrong}
               </p>
             )}
           </div>
 
-          <div className="space-y-4 border-t border-slate-50 pt-6">
-            <div className="flex items-baseline space-x-1.5">
-              <span className="text-3xl font-black text-primary">
-                {new Intl.NumberFormat('vi-VN').format(pkg.gia)}
-              </span>
-              <span className="text-slate-500 text-xs font-bold">
-                đ / {pkg.chu_ky_ngay} ngày
-              </span>
+          <div className="space-y-4 border-t border-slate-100 pt-6">
+            {/* Info Group 1: Thông tin cơ bản */}
+            <div className="space-y-2 text-slate-600 font-medium">
+              <div className="flex justify-between items-center">
+                <span>Giá cước:</span>
+                <span className="font-extrabold text-slate-950 text-sm">{formattedPrice}đ</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-50 pt-2">
+                <span>Chu kỳ cước:</span>
+                <span className="font-extrabold text-slate-950">{cycleLabel}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-50 pt-2">
+                <span>Loại gói:</span>
+                <span className="font-extrabold text-slate-950">{getCategoryLabel(pkg.phan_loai_goi)}</span>
+              </div>
             </div>
 
             <div className="flex space-x-2 pt-2">
@@ -274,101 +392,101 @@ export default function PackageDetail() {
 
         {/* Right Column: Detailed Benefits and Conditions */}
         <div className="lg:col-span-2 space-y-6 text-left">
-          {/* Box 1: Detailed Allowances */}
-          <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-6 md:p-8 space-y-6">
-            <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2 border-b border-slate-50 pb-3">
-              <Sparkles className="w-5 h-5 text-primary" />
+          {/* Info Group 2: Ưu đãi */}
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-6">
+            <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2 border-b border-slate-100 pb-3">
+              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
               <span>Chi tiết ưu đãi dịch vụ</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Data Detail Block */}
               {isValid(pkg.data_theo_ngay) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
                   <div className="flex items-center space-x-2">
-                    <Wifi className="w-4.5 h-4.5 text-primary" />
+                    <Wifi className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dung lượng Data</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.data_theo_ngay}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.data_theo_ngay}</p>
                 </div>
               )}
 
               {/* Calls Detail Block - Internal */}
               {isValid(pkg.free_noi_mang) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
                   <div className="flex items-center space-x-2">
-                    <Phone className="w-4.5 h-4.5 text-primary" />
+                    <Phone className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gọi Nội mạng</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.free_noi_mang}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.free_noi_mang}</p>
                 </div>
               )}
 
               {/* Calls Detail Block - External */}
               {isValid(pkg.free_ngoai_mang) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
                   <div className="flex items-center space-x-2">
-                    <Phone className="w-4.5 h-4.5 text-primary" />
+                    <Phone className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gọi Ngoại mạng</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.free_ngoai_mang}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.free_ngoai_mang}</p>
                 </div>
               )}
 
               {/* SMS Detail Block */}
               {isValid(pkg.sms) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
                   <div className="flex items-center space-x-2">
-                    <Info className="w-4.5 h-4.5 text-primary" />
+                    <MessageSquare className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tin nhắn SMS</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.sms}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.sms}</p>
                 </div>
               )}
 
               {/* Free Apps Detail Block */}
               {isValid(pkg.noi_dung_ngoai) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
                   <div className="flex items-center space-x-2">
-                    <HelpCircle className="w-4.5 h-4.5 text-emerald-600" />
+                    <Globe className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ứng dụng miễn cước data</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.noi_dung_ngoai}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.noi_dung_ngoai}</p>
                 </div>
               )}
 
               {/* Free Utilities Detail Block */}
               {isValid(pkg.tien_ich_free) && (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
                   <div className="flex items-center space-x-2">
-                    <Info className="w-4.5 h-4.5 text-emerald-600" />
+                    <Gift className="w-4 h-4 text-primary" />
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tiện ích đi kèm</h4>
                   </div>
-                  <p className="text-base font-black text-slate-950">{pkg.tien_ich_free}</p>
+                  <p className="text-sm font-extrabold text-slate-900">{pkg.tien_ich_free}</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Box 2: Terms and Conditions */}
+          {/* Info Group 3: Điều kiện */}
           {(isValid(pkg.dieu_kien_dang_ky) || isValid(pkg.chinh_sach_ap_dung)) && (
-            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-6 md:p-8 space-y-5">
-              <h3 className="text-base font-bold text-slate-900 border-b border-slate-50 pb-3">Điều kiện và quy định sử dụng</h3>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-5">
+              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Điều kiện & quy định sử dụng</h3>
 
               <div className="space-y-4 text-xs text-slate-600 font-medium">
                 {isValid(pkg.dieu_kien_dang_ky) && (
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-slate-900">Đối tượng áp dụng:</h4>
-                    <p className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 leading-relaxed">
+                  <div className="space-y-1.5">
+                    <h4 className="font-extrabold text-slate-900">Đối tượng áp dụng:</h4>
+                    <p className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 leading-relaxed font-medium">
                       {pkg.dieu_kien_dang_ky}
                     </p>
                   </div>
                 )}
 
                 {isValid(pkg.chinh_sach_ap_dung) && (
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-slate-900">Chính sách sử dụng:</h4>
-                    <p className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 leading-relaxed">
+                  <div className="space-y-1.5">
+                    <h4 className="font-extrabold text-slate-900">Chính sách sử dụng:</h4>
+                    <p className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 leading-relaxed font-medium">
                       {pkg.chinh_sach_ap_dung}
                     </p>
                   </div>
@@ -377,36 +495,75 @@ export default function PackageDetail() {
             </div>
           )}
 
-          {/* Box 3: Reg & Cancellation syntaxes */}
-          <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-6 md:p-8 space-y-3.5 font-medium text-slate-600">
-            {isValid(pkg.dangky) && (
-              <div className="flex justify-between items-center py-1">
-                <span>Cú pháp đăng ký nhanh:</span>
-                <span className="font-bold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg">{pkg.dangky}</span>
-              </div>
-            )}
-            {isValid(pkg.huygiahan) && (
-              <div className="flex justify-between items-center py-1 border-t border-slate-50 pt-2.5">
-                <span>Hủy gia hạn:</span>
-                <span className="font-bold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg">{pkg.huygiahan}</span>
-              </div>
-            )}
-            {isValid(pkg.huygoicuoc) && (
-              <div className="flex justify-between items-center py-1 border-t border-slate-50 pt-2.5">
-                <span>Hủy hoàn toàn gói cước:</span>
-                <span className="font-bold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg">{pkg.huygoicuoc}</span>
-              </div>
-            )}
+          {/* Info Group 4: Cú pháp đăng ký / hủy */}
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-4 font-medium text-slate-600">
+            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Cú pháp nhắn tin qua đầu số 191</h3>
+
+            <div className="space-y-3 pt-2">
+              {isValid(pkg.dangky) && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1">
+                  <span>Cú pháp đăng ký nhanh:</span>
+                  <div className="flex items-center space-x-2 self-start sm:self-auto">
+                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                      {pkg.dangky}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(pkg.dangky, 'dangky')}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                      title="Sao chép cú pháp"
+                    >
+                      {copiedText === 'dangky' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isValid(pkg.huygiahan) && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
+                  <span>Hủy gia hạn gói:</span>
+                  <div className="flex items-center space-x-2 self-start sm:self-auto">
+                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                      {pkg.huygiahan}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(pkg.huygiahan, 'huygiahan')}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                      title="Sao chép cú pháp"
+                    >
+                      {copiedText === 'huygiahan' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isValid(pkg.huygoicuoc) && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
+                  <span>Hủy gói cước hoàn toàn:</span>
+                  <div className="flex items-center space-x-2 self-start sm:self-auto">
+                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                      {pkg.huygoicuoc}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(pkg.huygoicuoc, 'huygoicuoc')}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                      title="Sao chép cú pháp"
+                    >
+                      {copiedText === 'huygoicuoc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Related Packages Showcase */}
       {relatedPackages.length > 0 && (
-        <section className="space-y-6 pt-6 text-left">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="text-xl font-bold text-slate-900">Gói cước liên quan</h3>
-            <p className="text-slate-500 text-xs font-semibold">Các gói cước cùng thể loại hoặc phân khúc giá tương tự</p>
+        <section className="space-y-6 pt-6 text-left border-t border-slate-150">
+          <div>
+            <h3 className="text-lg font-extrabold text-slate-900">Gói cước liên quan</h3>
+            <p className="text-slate-500 text-xs font-semibold">Các gói cước cùng thể loại hoặc chu kỳ tương tự</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -425,10 +582,10 @@ export default function PackageDetail() {
       {/* Subscription Confirmation Modal */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
             <h4 className="text-sm font-extrabold text-slate-900 mb-2">Xác nhận đăng ký</h4>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
-              Bạn có chắc chắn muốn đăng ký gói cước <strong className="text-primary">{pkg.ten}</strong> với giá{' '}
+              Bạn có chắc chắn muốn đăng ký gói cước <strong className="text-primary">{pkg.ma_goi || pkg.ten}</strong> với giá{' '}
               <strong className="text-slate-900">{new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ</strong>?
               Số tiền này sẽ được trừ trực tiếp vào tài khoản ví ảo của bạn.
             </p>
@@ -436,7 +593,7 @@ export default function PackageDetail() {
               <button
                 disabled={isSubmitting}
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
               >
                 Hủy
               </button>

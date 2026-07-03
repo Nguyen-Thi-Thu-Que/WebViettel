@@ -22,6 +22,7 @@ export interface Package {
   tags?: string[];
   ma_goi?: string;
   diem_noi_bat?: string;
+  goi_thay_the?: string;
 }
 
 export interface User {

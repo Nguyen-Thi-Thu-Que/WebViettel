@@ -176,7 +176,7 @@ const PackageCard = React.memo(function PackageCard({
 
         {/* Details route button */}
         <Link
-          to={`/packages/${pkg.id}`}
+          to={`/goi-cuoc/${pkg.ma_goi || pkg.id}`}
           className="w-full flex items-center justify-center py-1 text-[10px] text-slate-400 hover:text-primary transition-colors font-bold group/lnk"
         >
           <span>Xem chi tiết gói cước</span>

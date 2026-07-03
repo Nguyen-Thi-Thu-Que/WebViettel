@@ -41,7 +41,7 @@ export default function App() {
           <Route path="/" element={<ClientLayout />}>
             <Route index element={<Home />} />
             <Route path="packages" element={<Packages />} />
-            <Route path="packages/:id" element={<PackageDetail />} />
+            <Route path="goi-cuoc/:ma_goi" element={<PackageDetail />} />
             <Route path="compare" element={<Compare />} />
             <Route path="survey" element={<Survey />} />
             <Route path="profile" element={<Profile />} />
