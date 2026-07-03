@@ -108,7 +108,10 @@ function mapToEnglish(pkg) {
     rating: parseFloat(rating),
     registrationsCount,
     tags,
-    loaiMạng: doc.loai || '4G/5G'
+    loaiMạng: doc.loai || '4G/5G',
+    diem_noi_bat: doc.diem_noi_bat || '',
+    tien_ich_free: doc.tien_ich_free || doc.tienich || '0',
+    noi_dung_ngoai: doc.noi_dung_ngoai || '0'
   };
 }
 
@@ -190,10 +193,16 @@ exports.getPackages = async (req, res) => {
       }
     }
 
-    // C. Price Filter
+    // C. Price Filter (Lọc theo gia, không dựa vào phan_khuc_gia)
     if (req.query.price && req.query.price !== 'all') {
       const priceOpt = req.query.price;
-      if (priceOpt === 'under_50') {
+      if (priceOpt === 'Gia_re') {
+        mongoQuery.gia = { $lt: 50000 };
+      } else if (priceOpt === 'Trung_binh') {
+        mongoQuery.gia = { $gte: 50000, $lte: 150000 };
+      } else if (priceOpt === 'Cao_cap') {
+        mongoQuery.gia = { $gt: 150000 };
+      } else if (priceOpt === 'under_50') {
         mongoQuery.gia = { $lt: 50000 };
       } else if (priceOpt === '50_100') {
         mongoQuery.gia = { $gte: 50000, $lte: 100000 };
@@ -207,7 +216,9 @@ exports.getPackages = async (req, res) => {
     // D. Cycle / Duration Filter (chu_ky_ngay)
     const cycleOpt = req.query.cycle || req.query.duration;
     if (cycleOpt && cycleOpt !== 'all') {
-      if (cycleOpt === 'daily') {
+      if (/^\d+$/.test(cycleOpt)) {
+        mongoQuery.chu_ky_ngay = cycleOpt;
+      } else if (cycleOpt === 'daily') {
         mongoQuery.$expr = { $lte: [{ $toInt: "$chu_ky_ngay" }, 1] };
       } else if (cycleOpt === 'weekly') {
         mongoQuery.$expr = { 

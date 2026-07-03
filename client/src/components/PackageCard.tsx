@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Sparkles, Wifi, Phone, MessageSquare, ArrowRight, Check } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, Wifi, Phone, PhoneCall, MessageSquare, ArrowRight, Check, Gift, Globe } from 'lucide-react';
 import type { Package } from '../types';
 import { usePackageStore } from '../store';
 import React, { useState } from 'react';
@@ -45,8 +45,11 @@ const PackageCard = React.memo(function PackageCard({
 
   const isHot = pkg.dohot === 'Hot';
 
-  // Get tags as a list
-  const tagsList = pkg.tags || [];
+  // Exclude internal database filter tags from being displayed on the card UI
+  const excludedTags = ['gia_re', 'trung_binh', 'cao_cap', 'pho_thong', 'tra_truoc', 'tra_sau'];
+  const tagsList = (pkg.tags || [])
+    .filter((tag: string) => !excludedTags.includes(tag.toLowerCase()))
+    .map((tag: string) => tag.trim());
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-350 p-5 sm:p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative text-xs font-semibold select-none text-left">
@@ -60,9 +63,9 @@ const PackageCard = React.memo(function PackageCard({
 
       {/* Main info block */}
       <div className="space-y-4">
-        {/* Category */}
+        {/* Category & Package Code */}
         <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest block">
-          {pkg.phan_loai_goi || 'Data'}
+          {pkg.phan_loai_goi || 'Data'} {pkg.ma_goi && `• ${pkg.ma_goi}`}
         </span>
 
         {/* Name */}
@@ -73,12 +76,20 @@ const PackageCard = React.memo(function PackageCard({
         {/* Pricing */}
         <div className="flex items-baseline space-x-1.5 pt-1">
           <span className="text-2xl font-black text-slate-900 tracking-tight">
-            {new Intl.NumberFormat('vi-VN').format(pkg.gia)}
+            {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
           </span>
           <span className="text-[11px] text-slate-500 font-bold">
-            đ / {pkg.chu_ky_ngay} ngày
+            / {pkg.chu_ky_ngay} ngày
           </span>
         </div>
+
+        {/* Highlight points if available */}
+        {isValid(pkg.diem_noi_bat) && (
+          <div className="bg-red-50/50 border border-red-100/40 rounded-xl p-3 text-[11px] text-primary font-bold flex items-start space-x-2">
+            <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+            <span className="leading-snug">{pkg.diem_noi_bat}</span>
+          </div>
+        )}
 
         {/* Benefits lists */}
         <div className="space-y-3 pt-3 border-t border-slate-100">
@@ -97,25 +108,38 @@ const PackageCard = React.memo(function PackageCard({
             </div>
           )}
 
-          {/* Calls benefit */}
-          {(isValid(pkg.free_noi_mang) || isValid(pkg.free_ngoai_mang)) && (
+          {/* Internal Calls benefit */}
+          {isValid(pkg.free_noi_mang) && (
+            <div className="flex items-center text-slate-700">
+              <PhoneCall className="w-4 h-4 text-primary mr-3 shrink-0" />
+              <div className="flex flex-col">
+                <span className="font-extrabold text-[12.5px] text-slate-950 leading-tight">
+                  {pkg.free_noi_mang}
+                </span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                  Gọi nội mạng miễn phí
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* External Calls benefit */}
+          {isValid(pkg.free_ngoai_mang) && (
             <div className="flex items-center text-slate-700">
               <Phone className="w-4 h-4 text-primary mr-3 shrink-0" />
               <div className="flex flex-col">
                 <span className="font-extrabold text-[12.5px] text-slate-950 leading-tight">
-                  {isValid(pkg.free_noi_mang) && pkg.free_noi_mang !== '0' ? pkg.free_noi_mang : ''}
-                  {isValid(pkg.free_noi_mang) && pkg.free_noi_mang !== '0' && isValid(pkg.free_ngoai_mang) && pkg.free_ngoai_mang !== '0' ? ' + ' : ''}
-                  {isValid(pkg.free_ngoai_mang) && pkg.free_ngoai_mang !== '0' ? pkg.free_ngoai_mang : ''}
+                  {pkg.free_ngoai_mang}
                 </span>
                 <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-                  Miễn phí đàm thoại
+                  Gọi ngoại mạng miễn phí
                 </span>
               </div>
             </div>
           )}
 
           {/* SMS benefit */}
-          {isValid(pkg.sms) && pkg.sms !== '0' && (
+          {isValid(pkg.sms) && (
             <div className="flex items-center text-slate-700">
               <MessageSquare className="w-4 h-4 text-primary mr-3 shrink-0" />
               <div className="flex flex-col">
@@ -123,7 +147,37 @@ const PackageCard = React.memo(function PackageCard({
                   {pkg.sms}
                 </span>
                 <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-                  Tin nhắn đi kèm
+                  Tin nhắn SMS miễn phí
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Utilities benefit */}
+          {isValid(pkg.tien_ich_free) && (
+            <div className="flex items-center text-slate-700">
+              <Gift className="w-4 h-4 text-primary mr-3 shrink-0" />
+              <div className="flex flex-col">
+                <span className="font-extrabold text-[12px] text-slate-950 leading-tight">
+                  {pkg.tien_ich_free}
+                </span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                  Tiện ích miễn phí
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Social Media Apps benefit */}
+          {isValid(pkg.noi_dung_ngoai) && (
+            <div className="flex items-center text-slate-700">
+              <Globe className="w-4 h-4 text-primary mr-3 shrink-0" />
+              <div className="flex flex-col">
+                <span className="font-extrabold text-[12px] text-slate-950 leading-tight">
+                  {pkg.noi_dung_ngoai}
+                </span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                  Ứng dụng miễn phí data
                 </span>
               </div>
             </div>

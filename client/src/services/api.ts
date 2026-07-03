@@ -53,7 +53,6 @@ export function toVietnamesePackage(apiPkg: any): Package {
 
   const free_noi_mang = apiPkg.voiceFreeInternalMin ? `${apiPkg.voiceFreeInternalMin} phút nội mạng` : '0';
   const free_ngoai_mang = apiPkg.voiceFreeExternalMin ? `${apiPkg.voiceFreeExternalMin} phút ngoại mạng` : '0';
-  const noi_dung_ngoai = apiPkg.socialFreeApps?.length > 0 ? apiPkg.socialFreeApps.join(', ') : '0';
 
   return {
     id: apiPkg.id,
@@ -69,14 +68,16 @@ export function toVietnamesePackage(apiPkg: any): Package {
     sms: apiPkg.sms || '0',
     dieu_kien_dang_ky: apiPkg.conditions || 'Thuê bao di động hoạt động bình thường',
     chinh_sach_ap_dung,
-    noi_dung_ngoai,
+    noi_dung_ngoai: apiPkg.noi_dung_ngoai || '0',
     tien_ich_free: apiPkg.tien_ich_free || apiPkg.tienich || '0',
     uudaitrong: apiPkg.description || '',
     chu_ky_ngay: String(apiPkg.durationDays || 30),
     dangky,
     huygiahan,
     huygoicuoc,
-    tags: apiPkg.tags || []
+    tags: apiPkg.tags || [],
+    ma_goi: apiPkg.ma_goi || '',
+    diem_noi_bat: apiPkg.diem_noi_bat || ''
   };
 }
 

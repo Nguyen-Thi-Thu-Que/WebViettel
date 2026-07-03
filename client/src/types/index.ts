@@ -20,6 +20,8 @@ export interface Package {
   huygiahan: string;
   huygoicuoc: string;
   tags?: string[];
+  ma_goi?: string;
+  diem_noi_bat?: string;
 }
 
 export interface User {

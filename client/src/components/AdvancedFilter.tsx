@@ -94,11 +94,10 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSelectChange('price', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Mọi giá tiền</option>
-            <option value="under_50">Dưới 50.000đ</option>
-            <option value="50_100">Từ 50.000đ - 100.000đ</option>
-            <option value="100_200">Từ 100.000đ - 200.000đ</option>
-            <option value="above_200">Trên 200.000đ</option>
+            <option value="all">Mọi phân khúc</option>
+            <option value="Gia_re">Giá rẻ</option>
+            <option value="Trung_binh">Trung bình</option>
+            <option value="Cao_cap">Cao cấp</option>
           </select>
         </div>
 
@@ -114,10 +113,10 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Mọi chu kỳ</option>
-            <option value="daily">Theo Ngày (1 ngày)</option>
-            <option value="weekly">Theo Tuần (3 - 15 ngày)</option>
-            <option value="monthly">Theo Tháng (30 ngày)</option>
-            <option value="yearly">Chu kỳ năm (&gt;90 ngày)</option>
+            <option value="3">3 ngày</option>
+            <option value="7">7 ngày</option>
+            <option value="30">30 ngày</option>
+            <option value="90">90 ngày</option>
           </select>
         </div>
       </div>
@@ -196,14 +195,17 @@ export default function AdvancedFilter() {
           <label htmlFor="card-filter-target" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Đối tượng áp dụng
           </label>
-          <input
+          <select
             id="card-filter-target"
-            type="text"
-            placeholder="Ví dụ: trả trước..."
             value={filters.target}
             onChange={(e) => handleSelectChange('target', e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-2.5 px-3.5 text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-primary/45 focus:ring-4 focus:ring-red-50/20 transition-all font-semibold"
-          />
+            className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
+          >
+            <option value="all">Tất cả đối tượng</option>
+            <option value="pho_thong">Phổ thông</option>
+            <option value="tra_truoc">Trả trước</option>
+            <option value="tra_sau">Trả sau</option>
+          </select>
         </div>
 
         {/* Sort Select */}
