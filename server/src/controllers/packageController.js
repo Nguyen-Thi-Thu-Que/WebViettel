@@ -112,7 +112,9 @@ function mapToEnglish(pkg) {
     diem_noi_bat: doc.diem_noi_bat || '',
     tien_ich_free: doc.tien_ich_free || doc.tienich || '0',
     noi_dung_ngoai: doc.noi_dung_ngoai || '0',
-    goi_thay_the: doc.goi_thay_the || ''
+    goi_thay_the: doc.goi_thay_the || '',
+    dieu_kien_dang_ky: doc.dieu_kien_dang_ky || '',
+    chinh_sach_ap_dung: doc.chinh_sach_ap_dung || ''
   };
 }
 

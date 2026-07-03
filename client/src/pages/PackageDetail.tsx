@@ -2,18 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Wifi, 
-  Phone, 
   ArrowLeft, 
   ArrowRightLeft, 
   CreditCard, 
-  Sparkles, 
   Copy, 
   Check, 
-  Globe, 
-  Gift, 
-  MessageSquare, 
-  AlertCircle,
-  ArrowRight
+  AlertCircle
 } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
@@ -45,12 +39,8 @@ function DetailSkeleton() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
             <div className="h-6 bg-slate-200 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="h-16 bg-slate-50 rounded-xl"></div>
-              <div className="h-16 bg-slate-50 rounded-xl"></div>
-              <div className="h-16 bg-slate-50 rounded-xl"></div>
-              <div className="h-16 bg-slate-50 rounded-xl"></div>
-            </div>
+            <div className="h-16 bg-slate-50 rounded-xl"></div>
+            <div className="h-16 bg-slate-50 rounded-xl"></div>
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
             <div className="h-6 bg-slate-200 rounded w-1/4"></div>
@@ -185,7 +175,6 @@ export default function PackageDetail() {
   }
 
   const isInCompare = compareList.some(p => p.id === pkg.id);
-  const isHot = pkg.dohot === 'Hot';
 
   const handleCompareToggle = () => {
     if (isInCompare) {
@@ -237,17 +226,6 @@ export default function PackageDetail() {
     .sort((a, b) => b.score - a.score || parseInt(b.pkg.ma_goi || '0') - parseInt(a.pkg.ma_goi || '0'))
     .map(item => item.pkg)
     .slice(0, 3);
-
-  // Map category code to user-friendly Vietnamese text
-  const getCategoryLabel = (cat: string) => {
-    if (!cat) return 'Data';
-    const lower = cat.toLowerCase();
-    if (lower === 'mxh' || lower === 'social') return 'Mạng xã hội';
-    if (lower === 'data') return 'Data';
-    if (lower === 'combo') return 'Combo';
-    if (lower === 'thoại' || lower === 'voice') return 'Thoại';
-    return cat;
-  };
 
   // SEO dynamic values
   const formattedPrice = new Intl.NumberFormat('vi-VN').format(pkg.gia);
@@ -305,67 +283,40 @@ export default function PackageDetail() {
       {/* Breadcrumbs */}
       <Breadcrumb items={breadcrumbItems} />
 
-      {/* Alternative replacement package banner */}
-      {isValid(pkg.goi_thay_the) && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50/20 border border-red-100 rounded-2xl p-5 flex items-center justify-between text-left">
-          <div className="space-y-1">
-            <span className="text-[10px] text-primary font-bold uppercase tracking-wider block">Bạn có thể quan tâm</span>
-            <h4 className="text-sm font-extrabold text-slate-900">Gói cước thay thế: {pkg.goi_thay_the}</h4>
-            <p className="text-[11px] text-slate-500 font-medium">Gói cước này có nhiều ưu đãi phù hợp hơn dành cho bạn</p>
-          </div>
-          <Link
-            to={`/goi-cuoc/${pkg.goi_thay_the}`}
-            className="bg-primary hover:bg-primary-hover text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
-          >
-            <span>Xem ngay</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      )}
-
       {/* Main Details Panel */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Price and Primary Action Card */}
         <div className="lg:col-span-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-6 flex flex-col justify-between space-y-6 h-fit">
           <div className="space-y-4 text-left">
-            <div className="flex justify-between items-center">
-              <span className="bg-red-50 border border-red-100/60 text-primary text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                {getCategoryLabel(pkg.phan_loai_goi)}
-              </span>
-              {isHot && (
-                <div className="flex items-center text-[10px] text-primary font-bold bg-red-500/10 px-2 py-0.5 rounded border border-primary/20">
-                  <Sparkles className="w-3.5 h-3.5 mr-1 fill-primary text-primary" />
-                  <span>HOT</span>
-                </div>
-              )}
-            </div>
-
             <h2 className="text-2xl font-extrabold text-slate-900 leading-tight">
               {pkg.ma_goi ? `${pkg.ma_goi} - ${pkg.ten}` : pkg.ten}
             </h2>
-
-            {isValid(pkg.uudaitrong) && (
-              <p className="text-slate-600 text-xs leading-relaxed font-medium bg-red-50/10 p-4 rounded-xl border border-primary/10">
-                {pkg.uudaitrong}
-              </p>
-            )}
           </div>
 
           <div className="space-y-4 border-t border-slate-100 pt-6">
             {/* Info Group 1: Thông tin cơ bản */}
             <div className="space-y-2 text-slate-600 font-medium">
               <div className="flex justify-between items-center">
+                <span>Tên gói:</span>
+                <span className="font-extrabold text-slate-950">{pkg.ten}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-50 pt-2">
                 <span>Giá cước:</span>
                 <span className="font-extrabold text-slate-950 text-sm">{formattedPrice}đ</span>
               </div>
               <div className="flex justify-between items-center border-t border-slate-50 pt-2">
-                <span>Chu kỳ cước:</span>
+                <span>Chu kỳ sử dụng:</span>
                 <span className="font-extrabold text-slate-950">{cycleLabel}</span>
               </div>
-              <div className="flex justify-between items-center border-t border-slate-50 pt-2">
-                <span>Loại gói:</span>
-                <span className="font-extrabold text-slate-950">{getCategoryLabel(pkg.phan_loai_goi)}</span>
-              </div>
+              {isValid(pkg.data_theo_ngay) && (
+                <div className="flex justify-between items-center border-t border-slate-50 pt-2">
+                  <span className="flex items-center gap-1">
+                    <Wifi className="w-3.5 h-3.5 text-primary" />
+                    <span>Data:</span>
+                  </span>
+                  <span className="font-extrabold text-slate-950">{pkg.data_theo_ngay}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex space-x-2 pt-2">
@@ -392,83 +343,17 @@ export default function PackageDetail() {
 
         {/* Right Column: Detailed Benefits and Conditions */}
         <div className="lg:col-span-2 space-y-6 text-left">
-          {/* Info Group 2: Ưu đãi */}
-          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-6">
-            <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2 border-b border-slate-100 pb-3">
-              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
-              <span>Chi tiết ưu đãi dịch vụ</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Data Detail Block */}
-              {isValid(pkg.data_theo_ngay) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <Wifi className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dung lượng Data</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.data_theo_ngay}</p>
-                </div>
-              )}
-
-              {/* Calls Detail Block - Internal */}
-              {isValid(pkg.free_noi_mang) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <Phone className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gọi Nội mạng</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.free_noi_mang}</p>
-                </div>
-              )}
-
-              {/* Calls Detail Block - External */}
-              {isValid(pkg.free_ngoai_mang) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <Phone className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gọi Ngoại mạng</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.free_ngoai_mang}</p>
-                </div>
-              )}
-
-              {/* SMS Detail Block */}
-              {isValid(pkg.sms) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <MessageSquare className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tin nhắn SMS</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.sms}</p>
-                </div>
-              )}
-
-              {/* Free Apps Detail Block */}
-              {isValid(pkg.noi_dung_ngoai) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
-                  <div className="flex items-center space-x-2">
-                    <Globe className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ứng dụng miễn cước data</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.noi_dung_ngoai}</p>
-                </div>
-              )}
-
-              {/* Free Utilities Detail Block */}
-              {isValid(pkg.tien_ich_free) && (
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-1 col-span-1 md:col-span-2">
-                  <div className="flex items-center space-x-2">
-                    <Gift className="w-4 h-4 text-primary" />
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tiện ích đi kèm</h4>
-                  </div>
-                  <p className="text-sm font-extrabold text-slate-900">{pkg.tien_ich_free}</p>
-                </div>
-              )}
+          {/* Info Group 2: Nội dung ưu đãi */}
+          {isValid(pkg.uudaitrong) && (
+            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-4">
+              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Nội dung ưu đãi</h3>
+              <p className="text-slate-600 text-xs leading-relaxed font-medium bg-red-50/10 p-4 rounded-xl border border-primary/10">
+                {pkg.uudaitrong}
+              </p>
             </div>
-          </div>
+          )}
 
-          {/* Info Group 3: Điều kiện */}
+          {/* Info Group 3: Điều kiện đăng ký & chính sách sử dụng */}
           {(isValid(pkg.dieu_kien_dang_ky) || isValid(pkg.chinh_sach_ap_dung)) && (
             <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-5">
               <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Điều kiện & quy định sử dụng</h3>
@@ -476,7 +361,7 @@ export default function PackageDetail() {
               <div className="space-y-4 text-xs text-slate-600 font-medium">
                 {isValid(pkg.dieu_kien_dang_ky) && (
                   <div className="space-y-1.5">
-                    <h4 className="font-extrabold text-slate-900">Đối tượng áp dụng:</h4>
+                    <h4 className="font-extrabold text-slate-900">Điều kiện đăng ký:</h4>
                     <p className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 leading-relaxed font-medium">
                       {pkg.dieu_kien_dang_ky}
                     </p>
@@ -495,66 +380,68 @@ export default function PackageDetail() {
             </div>
           )}
 
-          {/* Info Group 4: Cú pháp đăng ký / hủy */}
-          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-4 font-medium text-slate-600">
-            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Cú pháp nhắn tin qua đầu số 191</h3>
+          {/* Info Group 4: Cú pháp nhắn tin qua đầu số 191 */}
+          {(isValid(pkg.dangky) || isValid(pkg.huygiahan) || isValid(pkg.huygoicuoc)) && (
+            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-4 font-medium text-slate-600">
+              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Cú pháp sử dụng (Đầu số 191)</h3>
 
-            <div className="space-y-3 pt-2">
-              {isValid(pkg.dangky) && (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1">
-                  <span>Cú pháp đăng ký nhanh:</span>
-                  <div className="flex items-center space-x-2 self-start sm:self-auto">
-                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
-                      {pkg.dangky}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(pkg.dangky, 'dangky')}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
-                      title="Sao chép cú pháp"
-                    >
-                      {copiedText === 'dangky' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+              <div className="space-y-3 pt-2">
+                {isValid(pkg.dangky) && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1">
+                    <span>Đăng ký:</span>
+                    <div className="flex items-center space-x-2 self-start sm:self-auto">
+                      <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                        {pkg.dangky}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(pkg.dangky, 'dangky')}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                        title="Sao chép cú pháp"
+                      >
+                        {copiedText === 'dangky' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {isValid(pkg.huygiahan) && (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
-                  <span>Hủy gia hạn gói:</span>
-                  <div className="flex items-center space-x-2 self-start sm:self-auto">
-                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
-                      {pkg.huygiahan}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(pkg.huygiahan, 'huygiahan')}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
-                      title="Sao chép cú pháp"
-                    >
-                      {copiedText === 'huygiahan' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                {isValid(pkg.huygoicuoc) && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
+                    <span>Hủy gói:</span>
+                    <div className="flex items-center space-x-2 self-start sm:self-auto">
+                      <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                        {pkg.huygoicuoc}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(pkg.huygoicuoc, 'huygoicuoc')}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                        title="Sao chép cú pháp"
+                      >
+                        {copiedText === 'huygoicuoc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {isValid(pkg.huygoicuoc) && (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
-                  <span>Hủy gói cước hoàn toàn:</span>
-                  <div className="flex items-center space-x-2 self-start sm:self-auto">
-                    <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
-                      {pkg.huygoicuoc}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(pkg.huygoicuoc, 'huygoicuoc')}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
-                      title="Sao chép cú pháp"
-                    >
-                      {copiedText === 'huygoicuoc' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                {isValid(pkg.huygiahan) && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-1 border-t border-slate-50 pt-3">
+                    <span>Hủy gia hạn:</span>
+                    <div className="flex items-center space-x-2 self-start sm:self-auto">
+                      <span className="font-extrabold text-slate-900 font-mono select-all bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-lg text-[13px]">
+                        {pkg.huygiahan}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(pkg.huygiahan, 'huygiahan')}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 hover:text-slate-900 transition-colors focus:outline-none flex items-center justify-center cursor-pointer"
+                        title="Sao chép cú pháp"
+                      >
+                        {copiedText === 'huygiahan' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
 
@@ -586,7 +473,7 @@ export default function PackageDetail() {
             <h4 className="text-sm font-extrabold text-slate-900 mb-2">Xác nhận đăng ký</h4>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
               Bạn có chắc chắn muốn đăng ký gói cước <strong className="text-primary">{pkg.ma_goi || pkg.ten}</strong> với giá{' '}
-              <strong className="text-slate-900">{new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ</strong>?
+              <strong className="text-slate-900">{formattedPrice}đ</strong>?
               Số tiền này sẽ được trừ trực tiếp vào tài khoản ví ảo của bạn.
             </p>
             <div className="flex space-x-3">
