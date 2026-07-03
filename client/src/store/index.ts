@@ -2,6 +2,16 @@ import { create } from 'zustand';
 import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers } from '../types';
 import { packageApi, authApi, transactionApi, faqApi, chatbotApi } from '../services/api';
 
+export function isAllowedForUser(pkg: Package, user: any): boolean {
+  // Hiện tại vẫn hiển thị bình thường.
+  // Ở Sprint sau, có thể mở rộng:
+  // if (pkg.doi_tuong_ap_dung?.includes('khach_hang_than_thiet') && user?.role !== 'loyalty') return false;
+  if (pkg && user) {
+    return true;
+  }
+  return true;
+}
+
 // ==========================================
 // 1. AUTH STORE
 // ==========================================
@@ -361,8 +371,11 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       };
 
       const data = await packageApi.fetchPackages(mergedParams);
+      const currentUser = useAuthStore.getState().currentUser;
+      const allowedPackages = data.packages.filter((pkg: Package) => isAllowedForUser(pkg, currentUser));
+
       set({ 
-        packages: data.packages, 
+        packages: allowedPackages, 
         totalPages: data.totalPages, 
         totalItems: data.totalItems,
         pagination: {

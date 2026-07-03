@@ -15,6 +15,7 @@ export interface FilterOptions {
   categories: { key: string; label: string }[];
   networks: string[];
   durations: { key: string; label: string }[];
+  appPromos?: string[];
 }
 
 export function toVietnamesePackage(apiPkg: any): Package {

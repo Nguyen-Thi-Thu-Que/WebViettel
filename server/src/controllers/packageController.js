@@ -5,10 +5,10 @@ const Package = require('../models/Package');
 function mapToEnglish(pkg) {
   if (!pkg) return null;
   const doc = pkg.toObject ? pkg.toObject() : pkg;
-  
+
   // Trích xuất mã gói cước làm ID string
   const idStr = doc.ma_goi ? doc.ma_goi.toLowerCase() : `pkg_${doc.package_id}`;
-  
+
   // Trích xuất duration và durationDays
   const durationDays = parseInt(doc.chu_ky_ngay) || 30;
   let duration = 'monthly';
@@ -30,7 +30,7 @@ function mapToEnglish(pkg) {
       }
     }
   }
-  
+
   // Trích xuất thoại
   let voiceFreeInternalMin = 0;
   let voiceFreeExternalMin = 0;
@@ -118,19 +118,19 @@ function mapToEnglish(pkg) {
 // Mapping function: Tiếng Anh (Frontend) -> Tiếng Việt (DB)
 function mapToVietnamese(englishData) {
   const ma_goi = englishData.ma_goi || (englishData.name ? englishData.name.split('-')[0].trim().toUpperCase() : 'NEW_PKG');
-  
+
   // Map category back to phan_loai_goi
   let phan_loai_goi = 'Data';
   if (englishData.category === 'combo') phan_loai_goi = 'Combo';
   else if (englishData.category === 'social') phan_loai_goi = 'Social';
   else if (englishData.category === 'voice') phan_loai_goi = 'Thoại';
 
-  const socialAppsStr = Array.isArray(englishData.socialFreeApps) 
-    ? englishData.socialFreeApps.join(',') 
+  const socialAppsStr = Array.isArray(englishData.socialFreeApps)
+    ? englishData.socialFreeApps.join(',')
     : englishData.socialFreeApps || '0';
 
-  const tagsStr = Array.isArray(englishData.tags) 
-    ? englishData.tags.join(',') 
+  const tagsStr = Array.isArray(englishData.tags)
+    ? englishData.tags.join(',')
     : englishData.tags || '';
 
   return {
@@ -217,18 +217,19 @@ exports.getPackages = async (req, res) => {
     const cycleOpt = req.query.cycle || req.query.duration;
     if (cycleOpt && cycleOpt !== 'all') {
       if (/^\d+$/.test(cycleOpt)) {
-        mongoQuery.chu_ky_ngay = cycleOpt;
+        const daysNum = parseInt(cycleOpt);
+        mongoQuery.$expr = { $eq: [{ $toInt: "$chu_ky_ngay" }, daysNum] };
       } else if (cycleOpt === 'daily') {
         mongoQuery.$expr = { $lte: [{ $toInt: "$chu_ky_ngay" }, 1] };
       } else if (cycleOpt === 'weekly') {
-        mongoQuery.$expr = { 
+        mongoQuery.$expr = {
           $and: [
             { $gt: [{ $toInt: "$chu_ky_ngay" }, 1] },
             { $lte: [{ $toInt: "$chu_ky_ngay" }, 15] }
           ]
         };
       } else if (cycleOpt === 'monthly') {
-        mongoQuery.$expr = { 
+        mongoQuery.$expr = {
           $and: [
             { $gt: [{ $toInt: "$chu_ky_ngay" }, 15] },
             { $lte: [{ $toInt: "$chu_ky_ngay" }, 90] }
@@ -304,7 +305,7 @@ exports.getPackages = async (req, res) => {
     }
 
     // K. Target Filter (Audience target)
-    if (req.query.target && req.query.target.trim()) {
+    if (req.query.target && req.query.target.trim() && req.query.target.trim() !== 'all') {
       mongoQuery.doi_tuong_ap_dung = new RegExp(req.query.target.trim(), 'i');
     }
 
@@ -312,8 +313,14 @@ exports.getPackages = async (req, res) => {
     if (req.query.promo && req.query.promo !== 'all') {
       if (req.query.promo === 'yes' || req.query.promo === 'true') {
         mongoQuery.$or = [
-          { noi_dung_ngoai: { $ne: '0' } },
-          { tienich: { $ne: '0' } }
+          { tien_ich_free: { $ne: '0', $exists: true } },
+          { tienich: { $ne: '0', $exists: true } }
+        ];
+      } else {
+        const appRegex = new RegExp(req.query.promo.trim(), 'i');
+        mongoQuery.$or = [
+          { tien_ich_free: appRegex },
+          { tienich: appRegex }
         ];
       }
     }
@@ -324,8 +331,8 @@ exports.getPackages = async (req, res) => {
       // Project computed fields for stable sorting
       {
         $addFields: {
-          rating: { $add: [4.2, { $divide: [ { $mod: ["$package_id", 8] }, 10 ] }] },
-          registrationsCount: { $add: [ 2000, { $mod: [ { $multiply: ["$package_id", 456] }, 250000 ] } ] }
+          rating: { $add: [4.2, { $divide: [{ $mod: ["$package_id", 8] }, 10] }] },
+          registrationsCount: { $add: [2000, { $mod: [{ $multiply: ["$package_id", 456] }, 250000] }] }
         }
       }
     ];
@@ -357,7 +364,7 @@ exports.getPackages = async (req, res) => {
     });
 
     const result = await Package.aggregate(pipeline);
-    
+
     const total = result[0].metadata[0] ? result[0].metadata[0].total : 0;
     const packagesRaw = result[0].data;
 
@@ -407,9 +414,9 @@ exports.getFilterOptions = async (req, res) => {
     // Get unique categories (phan_loai_goi)
     const phanLoaiValues = await Package.distinct('phan_loai_goi');
     const categories = phanLoaiValues.map(v => {
-      if (v === 'Data') return { key: 'data', label: 'Chỉ DATA' };
-      if (v === 'Combo') return { key: 'combo', label: 'Combo Thoại + Data' };
-      if (v === 'Social') return { key: 'social', label: 'Mạng xã hội (TikTok/YT)' };
+      if (v === 'Data') return { key: 'data', label: 'Data' };
+      if (v === 'Combo') return { key: 'combo', label: 'Combo' };
+      if (v === 'Social') return { key: 'social', label: 'Mạng xã hội' };
       return { key: v.toLowerCase(), label: v };
     });
 
@@ -417,34 +424,54 @@ exports.getFilterOptions = async (req, res) => {
     const loaiValues = await Package.distinct('loai');
     const networks = loaiValues.filter(Boolean).map(v => v.trim());
 
-    // Get unique cycle durations (chu_ky_ngay)
+    // Get unique cycle durations (chu_ky_ngay) dynamically
     const cycleValues = await Package.distinct('chu_ky_ngay');
-    const durations = cycleValues.filter(Boolean).map(v => {
-      const days = parseInt(v);
-      if (days <= 1) return { key: 'daily', label: 'Theo Ngày (1 ngày)' };
-      if (days <= 15) return { key: 'weekly', label: 'Theo Tuần (3 - 7 ngày)' };
-      if (days <= 90) return { key: 'monthly', label: 'Theo Tháng (30 ngày)' };
-      return { key: 'yearly', label: 'Chu kỳ dài (> 90 ngày)' };
-    });
+    const durations = cycleValues
+      .filter(Boolean)
+      .map(v => parseInt(v))
+      .filter(v => !isNaN(v))
+      .sort((a, b) => a - b)
+      .map(days => ({
+        key: String(days),
+        label: `${days} ngày`
+      }));
 
-    // Filter duplicate duration labels
-    const uniqueDurations = [];
-    const durKeys = new Set();
-    for (const d of durations) {
-      if (!durKeys.has(d.key)) {
-        durKeys.add(d.key);
-        uniqueDurations.push(d);
-      }
-    }
+    // Get unique app promos and utilities dynamically
+    const distinctNoiDungNgoai = await Package.distinct('noi_dung_ngoai');
+    const distinctTienIch = await Package.distinct('tien_ich_free');
+
+    const combined = new Set();
+    const normalizeAndAdd = (arr) => {
+      arr.forEach(val => {
+        if (!val || val === '0') return;
+        val.split(',').forEach(item => {
+          const trimmed = item.trim();
+          if (trimmed && trimmed !== '0' && trimmed !== '0GB' && trimmed !== '0 GB') {
+            let normalized = trimmed;
+            const lower = trimmed.toLowerCase();
+            if (lower === 'youtube' || lower === 'yt') normalized = 'Youtube';
+            else if (lower === 'tiktok') normalized = 'TikTok';
+            else if (lower === 'facebook' || lower === 'fb') normalized = 'Facebook';
+            else if (lower === 'messenger') normalized = 'Messenger';
+            else if (lower === 'tv360') normalized = 'TV360';
+            else {
+              normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+            }
+            combined.add(normalized);
+          }
+        });
+      });
+    };
+    normalizeAndAdd(distinctNoiDungNgoai);
+    normalizeAndAdd(distinctTienIch);
+
+    const appPromos = [...combined].sort();
 
     res.json({
       categories,
       networks: networks.length > 0 ? networks : ['4G/5G', '5G', '4G'],
-      durations: uniqueDurations.length > 0 ? uniqueDurations : [
-        { key: 'daily', label: 'Theo Ngày (1 ngày)' },
-        { key: 'weekly', label: 'Theo Tuần (3 - 7 ngày)' },
-        { key: 'monthly', label: 'Theo Tháng (30 ngày)' }
-      ]
+      durations,
+      appPromos
     });
   } catch (error) {
     console.error("Error in getFilterOptions API:", error);
@@ -474,13 +501,13 @@ exports.getProviders = (req, res) => {
 exports.getPackageById = async (req, res) => {
   try {
     const idParam = req.params.id;
-    
+
     // Find by _id (if valid ObjectId), by ma_goi, or by numeric id
     let pkg = null;
     if (mongoose.Types.ObjectId.isValid(idParam)) {
       pkg = await Package.findById(idParam);
     }
-    
+
     if (!pkg) {
       let numericId = -1;
       if (idParam.startsWith('pkg_')) {
@@ -513,7 +540,7 @@ exports.getPackageById = async (req, res) => {
 exports.createPackage = async (req, res) => {
   try {
     const englishData = req.body;
-    
+
     if (!englishData.name || !englishData.price) {
       return res.status(400).json({ success: false, message: "Tên gói cước và giá cước là bắt buộc." });
     }
@@ -534,7 +561,7 @@ exports.createPackage = async (req, res) => {
 
     const created = await Package.create(vnData);
     console.log(`[Admin] Created package: ${created.ma_goi} (${created.ten})`);
-    
+
     res.status(201).json({
       success: true,
       message: "Tạo gói cước thành công!",
@@ -579,7 +606,7 @@ exports.updatePackage = async (req, res) => {
     }
 
     const vnData = mapToVietnamese(englishData);
-    
+
     // Perform update
     const updated = await Package.findByIdAndUpdate(pkg._id, vnData, { new: true });
     console.log(`[Admin] Updated package: ${updated.ma_goi}`);
@@ -599,7 +626,7 @@ exports.updatePackage = async (req, res) => {
 exports.deletePackage = async (req, res) => {
   try {
     const idParam = req.params.id;
-    
+
     let pkg = null;
     if (mongoose.Types.ObjectId.isValid(idParam)) {
       pkg = await Package.findById(idParam);

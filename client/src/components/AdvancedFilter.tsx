@@ -1,17 +1,32 @@
 import { useState, useEffect } from 'react';
 import { usePackageStore } from '../store';
 import { Search, SlidersHorizontal } from 'lucide-react';
+import { packageApi } from '../services/api';
 
 export default function AdvancedFilter() {
   const { filters, search, sort, setFilter, setSearch, setSort, fetchPackages } = usePackageStore();
-  
+
   // Local state for debounced search box
   const [localSearch, setLocalSearch] = useState(search);
+
+  // Local state for dynamically loaded filter options from database
+  const [filterOptions, setFilterOptions] = useState<any>(null);
 
   // Sync local search when store search gets reset
   useEffect(() => {
     setLocalSearch(search);
   }, [search]);
+
+  // Load dynamic filter options on component mount
+  useEffect(() => {
+    packageApi.fetchFilterOptions()
+      .then((data) => {
+        setFilterOptions(data);
+      })
+      .catch((err) => {
+        console.error("Error fetching dynamic filter options:", err);
+      });
+  }, []);
 
   // Debounced search trigger (400ms)
   useEffect(() => {
@@ -48,7 +63,7 @@ export default function AdvancedFilter() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Debounced Search */}
         <div className="flex flex-col space-y-1.5">
-          <label htmlFor="card-filter-search" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+          <label htmlFor="card-filter-search" className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Từ khóa tìm kiếm
           </label>
           <div className="relative flex items-center">
@@ -76,14 +91,15 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Tất cả thể loại</option>
-            <option value="data">Chỉ DATA</option>
-            <option value="combo">Combo Thoại + Data</option>
-            <option value="social">Mạng xã hội (TikTok/YT)</option>
-            <option value="voice">Ưu đãi thoại</option>
+            {filterOptions?.categories?.map((cat: any) => (
+              <option key={cat.key} value={cat.key}>
+                {cat.label}
+              </option>
+            ))}
           </select>
         </div>
 
-        {/* Price Range */}
+        {/* Price Segment */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-price" className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Mức giá cước
@@ -113,10 +129,11 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Mọi chu kỳ</option>
-            <option value="3">3 ngày</option>
-            <option value="7">7 ngày</option>
-            <option value="30">30 ngày</option>
-            <option value="90">90 ngày</option>
+            {filterOptions?.durations?.map((dur: any) => (
+              <option key={dur.key} value={dur.key}>
+                {dur.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -135,8 +152,11 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Tất cả mạng</option>
-            <option value="5G">Mạng 5G</option>
-            <option value="4G">Mạng 4G</option>
+            {filterOptions?.networks?.map((net: string) => (
+              <option key={net} value={net}>
+                Mạng {net}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -174,7 +194,7 @@ export default function AdvancedFilter() {
           </select>
         </div>
 
-        {/* Promotion App */}
+        {/* Promotion App / Mạng xã hội */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-promo" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Khuyến mãi App
@@ -185,8 +205,12 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSelectChange('promo', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Tất cả</option>
-            <option value="yes">Có Free App (YT/FB/TikTok)</option>
+            <option value="all">Tất cả tiện ích free</option>
+            {filterOptions?.appPromos?.map((app: string) => (
+              <option key={app} value={app}>
+                {app}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -203,8 +227,9 @@ export default function AdvancedFilter() {
           >
             <option value="all">Tất cả đối tượng</option>
             <option value="pho_thong">Phổ thông</option>
-            <option value="tra_truoc">Trả trước</option>
-            <option value="tra_sau">Trả sau</option>
+            <option value="tra_truoc">Thuê bao trả trước</option>
+            <option value="tra_sau">Thuê bao trả sau</option>
+            <option value="khach_hang_than_thiet">Khách hàng thân thiết</option>
           </select>
         </div>
 
