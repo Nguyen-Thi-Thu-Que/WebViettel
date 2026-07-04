@@ -58,14 +58,30 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="space-y-6 text-xs font-semibold">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 text-center">Khôi phục mật khẩu</h2>
-        <p className="text-slate-500 text-center text-xs mt-1 font-semibold">Xác thực mã OTP để thiết lập lại mật khẩu di động.</p>
+    <div className="w-full bg-white rounded-3xl border border-slate-100 shadow-[0_20px_50px_rgba(15,23,42,0.04)] p-6 sm:p-8 space-y-6 animate-scale-up">
+      {/* Brand Header */}
+      <header className="flex flex-col items-center justify-center text-center space-y-2">
+        {/* Logo V with Red Background */}
+        <div className="inline-flex items-center justify-center w-12 h-12 bg-[#EE0033] rounded-2xl shadow-sm transform hover:scale-105 transition-transform duration-200">
+          <span className="text-xl font-black text-white">V</span>
+        </div>
+        <div className="text-[30px] font-black tracking-tight text-[#EE0033] leading-none">
+          ViettelAI
+        </div>
+      </header>
+
+      {/* Title Area */}
+      <div className="text-center space-y-1">
+        <h1 className="text-[28px] font-black text-slate-900 tracking-tight leading-tight">
+          Quên mật khẩu
+        </h1>
+        <p className="text-[14px] text-slate-400 font-semibold">
+          Xác thực mã OTP để thiết lập lại mật khẩu
+        </p>
       </div>
 
       {toastMsg && (
-        <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-250 p-3.5 rounded-lg text-xs font-medium">
+        <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-[13px] font-semibold animate-scale-up">
           <AlertCircle className="w-4 h-4 shrink-0 text-emerald-600" />
           <span>{toastMsg}</span>
         </div>
@@ -73,22 +89,22 @@ export default function ForgotPassword() {
 
       {step === 1 ? (
         /* Step 1: Input Phone to request OTP */
-        <div className="space-y-4 text-xs">
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Số điện thoại di động</label>
+        <div className="space-y-4">
+          <div className="flex flex-col space-y-1.5 text-left">
+            <label className="text-[13px] font-semibold text-slate-500 pl-0.5">Số điện thoại di động</label>
             <div className="relative flex items-center">
               <input
                 type="text"
                 placeholder="Ví dụ: 0987654321"
                 {...register('phoneNumber')}
-                className={`w-full bg-slate-55 border ${
-                  errors.phoneNumber ? 'border-red-550 focus:border-red-550' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 focus:outline-none transition-colors`}
+                className={`w-full h-[48px] bg-slate-50 border ${
+                  errors.phoneNumber ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 focus:outline-none transition-all`}
               />
-              <Phone className="absolute left-3 w-4 h-4 text-slate-400" />
+              <Phone className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
             </div>
             {errors.phoneNumber && (
-              <p className="text-[10px] text-red-550 flex items-center mt-0.5 font-medium">
+              <p className="text-[13px] text-red-500 flex items-center mt-1 font-medium pl-0.5 animate-fade-in">
                 <AlertCircle className="w-3.5 h-3.5 mr-1" />
                 {errors.phoneNumber.message}
               </p>
@@ -99,30 +115,30 @@ export default function ForgotPassword() {
             type="button"
             onClick={handleSendOTP}
             disabled={isSubmitting}
-            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-lg text-xs transition-colors focus:outline-none"
+            className="w-full h-[48px] bg-[#EE0033] hover:bg-[#D40032] text-white font-semibold rounded-xl text-[15px] uppercase tracking-wider disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center"
           >
             {isSubmitting ? 'Đang gửi...' : 'Gửi mã xác thực OTP'}
           </button>
         </div>
       ) : (
         /* Step 2: Input OTP and New Password */
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 text-left">
           {/* OTP Code Input */}
           <div className="flex flex-col space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mã xác thực OTP (Nhập: 123456)</label>
+            <label className="text-[13px] font-semibold text-slate-500 pl-0.5">Mã xác thực OTP (Nhập: 123456)</label>
             <div className="relative flex items-center">
               <input
                 type="text"
                 placeholder="Nhập 6 số OTP..."
                 {...register('otpCode')}
-                className={`w-full bg-slate-50 border ${
-                  errors.otpCode ? 'border-red-555 focus:border-red-555' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 focus:outline-none transition-colors`}
+                className={`w-full h-[48px] bg-slate-55 border ${
+                  errors.otpCode ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 focus:outline-none transition-all`}
               />
-              <Key className="absolute left-3 w-4 h-4 text-slate-400" />
+              <Key className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
             </div>
             {errors.otpCode && (
-              <p className="text-[10px] text-red-555 flex items-center mt-0.5 font-medium">
+              <p className="text-[13px] text-red-500 flex items-center mt-1 font-medium pl-0.5 animate-fade-in">
                 <AlertCircle className="w-3.5 h-3.5 mr-1" />
                 {errors.otpCode.message}
               </p>
@@ -131,20 +147,20 @@ export default function ForgotPassword() {
 
           {/* New Password Input */}
           <div className="flex flex-col space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mật khẩu mới</label>
+            <label className="text-[13px] font-semibold text-slate-500 pl-0.5">Mật khẩu mới</label>
             <div className="relative flex items-center">
               <input
                 type="password"
                 placeholder="Tối thiểu 6 ký tự..."
                 {...register('newPassword')}
-                className={`w-full bg-slate-50 border ${
-                  errors.newPassword ? 'border-red-555 focus:border-red-555' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                } rounded-lg py-2 pl-9 pr-4 text-xs text-slate-700 focus:outline-none transition-colors`}
+                className={`w-full h-[48px] bg-slate-50 border ${
+                  errors.newPassword ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 focus:outline-none transition-all`}
               />
-              <Lock className="absolute left-3 w-4 h-4 text-slate-400" />
+              <Lock className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
             </div>
             {errors.newPassword && (
-              <p className="text-[10px] text-red-555 flex items-center mt-0.5 font-medium">
+              <p className="text-[13px] text-red-500 flex items-center mt-1 font-medium pl-0.5 animate-fade-in">
                 <AlertCircle className="w-3.5 h-3.5 mr-1" />
                 {errors.newPassword.message}
               </p>
@@ -154,7 +170,7 @@ export default function ForgotPassword() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-lg text-xs transition-colors focus:outline-none"
+            className="w-full h-[48px] bg-[#EE0033] hover:bg-[#D40032] text-white font-semibold rounded-xl text-[15px] uppercase tracking-wider disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center"
           >
             {isSubmitting ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
           </button>
@@ -162,9 +178,9 @@ export default function ForgotPassword() {
       )}
 
       {/* Switch to Login link */}
-      <div className="text-center text-xs text-slate-500 pt-2 font-semibold">
+      <div className="text-center text-[14px] text-slate-500 pt-2 font-semibold">
         Nhớ mật khẩu di động?{' '}
-        <Link to="/login" className="text-primary hover:underline font-bold">
+        <Link to="/login" className="text-[#EE0033] hover:text-[#D40032] hover:underline font-bold transition-colors">
           Đăng nhập ngay
         </Link>
       </div>
