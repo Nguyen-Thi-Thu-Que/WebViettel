@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { 
-  Wifi, 
-  ArrowLeft, 
-  ArrowRightLeft, 
-  CreditCard, 
-  Copy, 
-  Check, 
+import {
+  Wifi,
+  ArrowLeft,
+  ArrowRightLeft,
+  CreditCard,
+  Copy,
+  Check,
   AlertCircle
 } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
@@ -330,8 +330,8 @@ export default function PackageDetail() {
               <button
                 onClick={handleCompareToggle}
                 className={`p-3.5 rounded-xl border transition-colors focus:outline-none cursor-pointer ${isInCompare
-                    ? 'bg-red-50 border-red-150 text-primary'
-                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                  ? 'bg-red-50 border-red-150 text-primary'
+                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
                   }`}
                 title={isInCompare ? "Xóa khỏi so sánh" : "Thêm vào so sánh"}
               >
@@ -383,7 +383,7 @@ export default function PackageDetail() {
           {/* Info Group 4: Cú pháp nhắn tin qua đầu số 191 */}
           {(isValid(pkg.dangky) || isValid(pkg.huygiahan) || isValid(pkg.huygoicuoc)) && (
             <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 md:p-8 space-y-4 font-medium text-slate-600">
-              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Cú pháp sử dụng (Đầu số 191)</h3>
+              <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Cú pháp sử dụng</h3>
 
               <div className="space-y-3 pt-2">
                 {isValid(pkg.dangky) && (
