@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
-import { usePackageStore } from '../store';
+import { usePackageStore, useAuthStore } from '../store';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { packageApi } from '../services/api';
 
 export default function AdvancedFilter() {
-  const { filters, search, sort, setFilter, setSearch, setSort, fetchPackages } = usePackageStore();
+  const { filters, sort, setFilter, setSort } = usePackageStore();
+  const { currentUser } = useAuthStore();
 
-  // Local state for debounced search box
-  const [localSearch, setLocalSearch] = useState(search);
+  // Local state for debounced search box (independent from Navbar Header search)
+  const [localSearch, setLocalSearch] = useState(filters.keyword || '');
 
   // Local state for dynamically loaded filter options from database
   const [filterOptions, setFilterOptions] = useState<any>(null);
 
-  // Sync local search when store search gets reset
+  // Sync local search when store keyword gets reset or updated
   useEffect(() => {
-    setLocalSearch(search);
-  }, [search]);
+    setLocalSearch(filters.keyword || '');
+  }, [filters.keyword]);
 
   // Load dynamic filter options on component mount
   useEffect(() => {
@@ -28,26 +29,63 @@ export default function AdvancedFilter() {
       });
   }, []);
 
-  // Debounced search trigger (400ms)
+  // Debounced search trigger (300ms)
   useEffect(() => {
     const handler = setTimeout(() => {
-      if (localSearch !== search) {
-        setSearch(localSearch);
-        fetchPackages();
+      if (localSearch !== filters.keyword) {
+        setFilter('keyword', localSearch);
       }
-    }, 400);
+    }, 300);
     return () => clearTimeout(handler);
-  }, [localSearch, search, setSearch, fetchPackages]);
+  }, [localSearch, filters.keyword, setFilter]);
 
-  const handleSelectChange = (key: keyof typeof filters, value: string) => {
+  const handleSelectChange = (key: any, value: string) => {
     setFilter(key, value);
-    fetchPackages();
   };
 
   const handleSortChange = (value: string) => {
     setSort(value);
-    fetchPackages();
   };
+
+  // Determine available Target Audience options based on user type
+  const getTargetOptions = () => {
+    if (!currentUser || currentUser.role === 'admin') {
+      return [
+        { value: 'all', label: 'Tất cả đối tượng' },
+        { value: 'pho_thong', label: 'Phổ thông' },
+        { value: 'tra_truoc', label: 'Thuê bao trả trước' },
+        { value: 'tra_sau', label: 'Thuê bao trả sau' },
+        { value: 'khach_hang_than_thiet', label: 'Khách hàng thân thiết' }
+      ];
+    }
+
+    const type = currentUser.subscription_type || 'tra_truoc';
+    const isLoyal = !!currentUser.is_loyal_customer;
+
+    if (type === 'tra_truoc') {
+      if (isLoyal) {
+        return [
+          { value: 'tra_truoc', label: 'Thuê bao trả trước' },
+          { value: 'khach_hang_than_thiet', label: 'Khách hàng thân thiết' }
+        ];
+      }
+      return [
+        { value: 'tra_truoc', label: 'Thuê bao trả trước' }
+      ];
+    } else {
+      if (isLoyal) {
+        return [
+          { value: 'tra_sau', label: 'Thuê bao trả sau' },
+          { value: 'khach_hang_than_thiet', label: 'Khách hàng thân thiết' }
+        ];
+      }
+      return [
+        { value: 'tra_sau', label: 'Thuê bao trả sau' }
+      ];
+    }
+  };
+
+  const targetOptions = getTargetOptions();
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5 text-xs font-semibold text-left">
@@ -61,7 +99,7 @@ export default function AdvancedFilter() {
 
       {/* Row 1: Search, Category, Price, Cycle (4 Columns) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Debounced Search */}
+        {/* Debounced local search input */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-search" className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Từ khóa tìm kiếm
@@ -91,18 +129,16 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Tất cả thể loại</option>
-            {filterOptions?.categories?.map((cat: any) => (
-              <option key={cat.key} value={cat.key}>
-                {cat.label}
-              </option>
-            ))}
+            <option value="data">Data</option>
+            <option value="combo">Combo</option>
+            <option value="mxh">Mạng xã hội</option>
           </select>
         </div>
 
-        {/* Price Segment */}
+        {/* Price filter */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-price" className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">
-            Mức giá cước
+            Phân khúc giá cước
           </label>
           <select
             id="card-filter-price"
@@ -110,14 +146,14 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSelectChange('price', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Mọi phân khúc</option>
-            <option value="Gia_re">Giá rẻ</option>
-            <option value="Trung_binh">Trung bình</option>
-            <option value="Cao_cap">Cao cấp</option>
+            <option value="all">Mọi mức giá</option>
+            <option value="Gia_re">Giá rẻ (Dưới 50.000đ)</option>
+            <option value="Trung_binh">Trung bình (50.000đ - 150.000đ)</option>
+            <option value="Cao_cap">Cao cấp (Trên 150.000đ)</option>
           </select>
         </div>
 
-        {/* Cycle Duration */}
+        {/* Cycle filter */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-cycle" className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Chu kỳ sử dụng
@@ -129,6 +165,10 @@ export default function AdvancedFilter() {
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Mọi chu kỳ</option>
+            <option value="daily">Gói ngày (≤ 1 ngày)</option>
+            <option value="weekly">Gói tuần (2 - 15 ngày)</option>
+            <option value="monthly">Gói tháng (16 - 90 ngày)</option>
+            <option value="yearly">Gói năm (Trên 90 ngày)</option>
             {filterOptions?.durations?.map((dur: any) => (
               <option key={dur.key} value={dur.key}>
                 {dur.label}
@@ -138,46 +178,60 @@ export default function AdvancedFilter() {
         </div>
       </div>
 
-      {/* Row 2: Network, Call, SMS, Promo App, Target, Sort (6 Columns) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-4 border-t border-slate-100">
-        {/* Network */}
+      {/* Row 2: network, data, call, sms, promo app, target, sort (Grid layout) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-1">
+        {/* network */}
         <div className="flex flex-col space-y-1.5">
-          <label htmlFor="card-filter-network" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+          <label htmlFor="card-filter-net" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Công nghệ mạng
           </label>
           <select
-            id="card-filter-network"
+            id="card-filter-net"
             value={filters.network}
             onChange={(e) => handleSelectChange('network', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Tất cả mạng</option>
-            {filterOptions?.networks?.map((net: string) => (
-              <option key={net} value={net}>
-                Mạng {net}
-              </option>
-            ))}
+            <option value="all">Tất cả mạng (4G/5G)</option>
+            <option value="5G">Chỉ mạng 5G siêu tốc</option>
+            <option value="4G">Chỉ mạng 4G</option>
           </select>
         </div>
 
-        {/* Calls */}
+        {/* Data benefit */}
         <div className="flex flex-col space-y-1.5">
-          <label htmlFor="card-filter-calls" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
-            Ưu đãi Gọi thoại
+          <label htmlFor="card-filter-data" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+            Ưu đãi Data
           </label>
           <select
-            id="card-filter-calls"
+            id="card-filter-data"
+            value={filters.data}
+            onChange={(e) => handleSelectChange('data', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
+          >
+            <option value="all">Không giới hạn</option>
+            <option value="yes">Có dung lượng Data</option>
+            <option value="no">Không có Data</option>
+          </select>
+        </div>
+
+        {/* Call benefit */}
+        <div className="flex flex-col space-y-1.5">
+          <label htmlFor="card-filter-call" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
+            Đàm thoại miễn phí
+          </label>
+          <select
+            id="card-filter-call"
             value={filters.call}
             onChange={(e) => handleSelectChange('call', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
             <option value="all">Không giới hạn</option>
-            <option value="yes">Có gọi miễn phí</option>
-            <option value="no">Chỉ dùng Data</option>
+            <option value="yes">Có miễn phí gọi thoại</option>
+            <option value="no">Không miễn phí thoại</option>
           </select>
         </div>
 
-        {/* SMS */}
+        {/* SMS benefit */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-sms" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Ưu đãi SMS
@@ -194,7 +248,7 @@ export default function AdvancedFilter() {
           </select>
         </div>
 
-        {/* Promotion App / Mạng xã hội */}
+        {/* Promo App */}
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="card-filter-promo" className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Khuyến mãi App
@@ -225,11 +279,11 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSelectChange('target', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Tất cả đối tượng</option>
-            <option value="pho_thong">Phổ thông</option>
-            <option value="tra_truoc">Thuê bao trả trước</option>
-            <option value="tra_sau">Thuê bao trả sau</option>
-            <option value="khach_hang_than_thiet">Khách hàng thân thiết</option>
+            {targetOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -244,7 +298,7 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSortChange(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer font-bold"
           >
-            <option value="popular">Lượt đăng ký nhiều nhất</option>
+            <option value="popular">Đăng ký nhiều nhất</option>
             <option value="newest">Mới cập nhật</option>
             <option value="price_asc">Giá cước: Thấp - Cao</option>
             <option value="price_desc">Giá cước: Cao - Thấp</option>

@@ -4,21 +4,13 @@ const Subscription = require('../models/Subscription');
 const Package = require('../models/Package');
 const { generateToken } = require('../middlewares/authMiddleware');
 
-// Helpers for Scrypt password hashing
+// Plain text password helpers (no hashing)
 function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = crypto.scryptSync(password, salt, 64);
-  return `${salt}:${derivedKey.toString('hex')}`;
+  return password;
 }
 
 function verifyPassword(password, storedHash) {
-  if (!storedHash) return false;
-  if (!storedHash.includes(':')) {
-    return password === storedHash; // Support plain text password from seed_extra.js
-  }
-  const [salt, hash] = storedHash.split(':');
-  const derivedKey = crypto.scryptSync(password, salt, 64);
-  return derivedKey.toString('hex') === hash;
+  return password === storedHash;
 }
 
 // Map MongoDB Subscription list to frontend activePackages
@@ -49,6 +41,10 @@ const authService = {
       throw new Error('Số điện thoại không tồn tại trong hệ thống.');
     }
 
+    if (account.status === 'locked') {
+      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+    }
+
     const isMatch = verifyPassword(password, account.password);
     if (!isMatch) {
       throw new Error('Mật khẩu không chính xác.');
@@ -73,12 +69,21 @@ const authService = {
         email: account.email || '',
         balance: account.balance,
         role: account.role === 'admin' ? 'admin' : 'customer',
+        subscription_type: account.subscription_type || 'tra_truoc',
+        is_loyal_customer: account.is_loyal_customer || false,
+        status: account.status || 'active',
         activePackages
       }
     };
   },
 
-  register: async (fullname, phoneNumber, email, password) => {
+  register: async (fullname, phoneNumber, email, password, subscriptionType) => {
+    // Check if phone number is a valid Viettel format
+    const isViettelPhone = (phone) => /^(086|096|097|098|032|033|034|035|036|037|038|039)\d{7}$/.test(phone);
+    if (!isViettelPhone(phoneNumber)) {
+      throw new Error('Chỉ hỗ trợ đăng ký bằng số điện thoại Viettel.');
+    }
+
     // Check if phone number exists
     const existing = await Account.findOne({ phone_number: phoneNumber });
     if (existing) {
@@ -92,14 +97,18 @@ const authService = {
     // Hash password
     const hashedPassword = hashPassword(password);
 
+    // Enforce default values for new account registration
     const newAccount = await Account.create({
       user_id: nextUserId,
       fullname,
       phone_number: phoneNumber,
       password: hashedPassword,
       email: email || '',
-      balance: 50000, // Welcome gift balance
-      role: 'user'
+      balance: 0,
+      role: 'user',
+      subscription_type: subscriptionType === 'tra_sau' ? 'tra_sau' : 'tra_truoc',
+      is_loyal_customer: false,
+      status: 'active'
     });
 
     const tokenPayload = {
@@ -119,6 +128,9 @@ const authService = {
         email: newAccount.email || '',
         balance: newAccount.balance,
         role: 'customer',
+        subscription_type: newAccount.subscription_type || 'tra_truoc',
+        is_loyal_customer: newAccount.is_loyal_customer || false,
+        status: newAccount.status || 'active',
         activePackages: []
       }
     };
@@ -139,6 +151,9 @@ const authService = {
       email: account.email || '',
       balance: account.balance,
       role: account.role === 'admin' ? 'admin' : 'customer',
+      subscription_type: account.subscription_type || 'tra_truoc',
+      is_loyal_customer: account.is_loyal_customer || false,
+      status: account.status || 'active',
       activePackages
     };
   },
@@ -162,6 +177,9 @@ const authService = {
       email: account.email || '',
       balance: account.balance,
       role: account.role === 'admin' ? 'admin' : 'customer',
+      subscription_type: account.subscription_type || 'tra_truoc',
+      is_loyal_customer: account.is_loyal_customer || false,
+      status: account.status || 'active',
       activePackages
     };
   },

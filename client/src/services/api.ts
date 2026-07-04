@@ -79,7 +79,8 @@ export function toVietnamesePackage(apiPkg: any): Package {
     tags: apiPkg.tags || [],
     ma_goi: apiPkg.ma_goi || '',
     diem_noi_bat: apiPkg.diem_noi_bat || '',
-    goi_thay_the: apiPkg.goi_thay_the || ''
+    goi_thay_the: apiPkg.goi_thay_the || '',
+    doi_tuong_ap_dung: apiPkg.conditions || ''
   };
 }
 
@@ -188,12 +189,13 @@ export const authApi = {
     return response.data.data;
   },
 
-  register: async (name: string, phoneNumber: string, email: string, password?: string): Promise<{ token: string; user: User }> => {
+  register: async (name: string, phoneNumber: string, email: string, password?: string, subscriptionType?: string): Promise<{ token: string; user: User }> => {
     const response = await axiosInstance.post<{ success: boolean; message: string; data: { token: string; user: User } }>('/api/auth/register', {
       name,
       phoneNumber,
       email,
-      password: password || 'password123'
+      password: password || 'password123',
+      subscription_type: subscriptionType || 'tra_truoc'
     });
     return response.data.data;
   },
@@ -301,6 +303,11 @@ export const userApi = {
 
   updateUserBalance: async (userId: string, balance: number): Promise<boolean> => {
     const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}/balance`, { balance });
+    return response.data.success;
+  },
+
+  updateUser: async (userId: string, data: { subscription_type?: 'tra_truoc' | 'tra_sau'; is_loyal_customer?: boolean; status?: 'active' | 'locked'; balance?: number }): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}`, data);
     return response.data.success;
   }
 };

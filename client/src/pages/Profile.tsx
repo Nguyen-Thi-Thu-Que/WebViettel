@@ -239,6 +239,15 @@ export default function Profile() {
                   />
                 </div>
                 <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loại thuê bao</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={currentUser.subscription_type === 'tra_sau' ? 'Trả sau' : 'Trả trước'}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Họ và tên</label>
                   <input
                     type="text"

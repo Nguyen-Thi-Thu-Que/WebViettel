@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { usePackageStore } from '../store';
+import { usePackageStore, useAuthStore } from '../store';
 import type { Package } from '../types';
+import { filterPackagesLocally } from '../utils/filterHelper';
 
 // Component imports
 import SEO from '../components/SEO';
@@ -22,11 +23,13 @@ export default function Packages() {
     pagination,
     search,
     filters,
+    sort,
     fetchPackages,
     setPage,
     reset
   } = usePackageStore();
 
+  const { currentUser } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State for Managing active Subscription Modal
@@ -49,47 +52,80 @@ export default function Packages() {
     showToast('error', msg);
   }, []);
 
-  // Sync URL search params to Zustand store on mount & URL changes
+  // 1. Fetch matching raw packages from database only when Header Search term (search) changes
+  useEffect(() => {
+    fetchPackages();
+  }, [search, fetchPackages]);
+
+  // 2. Sync URL search query parameters back to store Header Search term
   useEffect(() => {
     const urlSearch = searchParams.get('search') || '';
-    const urlCategory = searchParams.get('category') || 'all';
-
-    const storeState = usePackageStore.getState();
-    let hasChanges = false;
-
-    if (urlSearch !== storeState.search) {
-      storeState.setSearch(urlSearch);
-      hasChanges = true;
+    if (urlSearch !== search) {
+      usePackageStore.getState().setSearch(urlSearch);
     }
-    if (urlCategory !== storeState.filters.category) {
-      storeState.setFilter('category', urlCategory);
-      hasChanges = true;
-    }
+  }, [searchParams, search]);
 
-    if (hasChanges) {
-      fetchPackages();
-    }
-  }, [searchParams, fetchPackages]);
-
-  // Sync Zustand store changes (search, category) back to URL searchParams
+  // 3. Sync store search back to URL searchParams
   useEffect(() => {
     const currentParams: Record<string, string> = {};
     if (search) currentParams.search = search;
-    if (filters.category !== 'all') currentParams.category = filters.category;
 
-    // Only update if search params differ from current URL
     const prevSearch = searchParams.get('search') || '';
-    const prevCategory = searchParams.get('category') || 'all';
-
-    if (search !== prevSearch || filters.category !== prevCategory) {
+    if (search !== prevSearch) {
       setSearchParams(currentParams, { replace: true });
     }
-  }, [search, filters.category, setSearchParams, searchParams]);
+  }, [search, setSearchParams, searchParams]);
 
-  // Initial packages fetch on mount and page number change
+  // 4. Compute filtered packages entirely in memory on client-side
+  const filteredPackages = useMemo(() => {
+    return filterPackagesLocally(packages, filters, currentUser, sort);
+  }, [packages, filters, currentUser, sort]);
+
+  // 5. Initialize/align target audience filter options based on logged-in user subscription_type
   useEffect(() => {
-    fetchPackages();
-  }, [pagination.page, fetchPackages]);
+    const storeState = usePackageStore.getState();
+    if (currentUser && currentUser.role !== 'admin') {
+      const defaultTarget = currentUser.subscription_type || 'tra_truoc';
+      const validOptions = currentUser.is_loyal_customer 
+        ? [defaultTarget, 'khach_hang_than_thiet'] 
+        : [defaultTarget];
+      if (!validOptions.includes(storeState.filters.target)) {
+        storeState.setFilter('target', defaultTarget);
+      }
+    } else if (!currentUser || currentUser.role === 'admin') {
+      if (!storeState.filters.target) {
+        storeState.setFilter('target', 'all');
+      }
+    }
+  }, [currentUser]);
+
+  // 6. Update pagination statistics in store whenever filtered results count changes
+  useEffect(() => {
+    const totalItems = filteredPackages.length;
+    const limit = 8;
+    const totalPages = Math.ceil(totalItems / limit) || 1;
+    const currentPage = usePackageStore.getState().pagination.page;
+    const nextPage = currentPage > totalPages ? 1 : currentPage;
+
+    usePackageStore.setState({
+      totalItems,
+      totalPages,
+      pagination: {
+        page: nextPage,
+        limit,
+        totalPages,
+        totalItems
+      }
+    });
+  }, [filteredPackages.length]);
+
+  // 7. Paginate the filtered packages list client-side
+  const paginatedPackages = useMemo(() => {
+    const page = pagination.page;
+    const limit = 8;
+    const startIndex = (page - 1) * limit;
+    return filteredPackages.slice(startIndex, startIndex + limit);
+  }, [filteredPackages, pagination.page]);
 
   const handleSubscribeOpen = (pkg: Package) => {
     setSelectedPkg(pkg);
@@ -186,10 +222,10 @@ export default function Packages() {
                 <LoadingSkeleton key={idx} />
               ))}
             </PackageGrid>
-          ) : packages.length > 0 ? (
+          ) : paginatedPackages.length > 0 ? (
             /* Render Actual Package Cards list */
             <PackageGrid>
-              {packages.map((pkg) => (
+              {paginatedPackages.map((pkg) => (
                 <PackageCard
                   key={pkg.id}
                   pkg={pkg}
@@ -198,31 +234,32 @@ export default function Packages() {
               ))}
             </PackageGrid>
           ) : (
-            /* Render SaaS styled Empty Search state */
             <EmptyState onReset={handleResetAll} />
           )}
         </section>
 
-        {/* Pagination Section */}
-        <section className="pt-4">
-          {!loading && (
+        {/* Catalog List Pagination Controls */}
+        {filteredPackages.length > 0 && !loading && (
+          <section className="flex justify-center pt-6">
             <Pagination
               currentPage={pagination.page}
               totalPages={pagination.totalPages}
               onPageChange={setPage}
             />
-          )}
-        </section>
+          </section>
+        )}
       </main>
 
-      {/* Single Portal-Mounted Register Confirmation Modal */}
-      <RegisterModal
-        isOpen={isModalOpen}
-        pkg={selectedPkg}
-        onClose={handleModalClose}
-        onSuccess={handleSuccess}
-        onError={handleError}
-      />
+      {/* Subscription Modal Overlays */}
+      {selectedPkg && (
+        <RegisterModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          pkg={selectedPkg}
+          onSuccess={handleSuccess}
+          onError={handleError}
+        />
+      )}
     </div>
   );
 }

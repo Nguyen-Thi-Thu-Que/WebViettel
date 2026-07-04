@@ -37,6 +37,31 @@ const userController = {
         message: error.message
       });
     }
+  },
+
+  updateUser: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const { subscription_type, is_loyal_customer, status, balance } = req.body;
+
+      const updated = await userService.updateUser(id, {
+        subscription_type,
+        is_loyal_customer,
+        status,
+        balance
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Cập nhật thông tin tài khoản thành công!',
+        data: updated
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
   }
 };
 

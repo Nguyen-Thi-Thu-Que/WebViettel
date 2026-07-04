@@ -30,15 +30,15 @@ const authController = {
 
   register: async (req, res, next) => {
     try {
-      const { name, phoneNumber, email, password } = req.body;
-      if (!name || !phoneNumber || !password) {
+      const { name, phoneNumber, email, password, subscription_type } = req.body;
+      if (!name || !phoneNumber || !password || !subscription_type) {
         return res.status(400).json({
           success: false,
-          message: 'Họ tên, Số điện thoại và mật khẩu là bắt buộc.'
+          message: 'Họ tên, Số điện thoại, mật khẩu và loại thuê bao là bắt buộc.'
         });
       }
 
-      const result = await authService.register(name, phoneNumber, email, password);
+      const result = await authService.register(name, phoneNumber, email, password, subscription_type);
       return res.status(201).json({
         success: true,
         message: 'Đăng ký tài khoản thành công!',

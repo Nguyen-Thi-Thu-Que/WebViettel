@@ -7,6 +7,9 @@ const accountSchema = new mongoose.Schema({
   password: { type: String, required: true },
   balance: { type: Number, default: 0 },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  subscription_type: { type: String, enum: ['tra_truoc', 'tra_sau'], required: true, default: 'tra_truoc' },
+  is_loyal_customer: { type: Boolean, default: false },
+  status: { type: String, enum: ['active', 'locked'], default: 'active' },
   created_at: { type: String, default: () => new Date().toISOString() }
 }, {
   collection: 'accounts',

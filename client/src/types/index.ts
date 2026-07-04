@@ -23,6 +23,7 @@ export interface Package {
   ma_goi?: string;
   diem_noi_bat?: string;
   goi_thay_the?: string;
+  doi_tuong_ap_dung?: string;
 }
 
 export interface User {
@@ -37,6 +38,10 @@ export interface User {
     expiresAt: string;
   }[];
   role: 'customer' | 'admin';
+  subscription_type?: 'tra_truoc' | 'tra_sau';
+  is_loyal_customer?: boolean;
+  status?: 'active' | 'locked';
+  created_at?: string;
 }
 
 export interface Transaction {

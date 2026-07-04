@@ -22,7 +22,7 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   login: (phoneNumber: string, password?: string) => Promise<boolean>;
-  registerUser: (name: string, phoneNumber: string, email: string, password?: string) => Promise<boolean>;
+  registerUser: (name: string, phoneNumber: string, email: string, password?: string, subscriptionType?: string) => Promise<boolean>;
   logout: () => void;
   fetchMe: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
@@ -62,10 +62,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  registerUser: async (name, phoneNumber, email, password) => {
+  registerUser: async (name, phoneNumber, email, password, subscriptionType) => {
     set({ loading: true, error: null });
     try {
-      const data = await authApi.register(name, phoneNumber, email, password);
+      const data = await authApi.register(name, phoneNumber, email, password, subscriptionType);
       localStorage.setItem('token', data.token);
       set({ currentUser: data.user, loading: false });
       return true;
@@ -218,6 +218,7 @@ interface PackageFilters {
   recommended: string;
   target: string;
   promo: string;
+  keyword: string;
 }
 
 interface PackageState {
@@ -264,6 +265,7 @@ const INITIAL_FILTERS: PackageFilters = {
   recommended: 'all',
   target: '',
   promo: 'all',
+  keyword: '',
 };
 
 const INITIAL_PAGINATION = {
@@ -352,38 +354,16 @@ export const usePackageStore = create<PackageState>((set, get) => ({
     try {
       const state = get();
       const mergedParams = {
-        page: state.pagination.page,
-        limit: state.pagination.limit,
+        page: 1,
+        limit: 999, // Fetch all packages so client can filter/paginate locally
         search: state.search,
-        category: state.filters.category,
-        price: state.filters.price,
-        cycle: state.filters.cycle,
-        network: state.filters.network,
-        data: state.filters.data,
-        call: state.filters.call,
-        sms: state.filters.sms,
-        hot: state.filters.hot,
-        recommended: state.filters.recommended,
-        target: state.filters.target,
-        promo: state.filters.promo,
-        sort: state.sort,
         ...params
       };
 
       const data = await packageApi.fetchPackages(mergedParams);
-      const currentUser = useAuthStore.getState().currentUser;
-      const allowedPackages = data.packages.filter((pkg: Package) => isAllowedForUser(pkg, currentUser));
-
+      
       set({ 
-        packages: allowedPackages, 
-        totalPages: data.totalPages, 
-        totalItems: data.totalItems,
-        pagination: {
-          page: data.page,
-          limit: data.limit,
-          totalPages: data.totalPages,
-          totalItems: data.totalItems
-        },
+        packages: data.packages || [], 
         loading: false 
       });
     } catch (err: any) {
@@ -391,9 +371,6 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       set({
         error: err.response?.data?.message || 'Không thể tải danh sách gói cước.',
         packages: [],
-        totalPages: 1,
-        totalItems: 0,
-        pagination: INITIAL_PAGINATION,
         loading: false
       });
     }

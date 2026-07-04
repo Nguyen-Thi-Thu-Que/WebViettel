@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Package = require('../models/Package');
+const { canViewPackage } = require('../utils/permission');
 
 // Mapping function: Tiếng Việt (DB) -> Tiếng Anh (Frontend)
 function mapToEnglish(pkg) {
@@ -358,24 +359,19 @@ exports.getPackages = async (req, res) => {
       pipeline.push({ $sort: { registrationsCount: -1, package_id: 1 } });
     }
 
-    // Pagination
-    pipeline.push({
-      $facet: {
-        metadata: [{ $count: "total" }],
-        data: [{ $skip: skip }, { $limit: limit }]
-      }
-    });
-
-    const result = await Package.aggregate(pipeline);
-
-    const total = result[0].metadata[0] ? result[0].metadata[0].total : 0;
-    const packagesRaw = result[0].data;
+    const resultRaw = await Package.aggregate(pipeline);
 
     // Convert raw docs using English mapper
-    const packagesMapped = packagesRaw.map(pkg => mapToEnglish(pkg));
+    const packagesMapped = resultRaw.map(pkg => mapToEnglish(pkg));
+
+    // Filter packages through the permission service
+    const filteredPackages = packagesMapped.filter(pkg => canViewPackage(req.user, pkg));
+
+    const total = filteredPackages.length;
+    const paginatedPackages = filteredPackages.slice(skip, skip + limit);
 
     res.json({
-      packages: packagesMapped,
+      packages: paginatedPackages,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
@@ -404,7 +400,9 @@ exports.searchPackages = async (req, res) => {
       ]
     }).limit(10);
 
-    res.json(matches.map(m => mapToEnglish(m)));
+    const mapped = matches.map(m => mapToEnglish(m));
+    const filtered = mapped.filter(p => canViewPackage(req.user, p));
+    res.json(filtered);
   } catch (error) {
     console.error("Error in searchPackages API:", error);
     res.status(500).json({ success: false, message: "Lỗi tìm kiếm." });
@@ -562,7 +560,12 @@ exports.getPackageById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy gói cước." });
     }
 
-    res.json(mapToEnglish(pkg));
+    const mapped = mapToEnglish(pkg);
+    if (!canViewPackage(req.user, mapped)) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền xem gói cước này." });
+    }
+
+    res.json(mapped);
   } catch (error) {
     console.error("Error in getPackageById API:", error);
     res.status(500).json({ success: false, message: "Lỗi lấy chi tiết gói cước." });

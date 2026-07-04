@@ -47,24 +47,33 @@ async function seedExtra() {
         password: "password123",
         balance: 150000,
         role: "user",
+        subscription_type: "tra_truoc",
+        is_loyal_customer: false,
+        status: "active",
         created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       },
       {
         user_id: 2,
         fullname: "Trần Thị B",
-        phone_number: "0912345678",
+        phone_number: "0962345678",
         password: "password123",
         balance: 500000,
         role: "user",
+        subscription_type: "tra_sau",
+        is_loyal_customer: true,
+        status: "active",
         created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
       },
       {
         user_id: 3,
         fullname: "Lê Văn Quản Trị",
-        phone_number: "0900000001",
+        phone_number: "0970000001",
         password: "admin123",
         balance: 0,
         role: "admin",
+        subscription_type: "tra_truoc",
+        is_loyal_customer: true,
+        status: "active",
         created_at: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
       }
     ];

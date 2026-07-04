@@ -14,6 +14,7 @@ import PackageCard from '../components/PackageCard';
 import SEO from '../components/SEO';
 import Breadcrumb from '../components/Breadcrumb';
 import { calculateSimilarity } from '../utils/similarity';
+import { canViewPackage } from '../utils/permission';
 
 function DetailSkeleton() {
   return (
@@ -128,10 +129,13 @@ export default function PackageDetail() {
   }
 
   if (error) {
+    const isPermissionError = error.includes('không có quyền') || error.includes('quyền xem');
     return (
       <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-5 shadow-sm my-12 text-xs font-semibold animate-scale-up">
         <AlertCircle className="w-12 h-12 text-primary mx-auto" />
-        <h3 className="text-lg font-extrabold text-slate-900">Không thể tải dữ liệu</h3>
+        <h3 className="text-lg font-extrabold text-slate-900">
+          {isPermissionError ? 'Từ chối truy cập' : 'Không thể tải dữ liệu'}
+        </h3>
         <p className="text-slate-500 font-medium">
           {error || 'Đã xảy ra lỗi kết nối khi lấy thông tin gói cước từ hệ thống Viettel.'}
         </p>
@@ -143,13 +147,15 @@ export default function PackageDetail() {
             <ArrowLeft className="w-4 h-4" />
             <span>Quay lại danh mục</span>
           </Link>
-          <button
-            onClick={handleReload}
-            className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
-            type="button"
-          >
-            Tải lại
-          </button>
+          {!isPermissionError && (
+            <button
+              onClick={handleReload}
+              className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+              type="button"
+            >
+              Tải lại
+            </button>
+          )}
         </div>
       </div>
     );
@@ -170,6 +176,27 @@ export default function PackageDetail() {
           <ArrowLeft className="w-4 h-4" />
           <span>Quay lại danh sách</span>
         </Link>
+      </div>
+    );
+  }
+
+  if (!canViewPackage(currentUser, pkg)) {
+    return (
+      <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-5 shadow-sm my-12 text-xs font-semibold animate-scale-up text-left">
+        <AlertCircle className="w-12 h-12 text-primary mx-auto" />
+        <h3 className="text-lg font-extrabold text-slate-900 text-center">Từ chối truy cập</h3>
+        <p className="text-slate-500 font-medium text-center">
+          Bạn không có quyền xem gói cước này.
+        </p>
+        <div className="flex justify-center pt-2">
+          <Link
+            to="/packages"
+            className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Quay lại danh sách</span>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -218,7 +245,7 @@ export default function PackageDetail() {
 
   // Find related packages sorted by similarity score + fallback to do_uu_tien
   const relatedPackages = packages
-    .filter(p => p.id !== pkg.id)
+    .filter(p => p.id !== pkg.id && canViewPackage(currentUser, p))
     .map(p => ({
       pkg: p,
       score: calculateSimilarity(pkg, p)

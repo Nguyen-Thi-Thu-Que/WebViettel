@@ -80,6 +80,13 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
+    if (account.status === 'locked') {
+      return res.status(401).json({
+        success: false,
+        message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.'
+      });
+    }
+
     req.user = account;
     next();
   } catch (error) {
@@ -100,9 +107,30 @@ const requireRole = (roles) => {
   };
 };
 
+const decodeTokenOptional = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+      const decoded = verifyToken(token);
+      if (decoded) {
+        const account = await Account.findOne({ user_id: decoded.userId });
+        if (account && account.status !== 'locked') {
+          req.user = account;
+        }
+      }
+    }
+  } catch (error) {
+    // Ignore decoding errors for guest access
+  }
+  next();
+};
+
 module.exports = {
   generateToken,
   verifyToken,
   authenticateToken,
-  requireRole
+  requireRole,
+  decodeTokenOptional
 };
