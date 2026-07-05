@@ -21,7 +21,6 @@ export default function Packages() {
     packages,
     loading,
     pagination,
-    search,
     filters,
     sort,
     fetchPackages,
@@ -52,29 +51,14 @@ export default function Packages() {
     showToast('error', msg);
   }, []);
 
-  // 1. Fetch matching raw packages from database only when Header Search term (search) changes
-  useEffect(() => {
-    fetchPackages();
-  }, [search, fetchPackages]);
+  const keywordParam = searchParams.get('keyword') || '';
 
-  // 2. Sync URL search query parameters back to store Header Search term
+  // 1. Sync URL keyword query parameter to store search & filter, then fetch packages from backend exactly once per change
   useEffect(() => {
-    const urlSearch = searchParams.get('search') || '';
-    if (urlSearch !== search) {
-      usePackageStore.getState().setSearch(urlSearch);
-    }
-  }, [searchParams, search]);
-
-  // 3. Sync store search back to URL searchParams
-  useEffect(() => {
-    const currentParams: Record<string, string> = {};
-    if (search) currentParams.search = search;
-
-    const prevSearch = searchParams.get('search') || '';
-    if (search !== prevSearch) {
-      setSearchParams(currentParams, { replace: true });
-    }
-  }, [search, setSearchParams, searchParams]);
+    usePackageStore.getState().setSearch(keywordParam);
+    usePackageStore.getState().setFilter('keyword', keywordParam);
+    fetchPackages({ search: keywordParam });
+  }, [keywordParam, fetchPackages]);
 
   // 4. Compute filtered packages entirely in memory on client-side
   const filteredPackages = useMemo(() => {
@@ -140,7 +124,6 @@ export default function Packages() {
   const handleResetAll = () => {
     reset();
     setSearchParams({}, { replace: true });
-    fetchPackages();
   };
 
   // Structured breadcrumbs schema for Packages Page (SEO)

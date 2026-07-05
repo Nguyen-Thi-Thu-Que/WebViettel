@@ -13,10 +13,6 @@
 function canViewPackage(user, pkg) {
   if (!pkg) return false;
 
-  // 1. Guest (unauthenticated) & Admin have unrestricted access
-  if (!user) return true;
-  if (user.role === 'admin' || user.role === 'Admin') return true;
-
   const targetStr = (pkg.doi_tuong_ap_dung || pkg.conditions || '').toLowerCase();
   const descStr = (pkg.dieu_kien_dang_ky || pkg.description || '').toLowerCase();
 
@@ -24,15 +20,24 @@ function canViewPackage(user, pkg) {
   const isPrepaidPkg = targetStr.includes('tra_truoc') || descStr.includes('tra_truoc');
   const isPostpaidPkg = targetStr.includes('tra_sau') || descStr.includes('tra_sau');
 
+  // 1. Guest (unauthenticated)
+  if (!user) {
+    if (isLoyalPkg) return false; // Khách vãng lai không nhìn thấy gói KHTT
+    return true;
+  }
+
+  // 2. Admin has unrestricted access
+  if (user.role === 'admin' || user.role === 'Admin') return true;
+
   const userType = user.subscription_type || 'tra_truoc';
   const isLoyalUser = !!user.is_loyal_customer;
 
-  // 2. Prepaid Subscriber
+  // 3. Prepaid Subscriber
   if (userType === 'tra_truoc') {
     if (isPostpaidPkg && !isPrepaidPkg) return false; // Hide postpaid-only
     if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not KHTT subscriber
   } 
-  // 3. Postpaid Subscriber
+  // 4. Postpaid Subscriber
   else if (userType === 'tra_sau') {
     if (isPrepaidPkg && !isPostpaidPkg) return false; // Hide prepaid-only
     if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not KHTT subscriber

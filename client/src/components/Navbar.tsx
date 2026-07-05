@@ -22,12 +22,21 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const keyword = params.get('keyword') || '';
+    setSearchQuery(keyword);
+  }, [location.search]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/packages?search=${encodeURIComponent(searchQuery.trim())}`);
-      setIsMenuOpen(false);
+    const query = searchQuery.trim();
+    if (query) {
+      navigate(`/goi-cuoc?keyword=${encodeURIComponent(query)}`);
+    } else {
+      navigate('/goi-cuoc');
     }
+    setIsMenuOpen(false);
   };
 
   const formatBalance = (amount: number) => {
