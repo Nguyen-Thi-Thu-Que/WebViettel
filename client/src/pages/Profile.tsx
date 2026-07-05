@@ -83,9 +83,13 @@ export default function Profile() {
     resolver: zodResolver(passwordSchema)
   });
 
-  const onProfileSubmit = (data: ProfileFormValues) => {
-    updateProfile(data.name, data.email);
-    showToast('success', 'Cập nhật thông tin cá nhân thành công!');
+  const onProfileSubmit = async (data: ProfileFormValues) => {
+    const success = await updateProfile(data.name, data.email);
+    if (success) {
+      showToast('success', 'Cập nhật thông tin cá nhân thành công!');
+    } else {
+      showToast('error', 'Cập nhật thông tin cá nhân thất bại.');
+    }
   };
 
   const onPasswordSubmit = async (data: PasswordFormValues) => {
@@ -244,6 +248,24 @@ export default function Profile() {
                     type="text"
                     disabled
                     value={currentUser.subscription_type === 'tra_sau' ? 'Trả sau' : 'Trả trước'}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Trạng thái KHTT</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={currentUser.is_loyal_customer ? 'Khách hàng thân thiết (KHTT)' : 'Thành viên thường'}
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Trạng thái tài khoản</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={currentUser.status === 'locked' ? 'Bị khóa' : 'Đang hoạt động'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>

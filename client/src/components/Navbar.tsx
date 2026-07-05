@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Bell, User, LogOut, Shield, CreditCard, History, Menu, X, ChevronDown } from 'lucide-react';
+import { Search, Bell, User, LogOut, Shield, CreditCard, Menu, X, ChevronDown, Lock } from 'lucide-react';
 import { useAuthStore } from '../store';
 
 export default function Navbar() {
@@ -147,41 +147,54 @@ export default function Navbar() {
                     </div>
                   </div>
 
-                  <div className="py-1">
-                    {currentUser.role === 'admin' && (
-                      <Link
-                        to="/admin"
-                        onClick={() => setIsProfileOpen(false)}
-                        className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors text-primary font-bold"
-                      >
-                        <Shield className="w-4 h-4 mr-2" />
-                        Trang quản trị (Admin)
-                      </Link>
+                   <div className="py-1">
+                    {currentUser.role === 'admin' ? (
+                      <>
+                        <Link
+                          to="/admin/users"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors text-primary font-bold"
+                        >
+                          <Shield className="w-4 h-4 mr-2" />
+                          Quản lý người dùng
+                        </Link>
+                        <Link
+                          to="/profile?tab=info"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
+                        >
+                          <User className="w-4 h-4 mr-2" />
+                          Hồ sơ cá nhân
+                        </Link>
+                        <Link
+                          to="/profile?tab=info"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
+                        >
+                          <Lock className="w-4 h-4 mr-2" />
+                          Đổi mật khẩu
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          to="/profile?tab=info"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
+                        >
+                          <User className="w-4 h-4 mr-2" />
+                          Hồ sơ cá nhân
+                        </Link>
+                        <Link
+                          to="/profile?tab=info"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
+                        >
+                          <Lock className="w-4 h-4 mr-2" />
+                          Đổi mật khẩu
+                        </Link>
+                      </>
                     )}
-                    <Link
-                      to="/profile"
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
-                    >
-                      <User className="w-4 h-4 mr-2" />
-                      Thông tin cá nhân
-                    </Link>
-                    <Link
-                      to="/profile?tab=topup"
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
-                    >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Nạp tiền tài khoản
-                    </Link>
-                    <Link
-                      to="/profile?tab=history"
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors"
-                    >
-                      <History className="w-4 h-4 mr-2" />
-                      Lịch sử hoạt động
-                    </Link>
                   </div>
 
                   <div className="py-1">
