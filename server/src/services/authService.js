@@ -38,16 +38,22 @@ const authService = {
   login: async (phoneNumber, password) => {
     const account = await Account.findOne({ phone_number: phoneNumber });
     if (!account) {
-      throw new Error('Số điện thoại không tồn tại trong hệ thống.');
-    }
-
-    if (account.status === 'locked') {
-      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+      const err = new Error('Tài khoản không tồn tại.');
+      err.statusCode = 404;
+      throw err;
     }
 
     const isMatch = verifyPassword(password, account.password);
     if (!isMatch) {
-      throw new Error('Mật khẩu không chính xác.');
+      const err = new Error('Mật khẩu không chính xác.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    if (account.status === 'blocked') {
+      const err = new Error('Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.');
+      err.statusCode = 403;
+      throw err;
     }
 
     // Generate payload

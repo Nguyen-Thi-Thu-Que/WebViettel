@@ -80,10 +80,10 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    if (account.status === 'locked') {
+    if (account.status === 'blocked') {
       return res.status(401).json({
         success: false,
-        message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.'
+        message: 'Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.'
       });
     }
 
@@ -116,7 +116,7 @@ const decodeTokenOptional = async (req, res, next) => {
       const decoded = verifyToken(token);
       if (decoded) {
         const account = await Account.findOne({ user_id: decoded.userId });
-        if (account && account.status !== 'locked') {
+        if (account && account.status !== 'blocked') {
           req.user = account;
         }
       }

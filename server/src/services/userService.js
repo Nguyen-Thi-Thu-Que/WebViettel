@@ -64,7 +64,7 @@ const userService = {
     }
 
     if (data.status !== undefined) {
-      if (['active', 'locked'].includes(data.status)) {
+      if (['active', 'blocked', 'pending'].includes(data.status)) {
         account.status = data.status;
       } else {
         throw new Error('Trạng thái tài khoản không hợp lệ.');

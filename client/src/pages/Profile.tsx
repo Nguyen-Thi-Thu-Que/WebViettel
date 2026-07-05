@@ -286,7 +286,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.status === 'locked' ? 'Bị khóa' : 'Đang hoạt động'}
+                    value={currentUser.status === 'blocked' ? 'Bị khóa' : currentUser.status === 'pending' ? 'Chờ kích hoạt' : 'Đang hoạt động'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>

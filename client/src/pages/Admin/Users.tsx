@@ -51,13 +51,13 @@ export default function AdminUsers() {
   };
 
   const handleToggleStatus = (user: User) => {
-    const nextStatus = user.status === 'locked' ? 'active' : 'locked';
-    const confirmMessage = nextStatus === 'locked'
+    const nextStatus = user.status === 'blocked' ? 'active' : 'blocked';
+    const confirmMessage = nextStatus === 'blocked'
       ? "Bạn có chắc chắn muốn khóa tài khoản này? Người dùng sẽ không thể đăng nhập cho đến khi được mở khóa."
       : "Bạn có chắc chắn muốn mở khóa tài khoản này?";
 
     setConfirmModal({
-      title: nextStatus === 'locked' ? 'Khóa tài khoản' : 'Mở khóa tài khoản',
+      title: nextStatus === 'blocked' ? 'Khóa tài khoản' : 'Mở khóa tài khoản',
       message: confirmMessage,
       onConfirm: async () => {
         setProcessingUserIds(prev => ({ ...prev, [user.id]: 'status' }));
@@ -66,7 +66,7 @@ export default function AdminUsers() {
           if (success) {
             // Optimistic Local State Update
             setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
-            showToast('success', nextStatus === 'locked' ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.');
+            showToast('success', nextStatus === 'blocked' ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.');
             
             if (currentUser && currentUser.id === user.id) {
               useAuthStore.getState().fetchMe().catch(() => {});
@@ -286,12 +286,14 @@ export default function AdminUsers() {
                       {/* Account Status Badge */}
                       <td className="p-4">
                         <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full font-bold text-[10px] border ${
-                          user.status === 'locked'
+                          user.status === 'blocked'
                             ? 'bg-red-50 border-red-200 text-primary'
+                            : user.status === 'pending'
+                            ? 'bg-amber-50 border-amber-200 text-amber-700'
                             : 'bg-emerald-50 border-emerald-250 text-emerald-700'
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'locked' ? 'bg-primary' : 'bg-emerald-500'}`} />
-                          <span>{user.status === 'locked' ? 'Bị khóa' : 'Hoạt động'}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'blocked' ? 'bg-primary' : user.status === 'pending' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          <span>{user.status === 'blocked' ? 'Bị khóa' : user.status === 'pending' ? 'Chờ kích hoạt' : 'Hoạt động'}</span>
                         </span>
                       </td>
 
@@ -315,12 +317,12 @@ export default function AdminUsers() {
                           disabled={isStatusLoading}
                           onClick={() => handleToggleStatus(user)}
                           className={`inline-flex items-center space-x-1 border px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all focus:outline-none cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
-                            user.status === 'locked'
+                            user.status === 'blocked'
                               ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
                               : 'bg-red-50 hover:bg-red-100 border-red-200 text-primary'
                           }`}
                         >
-                          {user.status === 'locked' ? (
+                          {user.status === 'blocked' ? (
                             <>
                               <Unlock className="w-3 h-3 shrink-0" />
                               <span>{isStatusLoading ? 'Đang mở...' : 'Mở tài khoản'}</span>

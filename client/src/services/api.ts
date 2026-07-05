@@ -308,7 +308,7 @@ export const userApi = {
     return response.data.success;
   },
 
-  updateUser: async (userId: string, data: { subscription_type?: 'tra_truoc' | 'tra_sau'; is_loyal_customer?: boolean; status?: 'active' | 'locked'; balance?: number }): Promise<boolean> => {
+  updateUser: async (userId: string, data: { subscription_type?: 'tra_truoc' | 'tra_sau'; is_loyal_customer?: boolean; status?: 'active' | 'blocked' | 'pending'; balance?: number }): Promise<boolean> => {
     const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}`, data);
     return response.data.success;
   }

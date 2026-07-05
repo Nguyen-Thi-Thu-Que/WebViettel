@@ -49,7 +49,7 @@ export default function Login() {
           navigate('/');
         }
       } else {
-        setErrorMsg('Thông tin đăng nhập không chính xác.');
+        setErrorMsg(useAuthStore.getState().error || 'Thông tin đăng nhập không chính xác.');
       }
     } catch (err: any) {
       setIsSubmitting(false);

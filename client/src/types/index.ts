@@ -41,7 +41,7 @@ export interface User {
   role: 'customer' | 'admin';
   subscription_type?: 'tra_truoc' | 'tra_sau';
   is_loyal_customer?: boolean;
-  status?: 'active' | 'locked';
+  status?: 'active' | 'blocked' | 'pending';
   created_at?: string;
 }
 
