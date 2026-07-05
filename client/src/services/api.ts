@@ -80,7 +80,8 @@ export function toVietnamesePackage(apiPkg: any): Package {
     ma_goi: apiPkg.ma_goi || '',
     diem_noi_bat: apiPkg.diem_noi_bat || '',
     goi_thay_the: apiPkg.goi_thay_the || '',
-    doi_tuong_ap_dung: apiPkg.conditions || ''
+    doi_tuong_ap_dung: apiPkg.conditions || '',
+    loai_mang: apiPkg.loai_mang || ''
   };
 }
 
@@ -122,7 +123,8 @@ export function toEnglishPackage(vnPkg: Partial<Package>): any {
     ].filter(Boolean),
     isPopular: vnPkg.dohot === 'Hot',
     category,
-    tags: vnPkg.dohot === 'Hot' ? ['Hot'] : []
+    tags: vnPkg.dohot === 'Hot' ? ['Hot'] : [],
+    loai_mang: vnPkg.loai_mang || ''
   };
 }
 

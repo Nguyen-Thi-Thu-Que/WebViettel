@@ -2,6 +2,25 @@ const mongoose = require('mongoose');
 const Package = require('../models/Package');
 const { canViewPackage } = require('../utils/permission');
 
+function normalizeNetwork(loaiMangVal) {
+  if (!loaiMangVal) return [];
+  const parts = loaiMangVal
+    .trim()
+    .toUpperCase()
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).sort();
+}
+
+function compareArrays(arr1, arr2) {
+  if (arr1.length !== arr2.length) return false;
+  for (let i = 0; i < arr1.length; i++) {
+    if (arr1[i] !== arr2[i]) return false;
+  }
+  return true;
+}
+
 // Mapping function: Tiếng Việt (DB) -> Tiếng Anh (Frontend)
 function mapToEnglish(pkg) {
   if (!pkg) return null;
@@ -110,6 +129,7 @@ function mapToEnglish(pkg) {
     registrationsCount,
     tags,
     loaiMạng: doc.loai || '4G/5G',
+    loai_mang: doc.loai_mang !== undefined && doc.loai_mang !== null ? doc.loai_mang : (doc.loai ? doc.loai.replace(/\//g, ',') : ''),
     diem_noi_bat: doc.diem_noi_bat || '',
     tien_ich_free: doc.tien_ich_free || doc.tienich || '0',
     noi_dung_ngoai: doc.noi_dung_ngoai || '0',
@@ -155,7 +175,8 @@ function mapToVietnamese(englishData) {
     huygoicuoc: englishData.terms && englishData.terms[3] ? englishData.terms[3].replace('Hủy gói: ', '') : 'Soạn HUYDATA gửi 191',
     taggoiy: tagsStr,
     Nhom_Goi: phan_loai_goi === 'Data' ? 'Gói Data Tháng' : phan_loai_goi === 'Combo' ? 'Gói Combo Thoại + Data' : 'Gói Tiết Kiệm MXH/Giải Trí',
-    loai: englishData.loaiMạng || '4G/5G'
+    loai: englishData.loaiMạng || '4G/5G',
+    loai_mang: englishData.loai_mang || ''
   };
 }
 
@@ -244,14 +265,7 @@ exports.getPackages = async (req, res) => {
       }
     }
 
-    // E. 5G/4G Filter (loai / taggoiy)
-    if (req.query.network && req.query.network !== 'all') {
-      const netRegex = new RegExp(req.query.network, 'i');
-      mongoQuery.$or = [
-        { loai: netRegex },
-        { taggoiy: netRegex }
-      ];
-    }
+    // E. Network Filter (removed from MongoDB query, filtered in-memory with normalized data below)
 
     // F. Data Filter
     if (req.query.data && req.query.data !== 'all') {
@@ -365,7 +379,24 @@ exports.getPackages = async (req, res) => {
     const packagesMapped = resultRaw.map(pkg => mapToEnglish(pkg));
 
     // Filter packages through the permission service
-    const filteredPackages = packagesMapped.filter(pkg => canViewPackage(req.user, pkg));
+    let filteredPackages = packagesMapped.filter(pkg => canViewPackage(req.user, pkg));
+
+    // Filter by loai_mang in-memory using normalized values
+    const netOpt = req.query.network || req.query.loai_mang;
+    if (netOpt && netOpt !== 'all' && netOpt !== '') {
+      const netLower = netOpt.toLowerCase();
+      filteredPackages = filteredPackages.filter(pkg => {
+        const normalized = normalizeNetwork(pkg.loai_mang);
+        if (netLower === '4g') {
+          return normalized.includes('4G');
+        } else if (netLower === '5g') {
+          return normalized.includes('5G');
+        } else if (netLower === 'both' || netLower === '4g,5g' || netLower === '5g,4g') {
+          return normalized.includes('4G') && normalized.includes('5G');
+        }
+        return true;
+      });
+    }
 
     const total = filteredPackages.length;
     const paginatedPackages = filteredPackages.slice(skip, skip + limit);

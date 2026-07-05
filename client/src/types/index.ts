@@ -24,6 +24,7 @@ export interface Package {
   diem_noi_bat?: string;
   goi_thay_the?: string;
   doi_tuong_ap_dung?: string;
+  loai_mang?: string;
 }
 
 export interface User {

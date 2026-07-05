@@ -191,9 +191,10 @@ export default function AdvancedFilter() {
             onChange={(e) => handleSelectChange('network', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl py-3 px-3.5 text-slate-700 focus:outline-none focus:bg-white focus:ring-4 focus:ring-red-50/20 transition-all cursor-pointer"
           >
-            <option value="all">Tất cả mạng (4G/5G)</option>
-            <option value="5G">Chỉ mạng 5G siêu tốc</option>
-            <option value="4G">Chỉ mạng 4G</option>
+            <option value="all">Không giới hạn</option>
+            <option value="4G">Hỗ trợ 4G</option>
+            <option value="5G">Hỗ trợ 5G</option>
+            <option value="both">Hỗ trợ cả 4G và 5G</option>
           </select>
         </div>
 

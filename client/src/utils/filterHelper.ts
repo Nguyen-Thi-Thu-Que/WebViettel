@@ -1,6 +1,18 @@
 import type { Package, User } from '../types';
 import { canViewPackage } from './permission';
 
+function normalizeNetwork(loaiMangVal: string | undefined | null): string[] {
+  if (!loaiMangVal) return [];
+  const parts = loaiMangVal
+    .trim()
+    .toUpperCase()
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).sort();
+}
+
+
 /**
  * Filters and sorts packages on the client-side based on filter configurations and user roles.
  */
@@ -55,12 +67,19 @@ export function filterPackagesLocally(
     });
   }
 
-  // 5. Filter by Network Technology
-  if (filters.network && filters.network !== 'all') {
+  // 5. Filter by Network Technology (loai_mang)
+  if (filters.network && filters.network !== 'all' && filters.network !== '') {
     const net = filters.network.toLowerCase();
     list = list.filter(pkg => {
-      const tags = (pkg.tags || []).map(t => t.toLowerCase());
-      return tags.some(t => t.includes(net)) || (pkg.tienich || '').toLowerCase().includes(net);
+      const normalized = normalizeNetwork(pkg.loai_mang);
+      if (net === '4g') {
+        return normalized.includes('4G');
+      } else if (net === '5g') {
+        return normalized.includes('5G');
+      } else if (net === 'both') {
+        return normalized.includes('4G') && normalized.includes('5G');
+      }
+      return true;
     });
   }
 

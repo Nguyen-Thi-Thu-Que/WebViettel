@@ -29,6 +29,7 @@ const packageSchema = new mongoose.Schema({
   
   // Hỗ trợ thêm các trường từ CSV nếu có
   loai: { type: String },
+  loai_mang: { type: String },
   dulieu: { type: String },
   thoai: { type: String },
   noidung: { type: String },
