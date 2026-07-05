@@ -48,6 +48,11 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Submitting states to prevent double submits
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+  const [isUnsubmitting, setIsUnsubmitting] = useState(false);
+
   // If user is not logged in, redirect to login
   useEffect(() => {
     if (!currentUser) {
@@ -89,7 +94,9 @@ export default function Profile() {
   });
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
+    setIsSubmittingProfile(true);
     const success = await updateProfile(data.name, data.email);
+    setIsSubmittingProfile(false);
     if (success) {
       showToast('success', 'Cập nhật thông tin cá nhân thành công!');
     } else {
@@ -98,7 +105,9 @@ export default function Profile() {
   };
 
   const onPasswordSubmit = async (data: PasswordFormValues) => {
+    setIsSubmittingPassword(true);
     const success = await changePassword(data.oldPassword, data.newPassword);
+    setIsSubmittingPassword(false);
     if (success) {
       showToast('success', 'Thay đổi mật khẩu thành công!');
       resetPasswordForm();
@@ -129,11 +138,18 @@ export default function Profile() {
     setCancellingPkgId(pkgId);
   };
 
-  const handleConfirmUnsubscribe = () => {
+  const handleConfirmUnsubscribe = async () => {
     if (cancellingPkgId) {
-      unsubscribePackage(cancellingPkgId);
-      showToast('success', 'Đã hủy gia hạn gói cước thành công.');
-      setCancellingPkgId(null);
+      setIsUnsubmitting(true);
+      try {
+        await unsubscribePackage(cancellingPkgId);
+        showToast('success', 'Đã hủy gia hạn gói cước thành công.');
+      } catch (err) {
+        showToast('error', 'Hủy gia hạn gói cước thất bại.');
+      } finally {
+        setIsUnsubmitting(false);
+        setCancellingPkgId(null);
+      }
     }
   };
 
@@ -297,9 +313,10 @@ export default function Profile() {
                 <div className="md:col-span-2 flex justify-end">
                   <button
                     type="submit"
-                    className="bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                    disabled={isSubmittingProfile}
+                    className="bg-primary hover:bg-primary-hover disabled:bg-slate-150 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
                   >
-                    Cập nhật thông tin
+                    {isSubmittingProfile ? 'Đang cập nhật...' : 'Cập nhật thông tin'}
                   </button>
                 </div>
               </form>
@@ -378,9 +395,10 @@ export default function Profile() {
                   <div className="md:col-span-3 flex justify-end">
                     <button
                       type="submit"
-                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 px-5 py-2.5 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
+                      disabled={isSubmittingPassword}
+                      className="bg-white border border-slate-200 hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-600 hover:text-slate-900 px-5 py-2.5 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
                     >
-                      Thay đổi mật khẩu
+                      {isSubmittingPassword ? 'Đang thay đổi...' : 'Thay đổi mật khẩu'}
                     </button>
                   </div>
                 </form>
@@ -649,16 +667,18 @@ export default function Profile() {
             </p>
             <div className="flex space-x-3">
               <button
+                disabled={isUnsubmitting}
                 onClick={() => setCancellingPkgId(null)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50"
               >
                 Hủy bỏ
               </button>
               <button
+                disabled={isUnsubmitting}
                 onClick={handleConfirmUnsubscribe}
-                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
               >
-                Đồng ý hủy
+                {isUnsubmitting ? 'Đang hủy...' : 'Đồng ý hủy'}
               </button>
             </div>
           </div>

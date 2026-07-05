@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { 
   Users, 
-  Loader2, 
   Lock, 
   Unlock, 
   Sparkles, 
@@ -12,6 +11,7 @@ import {
 import { useAuthStore } from '../../store';
 import { userApi } from '../../services/api';
 import type { User } from '../../types';
+import { TableRowSkeleton } from '../../components/Skeleton';
 
 export default function AdminUsers() {
   const { currentUser } = useAuthStore();
@@ -21,6 +21,12 @@ export default function AdminUsers() {
   
   // Track loading per user row by maps of userId -> actionName ('status' | 'loyalty' | 'type')
   const [processingUserIds, setProcessingUserIds] = useState<Record<string, string>>({});
+
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -44,100 +50,109 @@ export default function AdminUsers() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const handleToggleStatus = async (user: User) => {
+  const handleToggleStatus = (user: User) => {
     const nextStatus = user.status === 'locked' ? 'active' : 'locked';
     const confirmMessage = nextStatus === 'locked'
-      ? "Bạn có chắc chắn muốn khóa tài khoản này?\nNgười dùng sẽ không thể đăng nhập cho đến khi được mở khóa."
+      ? "Bạn có chắc chắn muốn khóa tài khoản này? Người dùng sẽ không thể đăng nhập cho đến khi được mở khóa."
       : "Bạn có chắc chắn muốn mở khóa tài khoản này?";
 
-    if (!window.confirm(confirmMessage)) return;
-
-    setProcessingUserIds(prev => ({ ...prev, [user.id]: 'status' }));
-
-    try {
-      const success = await userApi.updateUser(user.id, { status: nextStatus });
-      if (success) {
-        // Optimistic Local State Update
-        setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
-        showToast('success', nextStatus === 'locked' ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.');
-        
-        if (currentUser && currentUser.id === user.id) {
-          useAuthStore.getState().fetchMe().catch(() => {});
+    setConfirmModal({
+      title: nextStatus === 'locked' ? 'Khóa tài khoản' : 'Mở khóa tài khoản',
+      message: confirmMessage,
+      onConfirm: async () => {
+        setProcessingUserIds(prev => ({ ...prev, [user.id]: 'status' }));
+        try {
+          const success = await userApi.updateUser(user.id, { status: nextStatus });
+          if (success) {
+            // Optimistic Local State Update
+            setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
+            showToast('success', nextStatus === 'locked' ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.');
+            
+            if (currentUser && currentUser.id === user.id) {
+              useAuthStore.getState().fetchMe().catch(() => {});
+            }
+          } else {
+            showToast('error', 'Không thể cập nhật dữ liệu.');
+          }
+        } catch (err: any) {
+          showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
+        } finally {
+          setProcessingUserIds(prev => {
+            const next = { ...prev };
+            delete next[user.id];
+            return next;
+          });
         }
-      } else {
-        showToast('error', 'Không thể cập nhật dữ liệu.');
       }
-    } catch (err: any) {
-      showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
-    } finally {
-      setProcessingUserIds(prev => {
-        const next = { ...prev };
-        delete next[user.id];
-        return next;
-      });
-    }
+    });
   };
 
-  const handleToggleLoyalty = async (user: User) => {
-    if (!window.confirm("Bạn có chắc chắn muốn thay đổi trạng thái khách hàng thân thiết?")) return;
-
+  const handleToggleLoyalty = (user: User) => {
     const nextLoyal = !user.is_loyal_customer;
-    setProcessingUserIds(prev => ({ ...prev, [user.id]: 'loyalty' }));
-
-    try {
-      const success = await userApi.updateUser(user.id, { is_loyal_customer: nextLoyal });
-      if (success) {
-        // Optimistic Local State Update
-        setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, is_loyal_customer: nextLoyal } : u));
-        showToast('success', 'Đã cập nhật khách hàng thân thiết.');
-        
-        if (currentUser && currentUser.id === user.id) {
-          useAuthStore.getState().fetchMe().catch(() => {});
+    setConfirmModal({
+      title: 'Thay đổi trạng thái Khách hàng thân thiết',
+      message: 'Bạn có chắc chắn muốn thay đổi trạng thái khách hàng thân thiết của tài khoản này?',
+      onConfirm: async () => {
+        setProcessingUserIds(prev => ({ ...prev, [user.id]: 'loyalty' }));
+        try {
+          const success = await userApi.updateUser(user.id, { is_loyal_customer: nextLoyal });
+          if (success) {
+            // Optimistic Local State Update
+            setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, is_loyal_customer: nextLoyal } : u));
+            showToast('success', 'Đã cập nhật khách hàng thân thiết.');
+            
+            if (currentUser && currentUser.id === user.id) {
+              useAuthStore.getState().fetchMe().catch(() => {});
+            }
+          } else {
+            showToast('error', 'Không thể cập nhật dữ liệu.');
+          }
+        } catch (err: any) {
+          showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
+        } finally {
+          setProcessingUserIds(prev => {
+            const next = { ...prev };
+            delete next[user.id];
+            return next;
+          });
         }
-      } else {
-        showToast('error', 'Không thể cập nhật dữ liệu.');
       }
-    } catch (err: any) {
-      showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
-    } finally {
-      setProcessingUserIds(prev => {
-        const next = { ...prev };
-        delete next[user.id];
-        return next;
-      });
-    }
+    });
   };
 
-  const handleToggleSubscriptionType = async (user: User) => {
+  const handleToggleSubscriptionType = (user: User) => {
     const nextType = user.subscription_type === 'tra_sau' ? 'tra_truoc' : 'tra_sau';
     const label = nextType === 'tra_truoc' ? 'Trả trước' : 'Trả sau';
 
-    if (!window.confirm(`Bạn có chắc chắn muốn chuyển thuê bao này sang ${label}?\nThao tác sẽ ảnh hưởng tới các gói cước người dùng có thể xem.`)) return;
-
-    setProcessingUserIds(prev => ({ ...prev, [user.id]: 'type' }));
-
-    try {
-      const success = await userApi.updateUser(user.id, { subscription_type: nextType });
-      if (success) {
-        // Optimistic Local State Update
-        setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, subscription_type: nextType } : u));
-        showToast('success', `Đã cập nhật loại thuê bao của ${user.phoneNumber} sang ${label}.`);
-        
-        if (currentUser && currentUser.id === user.id) {
-          useAuthStore.getState().fetchMe().catch(() => {});
+    setConfirmModal({
+      title: 'Thay đổi loại thuê bao',
+      message: `Bạn có chắc chắn muốn chuyển thuê bao này sang ${label}? Thao tác sẽ ảnh hưởng tới các gói cước người dùng có thể xem.`,
+      onConfirm: async () => {
+        setProcessingUserIds(prev => ({ ...prev, [user.id]: 'type' }));
+        try {
+          const success = await userApi.updateUser(user.id, { subscription_type: nextType });
+          if (success) {
+            // Optimistic Local State Update
+            setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, subscription_type: nextType } : u));
+            showToast('success', `Đã cập nhật loại thuê bao của ${user.phoneNumber} sang ${label}.`);
+            
+            if (currentUser && currentUser.id === user.id) {
+              useAuthStore.getState().fetchMe().catch(() => {});
+            }
+          } else {
+            showToast('error', 'Không thể cập nhật dữ liệu.');
+          }
+        } catch (err: any) {
+          showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
+        } finally {
+          setProcessingUserIds(prev => {
+            const next = { ...prev };
+            delete next[user.id];
+            return next;
+          });
         }
-      } else {
-        showToast('error', 'Không thể cập nhật dữ liệu.');
       }
-    } catch (err: any) {
-      showToast('error', err.response ? 'Không thể cập nhật dữ liệu.' : 'Kết nối máy chủ thất bại.');
-    } finally {
-      setProcessingUserIds(prev => {
-        const next = { ...prev };
-        delete next[user.id];
-        return next;
-      });
-    }
+    });
   };
 
   const formatDate = (isoString?: string) => {
@@ -155,15 +170,6 @@ export default function AdminUsers() {
       return isoString;
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-xs font-semibold text-slate-500 space-y-3">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span>Đang tải thông tin danh sách người dùng...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 relative animate-fade-in text-xs font-semibold max-w-7xl mx-auto px-2">
@@ -201,23 +207,27 @@ export default function AdminUsers() {
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden text-left">
         {/* Table responsive and Scrollable with Sticky Header */}
         <div className="overflow-x-auto max-h-[580px] overflow-y-auto">
-          {usersList.length > 0 ? (
-            <table className="w-full text-left border-collapse text-xs table-auto min-w-[1000px]">
-              <thead className="sticky top-0 bg-slate-50 z-10 shadow-[inset_0_-1px_0_rgba(226,232,240,1)]">
-                <tr className="text-slate-600 font-bold text-[11px] uppercase tracking-wider">
-                  <th className="p-4 bg-slate-50">Họ và tên</th>
-                  <th className="p-4 bg-slate-50">Số điện thoại</th>
-                  <th className="p-4 bg-slate-50">Loại thuê bao</th>
-                  <th className="p-4 bg-slate-50">Khách hàng thân thiết</th>
-                  <th className="p-4 bg-slate-50">Số dư ví</th>
-                  <th className="p-4 bg-slate-50">Trạng thái</th>
-                  <th className="p-4 bg-slate-50">Vai trò</th>
-                  <th className="p-4 bg-slate-50">Ngày đăng ký</th>
-                  <th className="p-4 bg-slate-50 text-center">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
-                {usersList.map((user) => {
+          <table className="w-full text-left border-collapse text-xs table-auto min-w-[1000px]">
+            <thead className="sticky top-0 bg-slate-50 z-10 shadow-[inset_0_-1px_0_rgba(226,232,240,1)]">
+              <tr className="text-slate-600 font-bold text-[11px] uppercase tracking-wider">
+                <th className="p-4 bg-slate-50">Họ và tên</th>
+                <th className="p-4 bg-slate-50">Số điện thoại</th>
+                <th className="p-4 bg-slate-50">Loại thuê bao</th>
+                <th className="p-4 bg-slate-50">Khách hàng thân thiết</th>
+                <th className="p-4 bg-slate-50">Số dư ví</th>
+                <th className="p-4 bg-slate-50">Trạng thái</th>
+                <th className="p-4 bg-slate-50">Vai trò</th>
+                <th className="p-4 bg-slate-50">Ngày đăng ký</th>
+                <th className="p-4 bg-slate-50 text-center">Hành động</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <TableRowSkeleton key={idx} />
+                ))
+              ) : usersList.length > 0 ? (
+                usersList.map((user) => {
                   const isStatusLoading = processingUserIds[user.id] === 'status';
                   const isLoyaltyLoading = processingUserIds[user.id] === 'loyalty';
                   const isTypeLoading = processingUserIds[user.id] === 'type';
@@ -325,14 +335,47 @@ export default function AdminUsers() {
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          ) : (
-            <div className="p-10 text-center text-slate-500 font-medium">Danh sách người dùng hiện đang trống.</div>
-          )}
+                })
+              ) : (
+                <tr>
+                  <td colSpan={9} className="p-10 text-center text-slate-500 font-medium">
+                    Danh sách người dùng hiện đang trống.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-lg animate-scale-up text-left space-y-4">
+            <h3 className="text-base font-extrabold text-slate-900">{confirmModal.title}</h3>
+            <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+              {confirmModal.message}
+            </p>
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(null);
+                }}
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -200,9 +201,8 @@ export default function Navbar() {
                   <div className="py-1">
                     <button
                       onClick={() => {
-                        logout();
                         setIsProfileOpen(false);
-                        navigate('/login');
+                        setShowLogoutConfirm(true);
                       }}
                       className="w-full text-left flex items-center px-4 py-2 text-xs hover:bg-red-50 transition-colors text-red-650 font-bold"
                     >
@@ -266,6 +266,36 @@ export default function Navbar() {
                 </Link>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-lg animate-scale-up text-left space-y-4">
+            <h3 className="text-base font-extrabold text-slate-905">Xác nhận đăng xuất</h3>
+            <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+              Bạn có chắc chắn muốn đăng xuất khỏi hệ thống ViettelAI?
+            </p>
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  logout();
+                  navigate('/login');
+                }}
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+              >
+                Đăng xuất
+              </button>
+            </div>
           </div>
         </div>
       )}
