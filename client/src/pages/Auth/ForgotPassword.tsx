@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { Phone, Lock, Key, AlertCircle } from 'lucide-react';
+import { Phone, Lock, Key, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 const forgotPasswordSchema = z.object({
   phoneNumber: z.string()
@@ -21,6 +21,7 @@ export default function ForgotPassword() {
   const [step, setStep] = useState(1); // 1: Send OTP, 2: Reset Password
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -150,14 +151,24 @@ export default function ForgotPassword() {
             <label className="text-[13px] font-semibold text-slate-500 pl-0.5">Mật khẩu mới</label>
             <div className="relative flex items-center">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder="Tối thiểu 6 ký tự..."
                 {...register('newPassword')}
                 className={`w-full h-[48px] bg-slate-50 border ${
                   errors.newPassword ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
-                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 focus:outline-none transition-all`}
+                } rounded-xl pl-11 pr-11 text-[15px] font-semibold text-slate-700 focus:outline-none transition-all`}
               />
               <Lock className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
+
+              {/* Show/Hide Password Switch */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                className="absolute right-3.5 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
             {errors.newPassword && (
               <p className="text-[13px] text-red-500 flex items-center mt-1 font-medium pl-0.5 animate-fade-in">

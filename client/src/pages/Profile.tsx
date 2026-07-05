@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Shield, Check, QrCode } from 'lucide-react';
+import { User, CreditCard, History, Shield, Check, QrCode, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore, usePackageStore } from '../store';
 import SEO from '../components/SEO';
 
@@ -42,6 +42,11 @@ export default function Profile() {
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
+
+  // Show/Hide password states
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // If user is not logged in, redirect to login
   useEffect(() => {
@@ -309,35 +314,65 @@ export default function Profile() {
                 <form onSubmit={handlePasswordSubmit(onPasswordSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu hiện tại</label>
-                    <input
-                      type="password"
-                      placeholder="Nhập mật khẩu cũ..."
-                      {...registerPassword('oldPassword')}
-                      className={`w-full bg-slate-50 border ${passwordErrors.oldPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                        } rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showOldPassword ? 'text' : 'password'}
+                        placeholder="Nhập mật khẩu cũ..."
+                        {...registerPassword('oldPassword')}
+                        className={`w-full bg-slate-50 border ${passwordErrors.oldPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOldPassword(!showOldPassword)}
+                        aria-label={showOldPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                      >
+                        {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     {passwordErrors.oldPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.oldPassword.message}</p>}
                   </div>
                   <div className="flex flex-col space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu mới</label>
-                    <input
-                      type="password"
-                      placeholder="Mật khẩu mới..."
-                      {...registerPassword('newPassword')}
-                      className={`w-full bg-slate-50 border ${passwordErrors.newPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                        } rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        placeholder="Mật khẩu mới..."
+                        {...registerPassword('newPassword')}
+                        className={`w-full bg-slate-50 border ${passwordErrors.newPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     {passwordErrors.newPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.newPassword.message}</p>}
                   </div>
                   <div className="flex flex-col space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nhập lại mật khẩu</label>
-                    <input
-                      type="password"
-                      placeholder="Nhập lại mật khẩu mới..."
-                      {...registerPassword('confirmNewPassword')}
-                      className={`w-full bg-slate-50 border ${passwordErrors.confirmNewPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                        } rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Nhập lại mật khẩu mới..."
+                        {...registerPassword('confirmNewPassword')}
+                        className={`w-full bg-slate-50 border ${passwordErrors.confirmNewPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     {passwordErrors.confirmNewPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.confirmNewPassword.message}</p>}
                   </div>
                   <div className="md:col-span-3 flex justify-end">
