@@ -15,8 +15,10 @@ import type { Package, User } from '../types';
 export function canViewPackage(user: User | null | undefined, pkg: Package): boolean {
   if (!pkg) return false;
 
-  // 1. Guest & Admin have unrestricted access
+  // 1. Guest (unauthenticated) has 100% access to all packages
   if (!user) return true;
+
+  // 2. Admin has 100% access
   if (user.role === 'admin') return true;
 
   const targetStr = (pkg.doi_tuong_ap_dung || '').toLowerCase();
@@ -29,15 +31,19 @@ export function canViewPackage(user: User | null | undefined, pkg: Package): boo
   const userType = user.subscription_type || 'tra_truoc';
   const isLoyalUser = !!user.is_loyal_customer;
 
-  // 2. Prepaid subscriber
-  if (userType === 'tra_truoc') {
-    if (isPostpaidPkg && !isPrepaidPkg) return false; // Hide postpaid-only
-    if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not loyal customer
-  } 
-  // 3. Postpaid subscriber
-  else if (userType === 'tra_sau') {
-    if (isPrepaidPkg && !isPostpaidPkg) return false; // Hide prepaid-only
-    if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not loyal customer
+  // 3. Loyalty Check: nếu package có khach_hang_than_thiet chỉ cho phép khi is_loyal_customer = true
+  if (isLoyalPkg && !isLoyalUser) {
+    return false;
+  }
+
+  // 4. Prepaid Check: nếu subscription_type = tra_truoc ẩn toàn bộ gói chỉ dành cho tra_sau
+  if (userType === 'tra_truoc' && isPostpaidPkg && !isPrepaidPkg) {
+    return false;
+  }
+
+  // 5. Postpaid Check: nếu subscription_type = tra_sau ẩn toàn bộ gói chỉ dành cho tra_truoc
+  if (userType === 'tra_sau' && isPrepaidPkg && !isPostpaidPkg) {
+    return false;
   }
 
   return true;

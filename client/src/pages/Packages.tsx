@@ -77,9 +77,7 @@ export default function Packages() {
         storeState.setFilter('target', defaultTarget);
       }
     } else if (!currentUser || currentUser.role === 'admin') {
-      if (!storeState.filters.target) {
-        storeState.setFilter('target', 'all');
-      }
+      storeState.setFilter('target', 'all');
     }
   }, [currentUser]);
 

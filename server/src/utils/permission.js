@@ -13,6 +13,12 @@
 function canViewPackage(user, pkg) {
   if (!pkg) return false;
 
+  // 1. Guest (unauthenticated) has 100% access to all packages
+  if (!user) return true;
+
+  // 2. Admin has 100% access
+  if (user.role === 'admin' || user.role === 'Admin') return true;
+
   const targetStr = (pkg.doi_tuong_ap_dung || pkg.conditions || '').toLowerCase();
   const descStr = (pkg.dieu_kien_dang_ky || pkg.description || '').toLowerCase();
 
@@ -20,27 +26,22 @@ function canViewPackage(user, pkg) {
   const isPrepaidPkg = targetStr.includes('tra_truoc') || descStr.includes('tra_truoc');
   const isPostpaidPkg = targetStr.includes('tra_sau') || descStr.includes('tra_sau');
 
-  // 1. Guest (unauthenticated)
-  if (!user) {
-    if (isLoyalPkg) return false; // Khách vãng lai không nhìn thấy gói KHTT
-    return true;
-  }
-
-  // 2. Admin has unrestricted access
-  if (user.role === 'admin' || user.role === 'Admin') return true;
-
   const userType = user.subscription_type || 'tra_truoc';
   const isLoyalUser = !!user.is_loyal_customer;
 
-  // 3. Prepaid Subscriber
-  if (userType === 'tra_truoc') {
-    if (isPostpaidPkg && !isPrepaidPkg) return false; // Hide postpaid-only
-    if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not KHTT subscriber
-  } 
-  // 4. Postpaid Subscriber
-  else if (userType === 'tra_sau') {
-    if (isPrepaidPkg && !isPostpaidPkg) return false; // Hide prepaid-only
-    if (isLoyalPkg) return isLoyalUser; // Hide KHTT if not KHTT subscriber
+  // 3. Loyalty Check: nếu package có khach_hang_than_thiet chỉ cho phép khi is_loyal_customer = true
+  if (isLoyalPkg && !isLoyalUser) {
+    return false;
+  }
+
+  // 4. Prepaid Check: nếu subscription_type = tra_truoc ẩn toàn bộ gói chỉ dành cho tra_sau
+  if (userType === 'tra_truoc' && isPostpaidPkg && !isPrepaidPkg) {
+    return false;
+  }
+
+  // 5. Postpaid Check: nếu subscription_type = tra_sau ẩn toàn bộ gói chỉ dành cho tra_truoc
+  if (userType === 'tra_sau' && isPrepaidPkg && !isPostpaidPkg) {
+    return false;
   }
 
   return true;
