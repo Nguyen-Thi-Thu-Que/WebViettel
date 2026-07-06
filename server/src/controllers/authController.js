@@ -111,6 +111,30 @@ const authController = {
         message: error.message
       });
     }
+  },
+
+  linkWallet: async (req, res, next) => {
+    try {
+      const { walletAddress } = req.body;
+      if (!walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: 'Địa chỉ ví là bắt buộc.'
+        });
+      }
+
+      const updatedUser = await authService.linkWallet(req.user.user_id, walletAddress);
+      return res.status(200).json({
+        success: true,
+        message: 'Liên kết địa chỉ ví thành công!',
+        data: { user: updatedUser }
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
   }
 };
 

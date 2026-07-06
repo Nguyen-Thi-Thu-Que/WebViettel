@@ -10,6 +10,7 @@ const accountSchema = new mongoose.Schema({
   subscription_type: { type: String, enum: ['tra_truoc', 'tra_sau'], required: true, default: 'tra_truoc' },
   is_loyal_customer: { type: Boolean, default: false },
   status: { type: String, enum: ['active', 'blocked', 'pending'], default: 'active' },
+  wallet_address: { type: String, default: null },
   created_at: { type: String, default: () => new Date().toISOString() }
 }, {
   collection: 'accounts',

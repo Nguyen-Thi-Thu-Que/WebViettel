@@ -8,6 +8,7 @@ router.post('/login', authController.login);
 router.post('/register', authController.register);
 router.get('/me', authenticateToken, authController.getMe);
 router.put('/profile', authenticateToken, authController.updateProfile);
+router.put('/wallet', authenticateToken, authController.linkWallet);
 router.put('/change-password', authenticateToken, authController.changePassword);
 router.post('/deposit', authenticateToken, transactionController.deposit);
 router.post('/subscribe', authenticateToken, transactionController.subscribePackage);

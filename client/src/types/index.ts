@@ -42,6 +42,7 @@ export interface User {
   subscription_type?: 'tra_truoc' | 'tra_sau';
   is_loyal_customer?: boolean;
   status?: 'active' | 'blocked' | 'pending';
+  walletAddress?: string | null;
   created_at?: string;
 }
 

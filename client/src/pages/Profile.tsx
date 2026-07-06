@@ -6,6 +6,8 @@ import * as z from 'zod';
 import { User, CreditCard, History, Shield, Check, QrCode, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore, usePackageStore } from '../store';
 import SEO from '../components/SEO';
+import { useWeb3 } from '../hooks/useWeb3';
+import { web3Service } from '../services/web3Service';
 
 // Schemas for forms
 const profileSchema = z.object({
@@ -52,6 +54,57 @@ export default function Profile() {
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   const [isUnsubmitting, setIsUnsubmitting] = useState(false);
+
+  // Web3 MetaMask hook and integration states
+  const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
+  const { linkWalletAddress } = useAuthStore();
+  const [isLinking, setIsLinking] = useState(false);
+
+  const handleConnectWallet = async () => {
+    const res = await connect();
+    if (res.success) {
+      showToast('success', 'Kết nối MetaMask thành công!');
+      if (!res.isSepolia) {
+        showToast('error', 'Vui lòng chuyển mạng sang Sepolia để tiếp tục.');
+      }
+    } else {
+      showToast('error', res.error || 'Kết nối ví bị từ chối hoặc thất bại.');
+    }
+  };
+
+  const handleSwitchNetwork = async () => {
+    const success = await switchToSepolia();
+    if (success) {
+      showToast('success', 'Chuyển sang mạng Sepolia thành công!');
+    } else {
+      showToast('error', 'Chuyển mạng thất bại. Vui lòng thử lại.');
+    }
+  };
+
+  const handleLinkWallet = async () => {
+    if (!walletAddress) {
+      showToast('error', 'Không tìm thấy địa chỉ ví hiện tại.');
+      return;
+    }
+    if (!isSepolia) {
+      showToast('error', 'Vui lòng chuyển sang mạng Sepolia trước khi liên kết.');
+      return;
+    }
+
+    setIsLinking(true);
+    const res = await linkWalletAddress(walletAddress);
+    setIsLinking(false);
+
+    if (res.success) {
+      showToast('success', res.message);
+    } else {
+      showToast('error', res.message);
+    }
+  };
+
+  const truncateAddress = (addr: string) => {
+    return web3Service.truncateAddress(addr);
+  };
 
   // If user is not logged in, redirect to login
   useEffect(() => {
@@ -320,6 +373,104 @@ export default function Profile() {
                   </button>
                 </div>
               </form>
+
+              {/* Web3 MetaMask wallet link section */}
+              <div className="border-t border-slate-50 pt-6 mt-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Liên kết ví Web3 (MetaMask)</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Kết nối MetaMask trên mạng thử nghiệm Sepolia để liên kết tài khoản.</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-semibold text-slate-500">Trạng thái ví:</span>
+                      {currentUser.walletAddress ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
+                          Đã liên kết
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700">
+                          Chưa liên kết
+                        </span>
+                      )}
+                    </div>
+                    
+                    {currentUser.walletAddress ? (
+                      <div className="space-y-1">
+                        <p className="font-medium text-slate-700">
+                          Địa chỉ ví đã liên kết: <strong className="font-mono text-slate-900 select-all">{currentUser.walletAddress}</strong>
+                        </p>
+                        {isConnected && walletAddress && walletAddress.toLowerCase() !== currentUser.walletAddress.toLowerCase() && (
+                          <p className="text-[10px] text-amber-600 font-medium">
+                            ⚠️ Ví MetaMask hiện tại ({truncateAddress(walletAddress)}) khác với ví đã liên kết.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
+                        Liên kết ví của bạn để bắt đầu sử dụng các chức năng blockchain trong các phần tiếp theo.
+                      </p>
+                    )}
+
+                    {/* Display current MetaMask status if installed and connected */}
+                    {isConnected && walletAddress && (
+                      <div className="text-[10px] text-slate-500 font-medium pt-1 space-y-0.5">
+                        <p>• Ví đang chọn: <span className="font-mono text-slate-800">{walletAddress}</span></p>
+                        <p>• Mạng: {isSepolia ? (
+                          <span className="text-emerald-600 font-bold">Sepolia Testnet</span>
+                        ) : (
+                          <span className="text-red-500 font-bold">Không hỗ trợ (Yêu cầu mạng Sepolia)</span>
+                        )}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                    {!isInstalled ? (
+                      <a
+                        href="https://metamask.io/download/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-bold px-4 py-2.5 rounded-xl text-center transition-colors text-[11px]"
+                      >
+                        Cài đặt MetaMask
+                      </a>
+                    ) : !isConnected ? (
+                      <button
+                        type="button"
+                        onClick={handleConnectWallet}
+                        className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-xl transition-colors text-[11px] cursor-pointer"
+                      >
+                        Kết nối ví
+                      </button>
+                    ) : !isSepolia ? (
+                      <button
+                        type="button"
+                        onClick={handleSwitchNetwork}
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2.5 rounded-xl transition-colors text-[11px] cursor-pointer"
+                      >
+                        Chuyển sang Sepolia
+                      </button>
+                    ) : (
+                      currentUser.walletAddress?.toLowerCase() !== walletAddress?.toLowerCase() ? (
+                        <button
+                          type="button"
+                          onClick={handleLinkWallet}
+                          disabled={isLinking}
+                          className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[11px] cursor-pointer"
+                        >
+                          {isLinking ? 'Đang liên kết...' : 'Liên kết ví này'}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1">
+                          <Check className="w-4 h-4 text-emerald-500" />
+                          <span>Đã liên kết ví hiện tại</span>
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* Password Change Form */}
               <div className="border-t border-slate-50 pt-6 space-y-4">

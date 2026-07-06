@@ -32,6 +32,7 @@ interface AuthState {
   deposit: (amount: number, method: string) => Promise<boolean>;
   subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
+  linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -194,6 +195,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       console.error("Error unsubscribing package:", err);
       return false;
+    }
+  },
+
+  linkWalletAddress: async (walletAddress: string) => {
+    set({ loading: true, error: null });
+    try {
+      const user = await authApi.linkWallet(walletAddress);
+      set({ currentUser: user, loading: false });
+      return { success: true, message: 'Liên kết địa chỉ ví thành công!' };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || 'Liên kết địa chỉ ví thất bại.';
+      set({ error: errMsg, loading: false });
+      return { success: false, message: errMsg };
     }
   }
 }));

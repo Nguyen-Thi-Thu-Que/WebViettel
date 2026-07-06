@@ -78,6 +78,7 @@ const authService = {
         subscription_type: account.subscription_type || 'tra_truoc',
         is_loyal_customer: account.is_loyal_customer || false,
         status: account.status || 'active',
+        walletAddress: account.wallet_address || null,
         activePackages
       }
     };
@@ -137,6 +138,7 @@ const authService = {
         subscription_type: newAccount.subscription_type || 'tra_truoc',
         is_loyal_customer: newAccount.is_loyal_customer || false,
         status: newAccount.status || 'active',
+        walletAddress: newAccount.wallet_address || null,
         activePackages: []
       }
     };
@@ -160,6 +162,7 @@ const authService = {
       subscription_type: account.subscription_type || 'tra_truoc',
       is_loyal_customer: account.is_loyal_customer || false,
       status: account.status || 'active',
+      walletAddress: account.wallet_address || null,
       activePackages
     };
   },
@@ -186,6 +189,7 @@ const authService = {
       subscription_type: account.subscription_type || 'tra_truoc',
       is_loyal_customer: account.is_loyal_customer || false,
       status: account.status || 'active',
+      walletAddress: account.wallet_address || null,
       activePackages
     };
   },
@@ -204,6 +208,50 @@ const authService = {
     account.password = hashPassword(newPassword);
     await account.save();
     return true;
+  },
+
+  linkWallet: async (userId, walletAddress) => {
+    const account = await Account.findOne({ user_id: userId });
+    if (!account) {
+      throw new Error('Không tìm thấy thông tin tài khoản.');
+    }
+
+    if (!walletAddress) {
+      throw new Error('Địa chỉ ví không hợp lệ.');
+    }
+
+    // Normalize walletAddress (lowercase)
+    const normalizedAddress = walletAddress.toLowerCase();
+
+    // Check if another account has already linked this address
+    const otherAccount = await Account.findOne({ 
+      wallet_address: normalizedAddress, 
+      user_id: { $ne: userId } 
+    });
+    if (otherAccount) {
+      throw new Error('Địa chỉ ví này đã được liên kết với một tài khoản khác.');
+    }
+
+    if (account.wallet_address !== normalizedAddress) {
+      account.wallet_address = normalizedAddress;
+      await account.save();
+    }
+
+    const activePackages = await getActivePackages(account.user_id);
+
+    return {
+      id: String(account.user_id),
+      name: account.fullname,
+      phoneNumber: account.phone_number,
+      email: account.email || '',
+      balance: account.balance,
+      role: account.role === 'admin' ? 'admin' : 'customer',
+      subscription_type: account.subscription_type || 'tra_truoc',
+      is_loyal_customer: account.is_loyal_customer || false,
+      status: account.status || 'active',
+      walletAddress: account.wallet_address,
+      activePackages
+    };
   }
 };
 

@@ -233,6 +233,11 @@ export const authApi = {
   unsubscribePackage: async (packageId: string): Promise<boolean> => {
     const response = await axiosInstance.delete<{ success: boolean }>(`/api/auth/unsubscribe/${packageId}`);
     return response.data.success;
+  },
+
+  linkWallet: async (walletAddress: string): Promise<User> => {
+    const response = await axiosInstance.put<{ success: boolean; data: { user: User } }>('/api/auth/wallet', { walletAddress });
+    return response.data.data.user;
   }
 };
 
