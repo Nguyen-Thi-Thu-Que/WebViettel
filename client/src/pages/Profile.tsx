@@ -56,6 +56,7 @@ export default function Profile() {
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   const [isUnsubmitting, setIsUnsubmitting] = useState(false);
+  const showDetailModal = false;
 
   // Web3 MetaMask hook and integration states
   const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
@@ -888,6 +889,63 @@ export default function Profile() {
                 className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
               >
                 {isUnsubmitting ? 'Đang hủy...' : 'Đồng ý hủy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Detail Modal */}
+      {showDetailModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left">
+            <h3 className="text-base font-extrabold text-slate-900 mb-4">Chi tiết giao dịch</h3>
+            
+            <div className="space-y-3 text-xs text-slate-600 font-medium">
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
+                <span className="font-mono font-bold text-slate-800">—</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền</span>
+                <span className="font-bold text-slate-800">— VNĐ</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trạng thái</span>
+                <span className="font-bold text-slate-800">—</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
+                <span className="font-mono font-bold text-slate-800">—</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví nhận</span>
+                <span className="font-mono font-bold text-slate-800">—</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mạng Blockchain</span>
+                <span className="font-bold text-slate-800">Sepolia</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Tỷ giá quy đổi</span>
+                <span className="font-bold text-slate-800">— VNĐ / ETH</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian tạo</span>
+                <span className="font-bold text-slate-800">—</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian xác nhận</span>
+                <span className="font-bold text-slate-800">—</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <button
+                type="button"
+                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none"
+              >
+                Đóng
               </button>
             </div>
           </div>
