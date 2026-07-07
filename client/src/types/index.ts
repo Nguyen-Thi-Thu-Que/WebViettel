@@ -56,6 +56,10 @@ export interface Transaction {
   status: 'pending' | 'success' | 'failed';
   createdAt: string;
   txHash?: string;
+  walletAddress?: string;
+  exchangeRate?: number;
+  network?: string;
+  amountETH?: string;
 }
 
 export interface FAQ {

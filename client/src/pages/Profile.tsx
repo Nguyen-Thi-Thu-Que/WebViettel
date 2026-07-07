@@ -9,6 +9,7 @@ import { useAuthStore, usePackageStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
 import { getBlockchainConfig } from '../services/web3Service';
+import type { Transaction } from '../types';
 
 // Schemas for forms
 const profileSchema = z.object({
@@ -56,7 +57,8 @@ export default function Profile() {
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   const [isUnsubmitting, setIsUnsubmitting] = useState(false);
-  const showDetailModal = false;
+  const [selectedTxDetail, setSelectedTxDetail] = useState<Transaction | null>(null);
+  const showDetailModal = !!selectedTxDetail;
 
   // Web3 MetaMask hook and integration states
   const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
@@ -822,7 +824,11 @@ export default function Profile() {
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-700">
                       {transactions.map((tx) => (
-                        <tr key={tx.id} className="hover:bg-slate-50/40 transition-colors">
+                        <tr
+                          key={tx.id}
+                          onClick={() => setSelectedTxDetail(tx)}
+                          className="hover:bg-slate-50/40 transition-colors cursor-pointer"
+                        >
                           <td className="p-4 text-slate-550 font-semibold">
                             {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : 'Không rõ'}
                           </td>
@@ -896,7 +902,7 @@ export default function Profile() {
       )}
 
       {/* Transaction Detail Modal */}
-      {showDetailModal && (
+      {showDetailModal && selectedTxDetail && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left">
             <h3 className="text-base font-extrabold text-slate-900 mb-4">Chi tiết giao dịch</h3>
@@ -904,46 +910,71 @@ export default function Profile() {
             <div className="space-y-3 text-xs text-slate-600 font-medium">
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
-                <span className="font-mono font-bold text-slate-800">—</span>
+                <span className="font-mono font-bold text-slate-800 break-all select-all">
+                  {selectedTxDetail.txHash || selectedTxDetail.id}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền</span>
-                <span className="font-bold text-slate-800">— VNĐ</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.amount.toLocaleString()} VNĐ
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trạng thái</span>
-                <span className="font-bold text-slate-800">—</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.status === 'success' ? (
+                    <span className="text-emerald-600">Thành công</span>
+                  ) : selectedTxDetail.status === 'pending' ? (
+                    <span className="text-amber-600">Đang xử lý</span>
+                  ) : (
+                    <span className="text-red-600">Thất bại</span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
-                <span className="font-mono font-bold text-slate-800">—</span>
+                <span className="font-mono font-bold text-slate-800 break-all select-all">
+                  {selectedTxDetail.walletAddress || '—'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví nhận</span>
-                <span className="font-mono font-bold text-slate-800">—</span>
+                <span className="font-mono font-bold text-slate-800 break-all select-all">
+                  {selectedTxDetail.type === 'deposit' ? (import.meta.env.VITE_RECEIVER_WALLET || '—') : '—'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mạng Blockchain</span>
-                <span className="font-bold text-slate-800">Sepolia</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.network || 'Sepolia'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Tỷ giá quy đổi</span>
-                <span className="font-bold text-slate-800">— VNĐ / ETH</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.exchangeRate ? `${selectedTxDetail.exchangeRate.toLocaleString()} VNĐ / ETH` : '—'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian tạo</span>
-                <span className="font-bold text-slate-800">—</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.createdAt ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
+                </span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian xác nhận</span>
-                <span className="font-bold text-slate-800">—</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.createdAt && selectedTxDetail.status === 'success' ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
+                </span>
               </div>
             </div>
 
             <div className="mt-6">
               <button
                 type="button"
-                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none"
+                onClick={() => setSelectedTxDetail(null)}
+                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
               >
                 Đóng
               </button>

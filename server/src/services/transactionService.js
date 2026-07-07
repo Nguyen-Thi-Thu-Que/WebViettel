@@ -284,7 +284,11 @@ const transactionService = {
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
         createdAt: dep.created_at || new Date().toISOString(),
-        txHash: dep.txHash || dep.tx_hash || ''
+        txHash: dep.txHash || dep.tx_hash || '',
+        walletAddress: dep.walletAddress || '',
+        exchangeRate: dep.exchangeRate || null,
+        network: dep.network || '',
+        amountETH: dep.amountETH || ''
       });
     }
 
