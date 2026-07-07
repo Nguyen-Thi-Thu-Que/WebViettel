@@ -3,11 +3,11 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Shield, Check, QrCode, Eye, EyeOff } from 'lucide-react';
+import { User, CreditCard, History, Shield, Check, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore, usePackageStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
-import { web3Service } from '../services/web3Service';
+import { getBlockchainConfig } from '../services/web3Service';
 
 // Schemas for forms
 const profileSchema = z.object({
@@ -29,7 +29,7 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, transactions, deposit, unsubscribePackage, updateProfile, changePassword } = useAuthStore();
+  const { currentUser, transactions, unsubscribePackage, updateProfile, changePassword } = useAuthStore();
   const { packages } = usePackageStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'info';
@@ -37,10 +37,8 @@ export default function Profile() {
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Wallet states
-  const [depositAmount, setDepositAmount] = useState('100000');
-  const [paymentMethod, setPaymentMethod] = useState('VietQR');
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrCountdown, setQRCountdown] = useState(120);
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
+  const [customAmountStr, setCustomAmountStr] = useState<string>('');
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
@@ -58,14 +56,24 @@ export default function Profile() {
   // Web3 MetaMask hook and integration states
   const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
   const { linkWalletAddress } = useAuthStore();
-  const [isLinking, setIsLinking] = useState(false);
 
   const handleConnectWallet = async () => {
     const res = await connect();
-    if (res.success) {
+    const config = getBlockchainConfig();
+    if (res.success && res.address) {
       showToast('success', 'Kết nối MetaMask thành công!');
       if (!res.isSepolia) {
-        showToast('error', 'Vui lòng chuyển mạng sang Sepolia để tiếp tục.');
+        showToast('error', `Vui lòng chuyển mạng sang ${config.networkName} để tiếp tục.`);
+        return;
+      }
+      
+      // Auto-link to account on backend!
+      const linkRes = await linkWalletAddress(res.address);
+      
+      if (linkRes.success) {
+        showToast('success', 'Liên kết ví thành công!');
+      } else {
+        showToast('error', linkRes.message || 'Liên kết ví thất bại.');
       }
     } else {
       showToast('error', res.error || 'Kết nối ví bị từ chối hoặc thất bại.');
@@ -74,36 +82,39 @@ export default function Profile() {
 
   const handleSwitchNetwork = async () => {
     const success = await switchToSepolia();
+    const config = getBlockchainConfig();
     if (success) {
-      showToast('success', 'Chuyển sang mạng Sepolia thành công!');
+      showToast('success', `Chuyển sang mạng ${config.networkName} thành công!`);
     } else {
       showToast('error', 'Chuyển mạng thất bại. Vui lòng thử lại.');
     }
   };
 
-  const handleLinkWallet = async () => {
-    if (!walletAddress) {
-      showToast('error', 'Không tìm thấy địa chỉ ví hiện tại.');
-      return;
-    }
-    if (!isSepolia) {
-      showToast('error', 'Vui lòng chuyển sang mạng Sepolia trước khi liên kết.');
-      return;
-    }
-
-    setIsLinking(true);
-    const res = await linkWalletAddress(walletAddress);
-    setIsLinking(false);
-
-    if (res.success) {
-      showToast('success', res.message);
-    } else {
-      showToast('error', res.message);
-    }
+  const handlePresetSelect = (presetVal: number) => {
+    setSelectedPreset(presetVal);
+    setCustomAmountStr(presetVal.toLocaleString('vi-VN') + ' VNĐ');
   };
 
-  const truncateAddress = (addr: string) => {
-    return web3Service.truncateAddress(addr);
+  const handleCustomAmountInput = (val: string) => {
+    const numericString = val.replace(/\D/g, '');
+    if (!numericString) {
+      setCustomAmountStr('');
+      setSelectedPreset(null);
+      return;
+    }
+    const parsedNum = parseInt(numericString, 10);
+    setSelectedPreset(null);
+    setCustomAmountStr(parsedNum.toLocaleString('vi-VN') + ' VNĐ');
+  };
+
+  const getSummaryAmount = () => {
+    if (selectedPreset !== null) {
+      return selectedPreset.toLocaleString('vi-VN') + ' VNĐ';
+    }
+    if (!customAmountStr) {
+      return '0 VNĐ';
+    }
+    return customAmountStr;
   };
 
   // If user is not logged in, redirect to login
@@ -116,15 +127,7 @@ export default function Profile() {
     }
   }, [currentUser, navigate]);
 
-  useEffect(() => {
-    let timer: any;
-    if (showQRModal && qrCountdown > 0) {
-      timer = setInterval(() => setQRCountdown(c => c - 1), 1000);
-    } else if (qrCountdown === 0) {
-      setShowQRModal(false);
-    }
-    return () => clearInterval(timer);
-  }, [showQRModal, qrCountdown]);
+
 
   if (!currentUser) return null;
 
@@ -169,23 +172,7 @@ export default function Profile() {
     }
   };
 
-  const handleDepositClick = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amountVal = parseInt(depositAmount);
-    if (isNaN(amountVal) || amountVal < 10000) {
-      showToast('error', 'Số tiền nạp tối thiểu là 10.000đ');
-      return;
-    }
-    setQRCountdown(120);
-    setShowQRModal(true);
-  };
 
-  const handleConfirmQRDeposit = () => {
-    const amountVal = parseInt(depositAmount);
-    deposit(amountVal, paymentMethod);
-    setShowQRModal(false);
-    showToast('success', `Đã cộng ${amountVal.toLocaleString()}đ vào số dư tài khoản ảo của bạn!`);
-  };
 
   const handleUnsubscribeClick = (pkgId: string) => {
     setCancellingPkgId(pkgId);
@@ -374,104 +361,6 @@ export default function Profile() {
                 </div>
               </form>
 
-              {/* Web3 MetaMask wallet link section */}
-              <div className="border-t border-slate-50 pt-6 mt-6 space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Liên kết ví Web3 (MetaMask)</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Kết nối MetaMask trên mạng thử nghiệm Sepolia để liên kết tài khoản.</p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-                  <div className="space-y-1.5 text-left">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-slate-500">Trạng thái ví:</span>
-                      {currentUser.walletAddress ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                          Đã liên kết
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700">
-                          Chưa liên kết
-                        </span>
-                      )}
-                    </div>
-                    
-                    {currentUser.walletAddress ? (
-                      <div className="space-y-1">
-                        <p className="font-medium text-slate-700">
-                          Địa chỉ ví đã liên kết: <strong className="font-mono text-slate-900 select-all">{currentUser.walletAddress}</strong>
-                        </p>
-                        {isConnected && walletAddress && walletAddress.toLowerCase() !== currentUser.walletAddress.toLowerCase() && (
-                          <p className="text-[10px] text-amber-600 font-medium">
-                            ⚠️ Ví MetaMask hiện tại ({truncateAddress(walletAddress)}) khác với ví đã liên kết.
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
-                        Liên kết ví của bạn để bắt đầu sử dụng các chức năng blockchain trong các phần tiếp theo.
-                      </p>
-                    )}
-
-                    {/* Display current MetaMask status if installed and connected */}
-                    {isConnected && walletAddress && (
-                      <div className="text-[10px] text-slate-500 font-medium pt-1 space-y-0.5">
-                        <p>• Ví đang chọn: <span className="font-mono text-slate-800">{walletAddress}</span></p>
-                        <p>• Mạng: {isSepolia ? (
-                          <span className="text-emerald-600 font-bold">Sepolia Testnet</span>
-                        ) : (
-                          <span className="text-red-500 font-bold">Không hỗ trợ (Yêu cầu mạng Sepolia)</span>
-                        )}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-                    {!isInstalled ? (
-                      <a
-                        href="https://metamask.io/download/"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-bold px-4 py-2.5 rounded-xl text-center transition-colors text-[11px]"
-                      >
-                        Cài đặt MetaMask
-                      </a>
-                    ) : !isConnected ? (
-                      <button
-                        type="button"
-                        onClick={handleConnectWallet}
-                        className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-xl transition-colors text-[11px] cursor-pointer"
-                      >
-                        Kết nối ví
-                      </button>
-                    ) : !isSepolia ? (
-                      <button
-                        type="button"
-                        onClick={handleSwitchNetwork}
-                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2.5 rounded-xl transition-colors text-[11px] cursor-pointer"
-                      >
-                        Chuyển sang Sepolia
-                      </button>
-                    ) : (
-                      currentUser.walletAddress?.toLowerCase() !== walletAddress?.toLowerCase() ? (
-                        <button
-                          type="button"
-                          onClick={handleLinkWallet}
-                          disabled={isLinking}
-                          className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[11px] cursor-pointer"
-                        >
-                          {isLinking ? 'Đang liên kết...' : 'Liên kết ví này'}
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1">
-                          <Check className="w-4 h-4 text-emerald-500" />
-                          <span>Đã liên kết ví hiện tại</span>
-                        </span>
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {/* Password Change Form */}
               <div className="border-t border-slate-50 pt-6 space-y-4">
                 <div>
@@ -557,89 +446,135 @@ export default function Profile() {
             </div>
           )}
 
-          {/* Tab 2: TopUp Wallet Virtual Payment */}
+          {/* Tab 2: MetaMask Topup & Connection */}
           {activeTab === 'topup' && (
-            <div className="space-y-6 text-left">
+            <div className="space-y-6 text-left max-w-xl">
               <div className="border-b border-slate-50 pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Nạp tiền vào tài khoản ảo</h2>
-                <p className="text-slate-400 text-xs mt-0.5 font-medium">Số dư ví điện tử được dùng để mua/đăng ký thử nghiệm các gói cước.</p>
+                <h2 className="text-lg font-bold text-slate-900">Cổng nạp tiền ví</h2>
+                <p className="text-slate-400 text-xs mt-0.5 font-medium">
+                  Kết nối ví MetaMask và nạp tiền vào tài khoản.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Form Input nạp tiền */}
-                <form onSubmit={handleDepositClick} className="md:col-span-2 space-y-5">
-                  <div className="flex flex-col space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chọn số tiền cần nạp</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {['50000', '100000', '200000', '500000'].map(amount => (
-                        <button
-                          key={amount}
-                          type="button"
-                          onClick={() => setDepositAmount(amount)}
-                          className={`py-2 px-1 text-center rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer ${depositAmount === amount
-                              ? 'bg-red-50 border-primary text-primary shadow-sm'
-                              : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                            }`}
-                        >
-                          {parseInt(amount).toLocaleString()}đ
-                        </button>
-                      ))}
-                    </div>
+              {/* 1. Card kết nối MetaMask */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-lg select-none">
+                    🦊
                   </div>
-
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hoặc nhập số tiền tùy chọn</label>
-                    <input
-                      type="number"
-                      placeholder="Tối thiểu 10.000đ"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus"
-                    />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900">Ví MetaMask</h3>
+                    {isConnected && walletAddress && (
+                      <p className="text-xs font-mono text-slate-500 mt-0.5 break-all select-all leading-normal">
+                        {walletAddress}
+                      </p>
+                    )}
                   </div>
+                </div>
 
-                  <div className="flex flex-col space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phương thức thanh toán ảo</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        { id: 'VietQR', name: 'Mã QR VietQR', desc: 'Mô phỏng quét mã ngân hàng' },
-                        { id: 'Momo', name: 'Ví điện tử MoMo', desc: 'Mô phỏng cổng thanh toán ví' }
-                      ].map(method => (
-                        <div
-                          key={method.id}
-                          onClick={() => setPaymentMethod(method.id)}
-                          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${paymentMethod === method.id
-                              ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm'
-                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-750'
-                            }`}
-                        >
-                          <p className="text-xs font-bold">{method.name}</p>
-                          <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{method.desc}</p>
-                        </div>
-                      ))}
-                    </div>
+                <div>
+                  {!isInstalled ? (
+                    <a
+                      href="https://metamask.io/download/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block w-full text-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-all text-xs border border-slate-200"
+                    >
+                      Cài đặt MetaMask
+                    </a>
+                  ) : !isConnected ? (
+                    <button
+                      type="button"
+                      onClick={handleConnectWallet}
+                      className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-xl transition-all text-xs cursor-pointer"
+                    >
+                      Kết nối MetaMask
+                    </button>
+                  ) : !isSepolia ? (
+                    <button
+                      type="button"
+                      onClick={handleSwitchNetwork}
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all text-xs cursor-pointer"
+                    >
+                      Chuyển mạng sang {getBlockchainConfig().networkName}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 cursor-default"
+                    >
+                      <Check className="w-4 h-4 text-emerald-650" />
+                      <span>Đã kết nối</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Thiết kế khu vực nạp tiền */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Nạp tiền vào tài khoản</h3>
+                  <p className="text-slate-400 text-xs mt-0.5 font-medium">
+                    Chọn số tiền bạn muốn nạp vào tài khoản.
+                  </p>
+                </div>
+
+                {/* 3. Các mức tiền có sẵn */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Mức tiền có sẵn
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[10000, 20000, 30000, 50000, 100000, 200000, 300000, 500000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handlePresetSelect(preset)}
+                        className={`py-2.5 px-2 text-center rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer ${
+                          selectedPreset === preset
+                            ? 'bg-red-50 border-primary text-primary shadow-sm'
+                            : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset.toLocaleString('vi-VN')} VNĐ
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Nhập số tiền tùy chỉnh */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Số tiền muốn nạp
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nhập số tiền..."
+                    value={customAmountStr}
+                    onChange={(e) => handleCustomAmountInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus font-bold"
+                  />
+                </div>
+
+                {/* 6. Tóm tắt giao dịch & 7. Nút thanh toán */}
+                <div className="border-t border-slate-100 pt-5 space-y-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                      Số tiền sẽ nạp:
+                    </span>
+                    <span className="text-base font-black text-slate-900">
+                      {getSummaryAmount()}
+                    </span>
                   </div>
 
                   <button
-                    type="submit"
-                    className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-xl text-xs transition-colors focus:outline-none cursor-pointer shadow-sm hover:shadow"
+                    type="button"
+                    disabled={!(isConnected && walletAddress && isSepolia)}
+                    className="w-full py-3 bg-primary hover:bg-primary-hover disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer animate-scale-up"
                   >
-                    Tiến hành nạp tiền (Giả lập)
+                    Nạp tiền
                   </button>
-                </form>
-
-                {/* Right Info balance panel */}
-                <div className="md:col-span-1 bg-slate-50 border border-slate-200/60 p-5 rounded-2xl flex flex-col justify-between space-y-4">
-                  <div className="space-y-1">
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Số dư ví hiện tại</p>
-                    <h3 className="text-2xl font-black text-slate-900">
-                      {new Intl.NumberFormat('vi-VN').format(currentUser.balance)}đ
-                    </h3>
-                  </div>
-                  <div className="text-[10px] text-slate-450 space-y-1.5 leading-relaxed">
-                    <p className="font-bold text-slate-700">Lưu ý thanh toán:</p>
-                    <p className="font-medium">Đây là cổng thanh toán mô phỏng. Mọi giao dịch nạp tiền ảo đều được xử lý tức thời và hoàn toàn miễn phí, không tốn tiền thật.</p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -762,50 +697,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Mock VietQR / Momo Overlay Modal */}
-      {showQRModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-lg space-y-5 text-center animate-scale-up z-50 text-left">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-50">
-              <h4 className="text-sm font-extrabold text-slate-900">Quét mã chuyển khoản</h4>
-              <span className="text-[9px] text-primary bg-red-500/10 px-2 py-0.5 rounded border border-primary/20 font-bold">Cổng nạp {paymentMethod}</span>
-            </div>
 
-            {/* QR Mock image */}
-            <div className="bg-white p-4 rounded-2xl inline-block mx-auto border border-slate-200">
-              <QrCode className="w-40 h-40 text-slate-900" />
-            </div>
-
-            <div className="space-y-1 text-center">
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Số tiền nạp ảo</p>
-              <h3 className="text-2xl font-black text-primary">
-                {parseInt(depositAmount).toLocaleString()}đ
-              </h3>
-            </div>
-
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-150 text-[11px] text-slate-600 space-y-2 text-left font-semibold">
-              <p>• Mã giao dịch: <strong className="text-slate-900 font-bold font-mono">NAP_VIETTELAI_{currentUser.id.toUpperCase().substring(0, 8)}</strong></p>
-              <p>• Thời gian chờ: <strong className="text-primary font-bold">{qrCountdown} giây</strong></p>
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowQRModal(false)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
-              >
-                Hủy giao dịch
-              </button>
-              <button
-                onClick={handleConfirmQRDeposit}
-                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-1.5 focus:outline-none cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                <span>Xác nhận đã quét</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Subscription Unsubscribe Confirmation Modal */}
       {cancellingPkgId && (

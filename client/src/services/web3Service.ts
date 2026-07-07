@@ -1,6 +1,23 @@
 import { ethers } from 'ethers';
 
-export const SEPOLIA_CHAIN_ID_HEX = '0xaa36a7'; // 11155111
+export const getBlockchainConfig = () => {
+  const chainIdDecimal = import.meta.env.VITE_CHAIN_ID || '11155111';
+  let chainIdHex = '';
+  if (chainIdDecimal.startsWith('0x')) {
+    chainIdHex = chainIdDecimal;
+  } else {
+    chainIdHex = '0x' + parseInt(chainIdDecimal, 10).toString(16);
+  }
+
+  return {
+    networkName: import.meta.env.VITE_NETWORK_NAME || 'Sepolia',
+    chainIdDecimal: String(chainIdDecimal),
+    chainIdHex,
+    rpcUrl: import.meta.env.VITE_RPC_URL || 'https://sepolia.drpc.org',
+    blockExplorer: import.meta.env.VITE_BLOCK_EXPLORER || 'https://sepolia.etherscan.io',
+    receiverWallet: import.meta.env.VITE_RECEIVER_WALLET || '0x26FE0B08bB4d0BCc05e04248770e6E2731a04137'
+  };
+};
 
 export const web3Service = {
   isMetaMaskInstalled(): boolean {
@@ -51,10 +68,11 @@ export const web3Service = {
 
   async switchToSepolia(): Promise<boolean> {
     if (!this.isMetaMaskInstalled()) return false;
+    const config = getBlockchainConfig();
     try {
       await (window as any).ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }],
+        params: [{ chainId: config.chainIdHex }],
       });
       return true;
     } catch (switchError: any) {
@@ -65,26 +83,26 @@ export const web3Service = {
             method: 'wallet_addEthereumChain',
             params: [
               {
-                chainId: SEPOLIA_CHAIN_ID_HEX,
-                chainName: 'Sepolia Test Network',
-                rpcUrls: ['https://rpc.sepolia.org'],
+                chainId: config.chainIdHex,
+                chainName: config.networkName,
+                rpcUrls: [config.rpcUrl],
                 nativeCurrency: {
-                  name: 'Sepolia Ether',
+                  name: config.networkName + ' Ether',
                   symbol: 'ETH',
                   decimals: 18,
                 },
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                blockExplorerUrls: [config.blockExplorer],
               },
             ],
           });
           return true;
         } catch (addError) {
-          console.error('Error adding Sepolia chain:', addError);
-          throw new Error('Không thể thêm mạng Sepolia vào MetaMask.');
+          console.error('Error adding chain:', addError);
+          throw new Error(`Không thể thêm mạng ${config.networkName} vào MetaMask.`);
         }
       }
-      console.error('Error switching to Sepolia:', switchError);
-      throw new Error('Không thể chuyển sang mạng Sepolia. Vui lòng xác nhận chuyển mạng trong MetaMask.');
+      console.error('Error switching network:', switchError);
+      throw new Error(`Không thể chuyển sang mạng ${config.networkName}. Vui lòng xác nhận chuyển mạng trong MetaMask.`);
     }
   },
 

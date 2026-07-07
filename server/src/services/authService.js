@@ -223,13 +223,16 @@ const authService = {
     // Normalize walletAddress (lowercase)
     const normalizedAddress = walletAddress.toLowerCase();
 
-    // Check if another account has already linked this address
-    const otherAccount = await Account.findOne({ 
-      wallet_address: normalizedAddress, 
-      user_id: { $ne: userId } 
-    });
-    if (otherAccount) {
-      throw new Error('Địa chỉ ví này đã được liên kết với một tài khoản khác.');
+    // Check if another account has already linked this address (only if multiple accounts per wallet are disabled)
+    const allowMultiple = process.env.ALLOW_MULTIPLE_ACCOUNTS_PER_WALLET !== 'false';
+    if (!allowMultiple) {
+      const otherAccount = await Account.findOne({ 
+        wallet_address: normalizedAddress, 
+        user_id: { $ne: userId } 
+      });
+      if (otherAccount) {
+        throw new Error('Địa chỉ ví này đã được liên kết với một tài khoản khác.');
+      }
     }
 
     if (account.wallet_address !== normalizedAddress) {
