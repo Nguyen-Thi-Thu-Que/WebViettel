@@ -3,7 +3,7 @@ const transactionService = require('../services/transactionService');
 const transactionController = {
   deposit: async (req, res, next) => {
     try {
-      const { amount, method } = req.body;
+      const { amount, method, txHash, walletAddress, network } = req.body;
       if (!amount) {
         return res.status(400).json({
           success: false,
@@ -11,10 +11,16 @@ const transactionController = {
         });
       }
 
-      const result = await transactionService.deposit(req.user.user_id, amount, method);
+      const result = await transactionService.deposit(
+        req.user.user_id,
+        amount,
+        network || method,
+        txHash,
+        walletAddress
+      );
       return res.status(200).json({
         success: true,
-        message: `Nạp tiền ảo thành công! Số dư mới là ${result.balance.toLocaleString()}đ.`,
+        message: `Nạp tiền thành công! Số dư mới là ${result.balance.toLocaleString()}đ.`,
         data: result
       });
     } catch (error) {

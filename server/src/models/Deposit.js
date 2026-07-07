@@ -3,11 +3,21 @@ const mongoose = require('mongoose');
 const depositSchema = new mongoose.Schema({
   deposit_id: { type: Number, required: true, unique: true },
   user_id: { type: Number, required: true, index: true },
-  amount: { type: mongoose.Schema.Types.Decimal128, required: true },
-  fiat_equivalent: { type: mongoose.Schema.Types.Decimal128, required: true },
+  
+  // Standardized Web3 fields
+  amountVND: { type: Number, required: true },
+  amountETH: { type: String, required: true },
+  exchangeRate: { type: Number, required: true },
+  txHash: { type: String, required: true, index: true, unique: true },
+  network: { type: String, required: true },
+  status: { type: String, required: true, default: 'pending' },
+  walletAddress: { type: String, required: true },
+
+  // Legacy fields for backward compatibility
+  amount: { type: mongoose.Schema.Types.Decimal128 },
+  fiat_equivalent: { type: mongoose.Schema.Types.Decimal128 },
   tx_hash: { type: String },
-  network: { type: String },
-  status: { type: String, default: 'success' },
+
   created_at: { type: String, default: () => new Date().toISOString() }
 }, {
   collection: 'deposits',

@@ -30,6 +30,7 @@ interface AuthState {
   updateProfile: (name: string, email: string) => Promise<boolean>;
   changePassword: (oldPw: string, newPw: string) => Promise<boolean>;
   deposit: (amount: number, method: string) => Promise<boolean>;
+  depositBlockchain: (amount: number, txHash: string, walletAddress: string, network: string) => Promise<{ success: boolean; message: string; balance?: number }>;
   subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
@@ -147,6 +148,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       console.error("Error depositing wallet:", err);
       return false;
+    }
+  },
+
+  depositBlockchain: async (amount, txHash, walletAddress, network) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await authApi.depositBlockchain(amount, txHash, walletAddress, network);
+      set(state => ({
+        currentUser: state.currentUser ? {
+          ...state.currentUser,
+          balance: result.balance
+        } : null,
+        loading: false
+      }));
+      get().fetchTransactions().catch(() => {});
+      return { success: true, message: 'Nạp tiền qua blockchain thành công!', balance: result.balance };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.message || 'Nạp tiền qua blockchain thất bại.';
+      set({ error: errMsg, loading: false });
+      return { success: false, message: errMsg };
     }
   },
 

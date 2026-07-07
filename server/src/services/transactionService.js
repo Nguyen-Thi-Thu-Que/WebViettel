@@ -4,9 +4,81 @@ const Subscription = require('../models/Subscription');
 const Deposit = require('../models/Deposit');
 const Package = require('../models/Package');
 
+// Verification helper function via JSON-RPC
+const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, rpcUrl) => {
+  try {
+    // 1. Get transaction details
+    const txResponse = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_getTransactionByHash',
+        params: [txHash],
+        id: 1
+      })
+    });
+    const txData = await txResponse.json();
+    if (!txData || !txData.result) {
+      throw new Error('Không tìm thấy thông tin giao dịch trên Blockchain.');
+    }
+
+    const tx = txData.result;
+    
+    // Verify recipient (to) - case insensitive
+    if (!tx.to || tx.to.toLowerCase() !== expectedReceiver.toLowerCase()) {
+      throw new Error('Địa chỉ ví nhận không khớp với cấu hình hệ thống.');
+    }
+
+    // Verify status on transaction receipt (status should be 0x1)
+    const receiptResponse = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_getTransactionReceipt',
+        params: [txHash],
+        id: 2
+      })
+    });
+    const receiptData = await receiptResponse.json();
+    if (!receiptData || !receiptData.result) {
+      throw new Error('Không tìm thấy hóa đơn giao dịch (receipt) trên Blockchain.');
+    }
+
+    const receipt = receiptData.result;
+    if (receipt.status !== '0x1') {
+      throw new Error('Giao dịch Blockchain thất bại hoặc chưa được xác nhận.');
+    }
+
+    // Verify transaction value
+    // Parse hex value to bigint in Wei
+    const valWei = BigInt(tx.value);
+    const expectedWei = BigInt(Math.floor(expectedEthAmount * 1e18));
+    
+    // Check difference with a tiny tolerance (0.0001 ETH = 10^14 Wei) to prevent decimal rounding mismatch
+    const diff = valWei > expectedWei ? valWei - expectedWei : expectedWei - valWei;
+    if (diff > BigInt(1e14)) {
+      throw new Error('Số tiền thanh toán trên Blockchain không khớp với số tiền yêu cầu.');
+    }
+
+    return {
+      success: true,
+      from: tx.from,
+      to: tx.to,
+      value: tx.value
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+};
+
 const transactionService = {
-  // 1. Virtual wallet top up with MongoDB Transaction
-  deposit: async (userId, amount, network) => {
+  // 1. Web3 MetaMask wallet top up with MongoDB Transaction
+  deposit: async (userId, amount, network, txHash, walletAddress) => {
     if (amount < 10000) {
       throw new Error('Số tiền nạp tối thiểu là 10.000đ.');
     }
@@ -24,19 +96,65 @@ const transactionService = {
       const lastDeposit = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
       const nextDepId = lastDeposit ? lastDeposit.deposit_id + 1 : 1;
 
-      const txHash = `0x${crypto.randomBytes(32).toString('hex')}`;
-      const amountDecimal = mongoose.Types.Decimal128.fromString(String(amount / 80000000)); // Simulating crypto equivalent
+      let finalTxHash = txHash;
+      let finalNetwork = network || 'Sepolia';
+      let finalStatus = 'success';
+      let finalWalletAddress = walletAddress || account.walletAddress || '0x';
+      
+      const rate = parseFloat(process.env.VITE_ETH_EXCHANGE_RATE || '75000000');
+      const ethAmount = amount / rate;
+      
+      if (txHash) {
+        // --- 1. Blockchain Verification ---
+        // A. Prevent duplicate processing
+        const existingTx = await Deposit.findOne({ txHash: txHash }).session(session);
+        if (existingTx) {
+          throw new Error('Giao dịch này đã được xử lý trên hệ thống.');
+        }
+
+        // B. Query blockchain RPC to verify
+        const rpcUrl = process.env.VITE_RPC_URL || 'https://sepolia.drpc.org';
+        const receiver = process.env.VITE_RECEIVER_WALLET || '0x26FE0B08bB4d0BCc05e04248770e6E2731a04137';
+
+        const verification = await verifyBlockchainTx(txHash, receiver, ethAmount, rpcUrl);
+        if (!verification.success) {
+          throw new Error(`Xác minh giao dịch Blockchain thất bại: ${verification.message}`);
+        }
+
+        // Use the actual sender verified from the blockchain if client input is mismatched
+        if (verification.from.toLowerCase() !== finalWalletAddress.toLowerCase()) {
+          console.warn(`Wallet address mismatch: client=${finalWalletAddress}, chain=${verification.from}`);
+          finalWalletAddress = verification.from;
+        }
+      } else {
+        // Legacy fallback mock flow
+        finalTxHash = `0x${crypto.randomBytes(32).toString('hex')}`;
+        finalNetwork = network || 'VietQR';
+      }
+
+      // Standard legacy Decimals for compatibility
+      const amountDecimal = mongoose.Types.Decimal128.fromString(ethAmount.toFixed(18));
       const fiatDecimal = mongoose.Types.Decimal128.fromString(String(amount));
 
       // 1. Create Deposit Record
       await Deposit.create([{
         deposit_id: nextDepId,
         user_id: userId,
+        
+        // Standardized Web3 fields
+        amountVND: amount,
+        amountETH: ethAmount.toFixed(18),
+        exchangeRate: rate,
+        txHash: finalTxHash,
+        network: finalNetwork,
+        status: finalStatus,
+        walletAddress: finalWalletAddress,
+
+        // Legacy compatibility
         amount: amountDecimal,
         fiat_equivalent: fiatDecimal,
-        tx_hash: txHash,
-        network: network || 'VietQR',
-        status: 'success',
+        tx_hash: finalTxHash,
+        
         created_at: new Date().toISOString()
       }], { session });
 
@@ -163,7 +281,7 @@ const transactionService = {
         id: `tx_dep_${dep.deposit_id}`,
         userId: String(dep.user_id),
         type: 'deposit',
-        amount: parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
+        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
         createdAt: dep.created_at || new Date().toISOString()
@@ -195,7 +313,7 @@ const transactionService = {
     const totalPackagesCount = await Package.countDocuments();
     const allDeposits = await Deposit.find({ status: 'success' });
     const totalRevenueVal = allDeposits.reduce((sum, curr) => {
-      const fiat = parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0');
+      const fiat = curr.amountVND || parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0');
       return sum + fiat;
     }, 0);
     const totalSubscriptionsCount = await Subscription.countDocuments();
@@ -212,7 +330,7 @@ const transactionService = {
         id: `tx_dep_${dep.deposit_id}`,
         type: 'deposit',
         phoneNumber: user ? user.phone_number : '09xxxxxxxx',
-        amount: parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
+        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
         createdAt: dep.created_at

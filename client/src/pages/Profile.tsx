@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,7 +30,7 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, transactions, unsubscribePackage, updateProfile, changePassword } = useAuthStore();
+  const { currentUser, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain } = useAuthStore();
   const { packages } = usePackageStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'info';
@@ -39,6 +40,7 @@ export default function Profile() {
   // Wallet states
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>('');
+  const [isDepositing, setIsDepositing] = useState(false);
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
@@ -115,6 +117,101 @@ export default function Profile() {
       return '0 VNĐ';
     }
     return customAmountStr;
+  };
+
+  const handleBlockchainDeposit = async () => {
+    let vndAmount = 0;
+    if (selectedPreset !== null) {
+      vndAmount = selectedPreset;
+    } else if (customAmountStr) {
+      const numStr = customAmountStr.replace(/\D/g, '');
+      if (numStr) {
+        vndAmount = parseInt(numStr, 10);
+      }
+    }
+
+    if (vndAmount < 10000) {
+      showToast('error', 'Số tiền nạp tối thiểu là 10.000 VNĐ');
+      return;
+    }
+
+    if (!isConnected || !walletAddress || !isSepolia) {
+      showToast('error', 'Vui lòng kết nối ví MetaMask trên đúng mạng Sepolia.');
+      return;
+    }
+
+    setIsDepositing(true);
+    try {
+      const config = getBlockchainConfig();
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      
+      const networkObj = await provider.getNetwork();
+      if (String(networkObj.chainId) !== String(config.chainIdDecimal)) {
+        showToast('error', `Vui lòng chuyển mạng sang ${config.networkName} để thực hiện giao dịch.`);
+        setIsDepositing(false);
+        return;
+      }
+
+      const balance = await provider.getBalance(walletAddress);
+      
+      const exchangeRate = parseFloat(import.meta.env.VITE_ETH_EXCHANGE_RATE || '75000000');
+      const ethAmountVal = vndAmount / exchangeRate;
+      const ethAmountString = ethAmountVal.toFixed(18);
+      const valueWei = ethers.parseEther(ethAmountString);
+
+      const signer = await provider.getSigner();
+      let gasEstimate = 21000n;
+      try {
+        gasEstimate = await signer.estimateGas({
+          to: config.receiverWallet,
+          value: valueWei
+        });
+      } catch (gasErr) {
+        console.warn('Gas estimation failed, using standard transaction gas limit', gasErr);
+      }
+
+      const feeData = await provider.getFeeData();
+      const gasPrice = feeData.gasPrice || ethers.parseUnits('10', 'gwei');
+      const totalGasCost = gasEstimate * gasPrice;
+      const totalRequired = valueWei + totalGasCost;
+
+      if (balance < totalRequired) {
+        showToast('error', 'Số dư tài khoản ETH không đủ để thanh toán giá trị giao dịch và phí gas.');
+        setIsDepositing(false);
+        return;
+      }
+
+      const txResponse = await signer.sendTransaction({
+        to: config.receiverWallet,
+        value: valueWei
+      });
+
+      showToast('success', 'Giao dịch đã được gửi lên Blockchain. Vui lòng chờ xác nhận...');
+
+      const receipt = await txResponse.wait();
+      if (!receipt || receipt.status !== 1) {
+        throw new Error('Giao dịch Blockchain thất bại hoặc không được xác nhận.');
+      }
+
+      const res = await depositBlockchain(vndAmount, receipt.hash, walletAddress, config.networkName);
+
+      if (res.success) {
+        showToast('success', `Nạp tiền thành công! Đã cộng ${vndAmount.toLocaleString('vi-VN')} VNĐ vào số dư tài khoản.`);
+        setSelectedPreset(null);
+        setCustomAmountStr('');
+      } else {
+        showToast('error', res.message || 'Xác nhận nạp tiền thất bại.');
+      }
+    } catch (err: any) {
+      console.error('Deposit error:', err);
+      if (err.code === 4001 || err.message?.includes('rejected') || err.message?.includes('User denied')) {
+        showToast('error', 'Giao dịch đã bị hủy bởi người dùng.');
+      } else {
+        showToast('error', err.message || 'Có lỗi xảy ra trong quá trình nạp tiền.');
+      }
+    } finally {
+      setIsDepositing(false);
+    }
   };
 
   // If user is not logged in, redirect to login
@@ -570,10 +667,11 @@ export default function Profile() {
 
                   <button
                     type="button"
-                    disabled={!(isConnected && walletAddress && isSepolia)}
+                    onClick={handleBlockchainDeposit}
+                    disabled={!(isConnected && walletAddress && isSepolia) || isDepositing}
                     className="w-full py-3 bg-primary hover:bg-primary-hover disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer animate-scale-up"
                   >
-                    Nạp tiền
+                    {isDepositing ? 'Đang nạp tiền...' : 'Nạp tiền'}
                   </button>
                 </div>
               </div>

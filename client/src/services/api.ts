@@ -225,6 +225,11 @@ export const authApi = {
     return response.data.data;
   },
 
+  depositBlockchain: async (amount: number, txHash: string, walletAddress: string, network: string): Promise<{ balance: number }> => {
+    const response = await axiosInstance.post<{ success: boolean; data: { balance: number } }>('/api/auth/deposit', { amount, txHash, walletAddress, network });
+    return response.data.data;
+  },
+
   subscribePackage: async (packageId: string): Promise<{ balance: number; activePackage: any }> => {
     const response = await axiosInstance.post<{ success: boolean; data: { balance: number; activePackage: any } }>('/api/auth/subscribe', { packageId });
     return response.data.data;
