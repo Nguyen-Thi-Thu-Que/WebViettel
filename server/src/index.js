@@ -10,6 +10,7 @@ const userRoutes = require('./routes/userRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const chatbotRoutes = require('./routes/chatbotRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 // Global Error Handler Import
 const globalErrorHandler = require('./middlewares/errorMiddleware');
@@ -99,6 +100,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/faqs', faqRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // Base route
 app.get('/', (req, res) => {

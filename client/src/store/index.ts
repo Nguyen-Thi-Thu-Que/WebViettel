@@ -32,6 +32,7 @@ interface AuthState {
   deposit: (amount: number, method: string) => Promise<boolean>;
   depositBlockchain: (amount: number, txHash: string, walletAddress: string, network: string) => Promise<{ success: boolean; message: string; balance?: number }>;
   subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
+  registerSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
 }
@@ -196,6 +197,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { success: true, message: `Đăng ký thành công gói cước ${pkg.ten}!` };
     } catch (err: any) {
       const msg = err.response?.data?.message || `Lỗi đăng ký gói cước ${pkg.ten}.`;
+      return { success: false, message: msg };
+    }
+  },
+
+  registerSubscription: async (packageId, cycle) => {
+    try {
+      const result = await authApi.registerSubscription(packageId, cycle);
+      return { success: true, message: result?.message || 'Đăng ký gói cước thành công!' };
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi đăng ký gói cước.';
       return { success: false, message: msg };
     }
   },

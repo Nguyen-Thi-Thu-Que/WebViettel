@@ -110,6 +110,11 @@ export default function Packages() {
   }, [filteredPackages, pagination.page]);
 
   const handleSubscribeOpen = (pkg: Package) => {
+    if (!currentUser) {
+      setToast({ type: 'error', text: 'Vui lòng đăng nhập để đăng ký gói cước.' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
     setSelectedPkg(pkg);
     setIsModalOpen(true);
   };

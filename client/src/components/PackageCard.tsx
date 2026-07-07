@@ -1,6 +1,6 @@
 import { ArrowRightLeft, Sparkles, Wifi, Phone, PhoneCall, MessageSquare, ArrowRight, Check, Gift, Globe } from 'lucide-react';
 import type { Package } from '../types';
-import { usePackageStore } from '../store';
+import { usePackageStore, useAuthStore } from '../store';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import RegisterModal from './RegisterModal';
@@ -19,6 +19,7 @@ const PackageCard = React.memo(function PackageCard({
   onSubscribeError
 }: PackageCardProps) {
   const { addToCompare, compareList, removeFromCompare } = usePackageStore();
+  const { currentUser } = useAuthStore();
   const isInCompare = compareList.some((p) => p.id === pkg.id);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -47,6 +48,12 @@ const PackageCard = React.memo(function PackageCard({
   };
 
   const handleSubscribeClick = () => {
+    if (!currentUser) {
+      if (onSubscribeError) {
+        onSubscribeError('Vui lòng đăng nhập để đăng ký gói cước.');
+      }
+      return;
+    }
     if (onSubscribe) {
       onSubscribe(pkg);
     } else {

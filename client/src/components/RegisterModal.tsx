@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, ShieldCheck, Wallet } from 'lucide-react';
 import type { Package } from '../types';
 import { useAuthStore } from '../store';
 
@@ -20,7 +19,7 @@ export default function RegisterModal({
   onSuccess,
   onError
 }: RegisterModalProps) {
-  const { currentUser, subscribePackage } = useAuthStore();
+  const { currentUser, registerSubscription } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ESC keypress handler
@@ -49,7 +48,7 @@ export default function RegisterModal({
     };
   }, [isOpen]);
 
-  if (!isOpen || !pkg) return null;
+  if (!isOpen || !pkg || !currentUser) return null;
 
   const handleConfirm = async () => {
     if (!currentUser) {
@@ -60,7 +59,15 @@ export default function RegisterModal({
 
     setIsSubmitting(true);
     try {
-      const res = await subscribePackage(pkg);
+      let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
+      const dayCycle = parseInt(pkg.chu_ky_ngay || '30', 10);
+      if (dayCycle === 1) {
+        cycle = 'DAY';
+      } else if (dayCycle >= 360) {
+        cycle = 'YEAR';
+      }
+
+      const res = await registerSubscription(Number(pkg.id), cycle);
       setIsSubmitting(false);
       onClose();
       if (res.success) {
@@ -75,7 +82,7 @@ export default function RegisterModal({
     }
   };
 
-  const formattedPrice = new Intl.NumberFormat('vi-VN').format(pkg.gia);
+
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -97,78 +104,86 @@ export default function RegisterModal({
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking dialog body
-          className="bg-white border border-slate-250 shadow-2xl rounded-2xl p-6 max-w-sm w-full relative z-[1000] text-xs font-semibold text-slate-800 text-left pointer-events-auto"
+          className="bg-white border border-slate-250 shadow-2xl rounded-2xl p-6 max-w-md w-full relative z-[1000] text-xs font-semibold text-slate-800 text-left pointer-events-auto space-y-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-register-title"
         >
-          {/* Close button X */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-100"
-            title="Đóng"
-            type="button"
-            aria-label="Đóng"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <h4 id="confirm-register-title" className="text-base font-extrabold text-slate-900 border-b border-slate-50 pb-2">
+            Xác nhận đăng ký
+          </h4>
 
-          {/* Heading */}
-          <div className="flex items-center space-x-2.5 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center border border-red-100">
-              <ShieldCheck className="w-4 h-4 text-primary" />
+          {/* Nhóm 1 – Thông tin gói cước */}
+          <div className="space-y-2">
+            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thông tin gói cước</h5>
+            <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Tên gói cước:</span>
+                <span className="font-extrabold text-slate-900">{pkg.ten} ({pkg.ma_goi})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Giá gói:</span>
+                <span className="font-extrabold text-slate-900">{pkg.gia.toLocaleString()} VNĐ</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Chu kỳ sử dụng:</span>
+                <span className="font-extrabold text-slate-900">
+                  {pkg.chu_ky_ngay.includes('ngày') ? pkg.chu_ky_ngay : `${pkg.chu_ky_ngay} ngày`}
+                </span>
+              </div>
             </div>
-            <h4 id="confirm-register-title" className="text-sm font-extrabold text-slate-900">
-              Xác nhận đăng ký gói cước
-            </h4>
           </div>
 
-          {/* Description */}
-          <p className="text-slate-550 leading-relaxed font-semibold mb-5 text-[11px]">
-            Bạn có chắc chắn muốn đăng ký gói cước <strong className="text-primary">{pkg.ten}</strong> với mức giá{' '}
-            <strong className="text-slate-950 font-black">{formattedPrice}đ</strong> cho chu kỳ{' '}
-            <strong className="text-slate-950 font-black">{pkg.chu_ky_ngay} ngày</strong>?
-          </p>
-
-          {/* User balance check status */}
-          {currentUser && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between mb-5">
-              <div className="flex items-center space-x-2 text-slate-500">
-                <Wallet className="w-3.5 h-3.5" />
-                <span className="font-semibold text-[10px]">Số dư tài khoản ví</span>
+          {/* Nhóm 2 – Thanh toán */}
+          <div className="space-y-2">
+            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thanh toán</h5>
+            <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Phương thức:</span>
+                <span className="font-bold text-slate-900">Số dư tài khoản</span>
               </div>
-              <span className={`font-black text-[11px] ${currentUser.balance < pkg.gia ? 'text-red-600' : 'text-slate-900'}`}>
-                {new Intl.NumberFormat('vi-VN').format(currentUser.balance)}đ
-              </span>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Số dư hiện tại:</span>
+                <span className="font-bold text-slate-900">{(currentUser?.balance || 0).toLocaleString()} VNĐ</span>
+              </div>
+              {currentUser && currentUser.balance >= pkg.gia ? (
+                <div className="flex justify-between border-t border-slate-100/50 pt-1.5 mt-1.5">
+                  <span className="text-slate-500 font-semibold">Số dư dự kiến:</span>
+                  <span className="font-bold text-emerald-600">{(currentUser.balance - pkg.gia).toLocaleString()} VNĐ</span>
+                </div>
+              ) : (
+                <div className="text-[10px] text-red-655 bg-red-50/60 border border-red-100 rounded-lg p-2 leading-relaxed font-semibold">
+                  Số dư hiện tại có thể không đủ để đăng ký gói cước này. Hệ thống sẽ kiểm tra lại khi bạn xác nhận.
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Nhóm 3 – Lưu ý */}
+          <div className="space-y-1.5">
+            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lưu ý</h5>
+            <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+              Sau khi xác nhận đăng ký, hệ thống sẽ tiến hành trừ số dư trong tài khoản để kích hoạt gói cước. Vui lòng kiểm tra kỹ thông tin trước khi tiếp tục.
+            </p>
+          </div>
 
           {/* Actions */}
-          <div className="flex space-x-3">
+          <div className="flex space-x-3 pt-2">
             <button
               disabled={isSubmitting}
               onClick={onClose}
-              className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
+              className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer disabled:opacity-50"
               type="button"
             >
               Hủy
             </button>
             <button
-              disabled={isSubmitting || (currentUser ? currentUser.balance < pkg.gia : false)}
+              disabled={isSubmitting}
               onClick={handleConfirm}
-              className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:bg-slate-150 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed text-white border border-primary font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-2 focus:outline-none cursor-pointer shadow-sm hover:shadow"
+              className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-2 focus:outline-none cursor-pointer disabled:opacity-50 shadow-sm"
               type="button"
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang đăng ký...</span>
-                </>
-              ) : currentUser && currentUser.balance < pkg.gia ? (
-                <span>Số dư không đủ</span>
-              ) : (
-                <span>Xác nhận</span>
-              )}
+              {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đăng ký'}
             </button>
           </div>
         </motion.div>

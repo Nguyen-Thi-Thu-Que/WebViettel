@@ -235,6 +235,11 @@ export const authApi = {
     return response.data.data;
   },
 
+  registerSubscription: async (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR'): Promise<any> => {
+    const response = await axiosInstance.post('/api/subscriptions/register', { packageId, cycle });
+    return response.data;
+  },
+
   unsubscribePackage: async (packageId: string): Promise<boolean> => {
     const response = await axiosInstance.delete<{ success: boolean }>(`/api/auth/unsubscribe/${packageId}`);
     return response.data.success;

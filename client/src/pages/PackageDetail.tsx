@@ -66,7 +66,7 @@ export default function PackageDetail() {
     compareList,
     removeFromCompare
   } = usePackageStore();
-  const { currentUser, subscribePackage } = useAuthStore();
+  const { currentUser, registerSubscription } = useAuthStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -219,7 +219,7 @@ export default function PackageDetail() {
 
   const handleSubscribeClick = () => {
     if (!currentUser) {
-      showToast('error', 'Vui lòng đăng nhập trước khi đăng ký gói cước.');
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
       return;
     }
     setShowConfirm(true);
@@ -228,7 +228,15 @@ export default function PackageDetail() {
   const handleConfirmSubscribe = async () => {
     setIsSubmitting(true);
     try {
-      const res = await subscribePackage(pkg);
+      let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
+      const dayCycle = parseInt(pkg.chu_ky_ngay || '30', 10);
+      if (dayCycle === 1) {
+        cycle = 'DAY';
+      } else if (dayCycle >= 360) {
+        cycle = 'YEAR';
+      }
+
+      const res = await registerSubscription(Number(pkg.id), cycle);
       setIsSubmitting(false);
       setShowConfirm(false);
       if (res.success) {
@@ -241,6 +249,11 @@ export default function PackageDetail() {
       setShowConfirm(false);
       showToast('error', err.message || 'Lỗi đăng ký gói cước.');
     }
+  };
+
+  const getCycleLabel = (cycleDays: string) => {
+    if (!cycleDays) return '—';
+    return cycleDays.includes('ngày') ? cycleDays : `${cycleDays} ngày`;
   };
 
   // Find related packages sorted by similarity score + fallback to do_uu_tien
@@ -496,27 +509,78 @@ export default function PackageDetail() {
       {/* Subscription Confirmation Modal */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
-            <h4 className="text-sm font-extrabold text-slate-900 mb-2">Xác nhận đăng ký</h4>
-            <p className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
-              Bạn có chắc chắn muốn đăng ký gói cước <strong className="text-primary">{pkg.ma_goi || pkg.ten}</strong> với giá{' '}
-              <strong className="text-slate-900">{formattedPrice}đ</strong>?
-              Số tiền này sẽ được trừ trực tiếp vào tài khoản ví ảo của bạn.
-            </p>
-            <div className="flex space-x-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left space-y-5">
+            <h4 className="text-base font-extrabold text-slate-900 border-b border-slate-50 pb-2">Xác nhận đăng ký</h4>
+            
+            {/* Nhóm 1 – Thông tin gói cước */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thông tin gói cước</h5>
+              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Tên gói cước:</span>
+                  <span className="font-extrabold text-slate-900">{pkg.ten} ({pkg.ma_goi})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Giá gói:</span>
+                  <span className="font-extrabold text-slate-900">{pkg.gia.toLocaleString()} VNĐ</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Chu kỳ sử dụng:</span>
+                  <span className="font-extrabold text-slate-900">{getCycleLabel(pkg.chu_ky_ngay)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Nhóm 2 – Thanh toán */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thanh toán</h5>
+              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Phương thức:</span>
+                  <span className="font-bold text-slate-900">Số dư tài khoản</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Số dư hiện tại:</span>
+                  <span className="font-bold text-slate-900">{(currentUser?.balance || 0).toLocaleString()} VNĐ</span>
+                </div>
+                {currentUser && currentUser.balance >= pkg.gia ? (
+                  <div className="flex justify-between border-t border-slate-100/50 pt-1.5 mt-1.5">
+                    <span className="text-slate-500 font-semibold">Số dư dự kiến:</span>
+                    <span className="font-bold text-emerald-600">{(currentUser.balance - pkg.gia).toLocaleString()} VNĐ</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-red-650 bg-red-50/60 border border-red-100 rounded-lg p-2 leading-relaxed font-semibold">
+                    Số dư hiện tại có thể không đủ để đăng ký gói cước này. Hệ thống sẽ kiểm tra lại khi bạn xác nhận.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Nhóm 3 – Lưu ý */}
+            <div className="space-y-1.5">
+              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lưu ý</h5>
+              <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+                Sau khi xác nhận đăng ký, hệ thống sẽ tiến hành trừ số dư trong tài khoản để kích hoạt gói cước. Vui lòng kiểm tra kỹ thông tin trước khi tiếp tục.
+              </p>
+            </div>
+
+            {/* Nút thao tác */}
+            <div className="flex space-x-3 pt-2">
               <button
+                type="button"
                 disabled={isSubmitting}
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer disabled:opacity-50"
               >
                 Hủy
               </button>
               <button
+                type="button"
                 disabled={isSubmitting}
                 onClick={handleConfirmSubscribe}
-                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50 flex items-center justify-center"
               >
-                {isSubmitting ? 'Đang xử lý...' : 'Đăng ký ngay'}
+                {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đăng ký'}
               </button>
             </div>
           </div>

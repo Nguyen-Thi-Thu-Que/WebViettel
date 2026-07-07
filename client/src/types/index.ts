@@ -96,3 +96,22 @@ export interface SurveyAnswers {
   voiceDemand: 'none' | 'low' | 'high';
   socialApps: string[]; // e.g., ["TikTok", "YouTube", "Facebook"]
 }
+
+export type SubscriptionStatus = 'ACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'CANCELLED';
+export type SubscriptionCycle = 'DAY' | 'MONTH' | 'YEAR';
+
+export interface UserSubscription {
+  id?: string;
+  userId: number;
+  packageId: number;
+  registeredAt: string;
+  activatedAt: string;
+  expiresAt: string;
+  status: SubscriptionStatus;
+  autoRenew: boolean;
+  cycle: SubscriptionCycle;
+  cancelledAt?: string | null;
+  cancelReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
