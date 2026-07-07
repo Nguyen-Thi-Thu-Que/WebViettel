@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Shield, Check, Eye, EyeOff } from 'lucide-react';
+import { User, CreditCard, History, Shield, Check, Eye, EyeOff, Copy, ExternalLink } from 'lucide-react';
 import { useAuthStore, usePackageStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
@@ -250,6 +250,27 @@ export default function Profile() {
     if (!hash) return '—';
     if (hash.length <= 12) return hash;
     return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`;
+  };
+
+  const handleCopyHash = async (hash: string) => {
+    if (!hash) {
+      showToast('error', 'Không tìm thấy mã giao dịch.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(hash);
+      showToast('success', 'Đã sao chép mã giao dịch!');
+    } catch (err) {
+      showToast('error', 'Không thể sao chép mã giao dịch.');
+    }
+  };
+
+  const handleOpenExplorer = (hash: string) => {
+    if (!hash || !hash.startsWith('0x')) {
+      showToast('error', 'Mã giao dịch không hợp lệ hoặc không có trên Explorer.');
+      return;
+    }
+    window.open(`https://sepolia.etherscan.io/tx/${hash}`, '_blank', 'noopener,noreferrer');
   };
 
 
@@ -932,11 +953,22 @@ export default function Profile() {
                   {selectedTxDetail.createdAt ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
-                <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {formatHash(selectedTxDetail.txHash || selectedTxDetail.id)}
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="font-mono font-bold text-slate-800">
+                    {formatHash(selectedTxDetail.txHash || selectedTxDetail.id)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyHash(selectedTxDetail.txHash || '')}
+                    disabled={!selectedTxDetail.txHash}
+                    aria-label="Sao chép mã giao dịch"
+                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed rounded-md transition-colors cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
@@ -958,13 +990,23 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 flex space-x-3">
               <button
                 type="button"
                 onClick={() => setSelectedTxDetail(null)}
-                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
               >
                 Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenExplorer(selectedTxDetail.txHash || '')}
+                disabled={!selectedTxDetail.txHash || !selectedTxDetail.txHash.startsWith('0x')}
+                aria-label="Xem giao dịch trên Sepolia Etherscan Explorer"
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer flex items-center justify-center space-x-1.5"
+              >
+                <span>Xem Explorer</span>
+                <ExternalLink className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
