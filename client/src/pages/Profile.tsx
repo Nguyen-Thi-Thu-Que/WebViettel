@@ -41,6 +41,8 @@ export default function Profile() {
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>('');
   const [isDepositing, setIsDepositing] = useState(false);
+  const historyLoading = false;
+  const historyError: string | null = null;
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
@@ -739,46 +741,88 @@ export default function Profile() {
           {activeTab === 'history' && (
             <div className="space-y-6 text-left">
               <div className="border-b border-slate-50 pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Lịch sử giao dịch ví & đăng ký</h2>
-                <p className="text-slate-400 text-xs mt-0.5 font-medium">Nhật ký toàn bộ hoạt động nạp ví và trừ tiền đăng ký gói cước di động.</p>
+                <h2 className="text-lg font-bold text-slate-900">Lịch sử giao dịch</h2>
+                <p className="text-slate-400 text-xs mt-0.5 font-medium">
+                  Xem lại nhật ký các giao dịch nạp tiền của bạn.
+                </p>
               </div>
 
-              {transactions.length > 0 ? (
+              {historyLoading ? (
+                /* Skeleton Loading state */
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-550 font-bold uppercase tracking-wider">
-                        <th className="p-4">Mã GD</th>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
                         <th className="p-4">Thời gian</th>
-                        <th className="p-4">Loại giao dịch</th>
                         <th className="p-4">Số tiền</th>
-                        <th className="p-4">Chi tiết / Cổng</th>
                         <th className="p-4">Trạng thái</th>
+                        <th className="p-4">Mã giao dịch</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {[1, 2, 3].map((i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="p-4">
+                            <div className="h-4 bg-slate-100 rounded w-24"></div>
+                          </td>
+                          <td className="p-4">
+                            <div className="h-4 bg-slate-100 rounded w-16"></div>
+                          </td>
+                          <td className="p-4">
+                            <div className="h-5 bg-slate-100 rounded-full w-20"></div>
+                          </td>
+                          <td className="p-4">
+                            <div className="h-4 bg-slate-100 rounded w-48"></div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : historyError ? (
+                /* Error State */
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-xs flex items-center space-x-2 font-medium">
+                  <span>⚠️ Lỗi tải dữ liệu: {historyError}</span>
+                </div>
+              ) : transactions.length > 0 ? (
+                /* Data State */
+                <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                        <th className="p-4">Thời gian</th>
+                        <th className="p-4">Số tiền</th>
+                        <th className="p-4">Trạng thái</th>
+                        <th className="p-4">Mã giao dịch</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-700">
                       {transactions.map((tx) => (
                         <tr key={tx.id} className="hover:bg-slate-50/40 transition-colors">
-                          <td className="p-4 font-mono text-[9px] text-slate-405 font-bold">{tx.id.toUpperCase()}</td>
-                          <td className="p-4 text-slate-450 font-semibold">{new Date(tx.createdAt).toLocaleString('vi-VN')}</td>
+                          <td className="p-4 text-slate-550 font-semibold">
+                            {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : 'Không rõ'}
+                          </td>
                           <td className="p-4 font-bold text-slate-800">
-                            {tx.type === 'deposit' ? (
-                              <span className="text-emerald-600">Nạp tiền vào ví</span>
-                            ) : (
-                              <span className="text-primary">Đăng ký gói cước</span>
-                            )}
-                          </td>
-                          <td className="p-4 font-black text-slate-900">
                             {tx.type === 'deposit' ? '+' : '-'}
-                            {tx.amount.toLocaleString()}đ
-                          </td>
-                          <td className="p-4 text-slate-500 font-semibold font-mono text-[10px]">
-                            {tx.type === 'deposit' ? `Cổng: ${tx.paymentMethod}` : `Gói: ${tx.packageName}`}
+                            {tx.amount.toLocaleString()} VNĐ
                           </td>
                           <td className="p-4">
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2 py-0.5 rounded-full font-bold">
-                              Thành công
-                            </span>
+                            {tx.status === 'success' ? (
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                Thành công
+                              </span>
+                            ) : tx.status === 'pending' ? (
+                              <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold animate-pulse">
+                                Đang xử lý
+                              </span>
+                            ) : (
+                              <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                Thất bại
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 font-mono text-[10px] text-slate-500 font-bold break-all select-all">
+                            {tx.id.toUpperCase()}
                           </td>
                         </tr>
                       ))}
@@ -786,8 +830,9 @@ export default function Profile() {
                   </table>
                 </div>
               ) : (
-                <div className="p-6 text-center text-slate-500 text-xs font-semibold">
-                  Không có nhật ký giao dịch nào được ghi nhận.
+                /* Empty State */
+                <div className="bg-slate-50 border border-slate-200/50 p-10 rounded-2xl text-center max-w-sm mx-auto space-y-2">
+                  <p className="text-slate-500 text-xs font-semibold">Chưa ghi nhận giao dịch nào.</p>
                 </div>
               )}
             </div>
