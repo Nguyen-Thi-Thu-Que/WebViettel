@@ -271,7 +271,6 @@ const transactionService = {
   // 4. Merge deposits & subscriptions into user transactions
   getTransactionsForUser: async (userId) => {
     const userDeposits = await Deposit.find({ user_id: userId });
-    const userSubscriptions = await Subscription.find({ user_id: userId });
 
     const txs = [];
 
@@ -286,20 +285,6 @@ const transactionService = {
         status: dep.status || 'success',
         createdAt: dep.created_at || new Date().toISOString(),
         txHash: dep.txHash || dep.tx_hash || ''
-      });
-    }
-
-    // Map subscriptions
-    for (const sub of userSubscriptions) {
-      const pkg = await Package.findOne({ $or: [{ package_id: sub.package_id }, { id: sub.package_id }] });
-      txs.push({
-        id: `tx_sub_${sub.subscription_id}`,
-        userId: String(sub.user_id),
-        type: 'subscribe',
-        amount: pkg ? pkg.gia : 0,
-        packageName: pkg ? pkg.ten : 'Gói cước di động',
-        status: 'success', // if subscription exists, it was paid successfully
-        createdAt: sub.registered_at
       });
     }
 
