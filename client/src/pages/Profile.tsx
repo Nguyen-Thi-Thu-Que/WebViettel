@@ -909,18 +909,6 @@ export default function Profile() {
             
             <div className="space-y-3 text-xs text-slate-600 font-medium">
               <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
-                <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {selectedTxDetail.txHash || selectedTxDetail.id}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.amount.toLocaleString()} VNĐ
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trạng thái</span>
                 <span className="font-bold text-slate-800">
                   {selectedTxDetail.status === 'success' ? (
@@ -933,39 +921,39 @@ export default function Profile() {
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền nạp (VNĐ)</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.amount.toLocaleString()} VNĐ
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian giao dịch</span>
+                <span className="font-bold text-slate-800">
+                  {selectedTxDetail.createdAt ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
+                <span className="font-mono font-bold text-slate-800 break-all select-all">
+                  {formatHash(selectedTxDetail.txHash || selectedTxDetail.id)}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
                 <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {selectedTxDetail.walletAddress || '—'}
+                  {selectedTxDetail.walletAddress ? formatHash(selectedTxDetail.walletAddress) : '—'}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví nhận</span>
                 <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {selectedTxDetail.type === 'deposit' ? (import.meta.env.VITE_RECEIVER_WALLET || '—') : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mạng Blockchain</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.network || 'Sepolia'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Tỷ giá quy đổi</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.exchangeRate ? `${selectedTxDetail.exchangeRate.toLocaleString()} VNĐ / ETH` : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian tạo</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.createdAt ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
+                  {selectedTxDetail.type === 'deposit' ? formatHash(import.meta.env.VITE_RECEIVER_WALLET || '') : '—'}
                 </span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian xác nhận</span>
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mạng Blockchain</span>
                 <span className="font-bold text-slate-800">
-                  {selectedTxDetail.createdAt && selectedTxDetail.status === 'success' ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
+                  {selectedTxDetail.network || 'Sepolia'}
                 </span>
               </div>
             </div>
