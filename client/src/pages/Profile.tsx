@@ -41,8 +41,8 @@ export default function Profile() {
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>('');
   const [isDepositing, setIsDepositing] = useState(false);
-  const historyLoading = false;
-  const historyError: string | null = null;
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
@@ -225,6 +225,29 @@ export default function Profile() {
       useAuthStore.getState().fetchFAQs().catch(() => { });
     }
   }, [currentUser, navigate]);
+
+  useEffect(() => {
+    if (activeTab === 'history' && currentUser) {
+      const loadHistory = async () => {
+        setHistoryLoading(true);
+        setHistoryError(null);
+        try {
+          await useAuthStore.getState().fetchTransactions();
+        } catch (err: any) {
+          setHistoryError(err.response?.data?.message || err.message || 'Không thể tải lịch sử giao dịch. Vui lòng thử lại sau.');
+        } finally {
+          setHistoryLoading(false);
+        }
+      };
+      loadHistory();
+    }
+  }, [activeTab, currentUser]);
+
+  const formatHash = (hash: string) => {
+    if (!hash) return '—';
+    if (hash.length <= 12) return hash;
+    return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`;
+  };
 
 
 
@@ -821,8 +844,8 @@ export default function Profile() {
                               </span>
                             )}
                           </td>
-                          <td className="p-4 font-mono text-[10px] text-slate-500 font-bold break-all select-all">
-                            {tx.id.toUpperCase()}
+                          <td className="p-4 font-mono text-[10px] text-slate-550 font-bold break-all select-all">
+                            {formatHash(tx.txHash || tx.id)}
                           </td>
                         </tr>
                       ))}

@@ -284,7 +284,8 @@ const transactionService = {
         amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
-        createdAt: dep.created_at || new Date().toISOString()
+        createdAt: dep.created_at || new Date().toISOString(),
+        txHash: dep.txHash || dep.tx_hash || ''
       });
     }
 
@@ -333,7 +334,8 @@ const transactionService = {
         amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
-        createdAt: dep.created_at
+        createdAt: dep.created_at,
+        txHash: dep.txHash || dep.tx_hash || ''
       });
     }
 

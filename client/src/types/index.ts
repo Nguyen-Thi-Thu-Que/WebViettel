@@ -55,6 +55,7 @@ export interface Transaction {
   paymentMethod?: string; // e.g. "VietQR", "Momo", "ATM Card"
   status: 'pending' | 'success' | 'failed';
   createdAt: string;
+  txHash?: string;
 }
 
 export interface FAQ {

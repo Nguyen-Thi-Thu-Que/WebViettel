@@ -102,6 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ transactions: txs });
     } catch (err) {
       console.error("Error fetching transactions:", err);
+      throw err;
     }
   },
 
