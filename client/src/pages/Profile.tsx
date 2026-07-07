@@ -377,7 +377,9 @@ export default function Profile() {
 
       {/* Toast Notification */}
       {toastMsg && (
-        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
+        <div 
+          style={{ zIndex: 9999 }}
+          className={`fixed top-20 right-6 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
           }`}>
           {toastMsg.text}
         </div>
