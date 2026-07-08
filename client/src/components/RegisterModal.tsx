@@ -57,6 +57,13 @@ export default function RegisterModal({
       return;
     }
 
+    if (currentUser.balance < pkg.gia) {
+      setIsSubmitting(false);
+      onClose();
+      if (onError) onError('Số dư tài khoản không đủ để đăng ký gói cước này.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';

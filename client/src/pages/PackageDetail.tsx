@@ -234,6 +234,11 @@ export default function PackageDetail() {
   };
 
   const handleConfirmSubscribe = async () => {
+    if (currentUser && currentUser.balance < pkg.gia) {
+      showToast('error', 'Số dư tài khoản không đủ để đăng ký gói cước này.');
+      setShowConfirm(false);
+      return;
+    }
     setIsSubmitting(true);
     try {
       let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
