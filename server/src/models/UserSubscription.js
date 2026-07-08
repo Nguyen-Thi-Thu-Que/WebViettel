@@ -21,6 +21,10 @@ const userSubscriptionSchema = new mongoose.Schema({
     required: true,
     default: Date.now
   },
+  startedAt: {
+    type: Date,
+    default: Date.now
+  },
   expiresAt: {
     type: Date,
     required: true

@@ -67,7 +67,14 @@ export default function RegisterModal({
         cycle = 'YEAR';
       }
 
-      const res = await registerSubscription(Number(pkg.id), cycle);
+      console.log("========== REGISTER CLICK ==========");
+      console.log("Package object:", pkg);
+      console.log("pkg.numericId =", (pkg as any).numericId);
+      console.log("pkg.id =", pkg.id);
+      console.log("pkg.dbId =", (pkg as any).dbId);
+      console.log("Selected cycle =", cycle);
+
+      const res = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
       setIsSubmitting(false);
       onClose();
       if (res.success) {

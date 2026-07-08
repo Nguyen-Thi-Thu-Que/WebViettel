@@ -18,6 +18,12 @@ const PackageCard = React.memo(function PackageCard({
   onSubscribeSuccess,
   onSubscribeError
 }: PackageCardProps) {
+  console.log("========== PACKAGECARD RECEIVED PROPS ==========");
+  console.log("Package card pkg:", pkg);
+  console.log("id =", pkg.id);
+  console.log("numericId =", (pkg as any).numericId);
+  console.log("dbId =", (pkg as any).dbId);
+
   const { addToCompare, compareList, removeFromCompare } = usePackageStore();
   const { currentUser } = useAuthStore();
   const isInCompare = compareList.some((p) => p.id === pkg.id);

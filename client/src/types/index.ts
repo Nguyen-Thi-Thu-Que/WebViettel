@@ -1,5 +1,6 @@
 export interface Package {
   id: string; // unique identifier (maps to ma_goi or database numeric id)
+  numericId?: number;
   ten: string;
   dohot: string; // e.g. "Hot" or "normal"
   phan_loai_goi: string; // e.g. "Data", "Combo", "Social", "Thoại"

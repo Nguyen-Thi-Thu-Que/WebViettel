@@ -3,9 +3,22 @@ const subscriptionService = require('../services/subscriptionService');
 module.exports = {
   register: async (req, res, next) => {
     try {
-      res.status(501).json({ message: 'Chức năng đăng ký gói chưa được triển khai.' });
+      const userId = req.user.user_id;
+      const { packageId, cycle } = req.body;
+
+      if (packageId === undefined || packageId === null || packageId === '') {
+        return res.status(400).json({ success: false, message: 'Thiếu thông tin gói cước.' });
+      }
+
+      const subscription = await subscriptionService.registerSubscription(userId, packageId, cycle);
+
+      res.status(200).json({
+        success: true,
+        message: 'Đăng ký gói cước thành công!',
+        data: subscription
+      });
     } catch (err) {
-      next(err);
+      res.status(400).json({ success: false, message: err.message });
     }
   },
 

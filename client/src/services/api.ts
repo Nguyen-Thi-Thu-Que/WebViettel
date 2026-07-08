@@ -20,6 +20,13 @@ export interface FilterOptions {
 
 export function toVietnamesePackage(apiPkg: any): Package {
   if (!apiPkg) return {} as Package;
+
+  console.log("========== toVietnamesePackage INPUT ==========");
+  console.log("Input package:", apiPkg);
+  console.log("Input id =", apiPkg.id);
+  console.log("Input numericId =", apiPkg.numericId);
+  console.log("Input dbId =", apiPkg.dbId);
+
   const price = apiPkg.price || 0;
   const phan_khuc_gia = price < 50000 ? 'Gia_re' : price <= 150000 ? 'Trung_binh' : 'Cao_cap';
 
@@ -55,8 +62,10 @@ export function toVietnamesePackage(apiPkg: any): Package {
   const free_noi_mang = apiPkg.voiceFreeInternalMin ? `${apiPkg.voiceFreeInternalMin} phút nội mạng` : '0';
   const free_ngoai_mang = apiPkg.voiceFreeExternalMin ? `${apiPkg.voiceFreeExternalMin} phút ngoại mạng` : '0';
 
-  return {
+  const vnPkg: any = {
     id: apiPkg.id,
+    numericId: apiPkg.numericId,
+    dbId: apiPkg.dbId,
     ten: apiPkg.name || '',
     dohot: apiPkg.isPopular ? 'Hot' : 'normal',
     phan_loai_goi: apiPkg.category === 'data' ? 'Data' : apiPkg.category === 'combo' ? 'Combo' : apiPkg.category === 'social' ? 'Social' : 'Thoại',
@@ -83,6 +92,14 @@ export function toVietnamesePackage(apiPkg: any): Package {
     doi_tuong_ap_dung: apiPkg.conditions || '',
     loai_mang: apiPkg.loai_mang || ''
   };
+
+  console.log("========== toVietnamesePackage OUTPUT ==========");
+  console.log("Output package:", vnPkg);
+  console.log("Output id =", vnPkg.id);
+  console.log("Output numericId =", (vnPkg as any).numericId);
+  console.log("Output dbId =", (vnPkg as any).dbId);
+
+  return vnPkg as Package;
 }
 
 export function toEnglishPackage(vnPkg: Partial<Package>): any {
@@ -133,6 +150,16 @@ export const packageApi = {
   fetchPackages: async (params: Record<string, any>): Promise<FetchPackagesResponse> => {
     const response = await axiosInstance.get<any>(API_BASE_URL, { params });
     const rawData = response.data;
+
+    console.log("========== API RESPONSE fetchPackages ==========");
+    if (rawData.packages && rawData.packages.length > 0) {
+      const firstRaw = rawData.packages[0];
+      console.log("First raw package in list:", firstRaw);
+      console.log("Raw list id =", firstRaw.id);
+      console.log("Raw list numericId =", firstRaw.numericId);
+      console.log("Raw list dbId =", firstRaw.dbId);
+    }
+
     return {
       packages: (rawData.packages || []).map(toVietnamesePackage),
       page: rawData.page,
@@ -144,6 +171,13 @@ export const packageApi = {
 
   fetchPackageById: async (id: string): Promise<Package> => {
     const response = await axiosInstance.get<any>(`${API_BASE_URL}/${id}`);
+
+    console.log("========== API RESPONSE fetchPackageById ==========");
+    console.log("Raw package from API:", response.data);
+    console.log("Raw id =", response.data?.id);
+    console.log("Raw numericId =", response.data?.numericId);
+    console.log("Raw dbId =", response.data?.dbId);
+
     return toVietnamesePackage(response.data);
   },
 

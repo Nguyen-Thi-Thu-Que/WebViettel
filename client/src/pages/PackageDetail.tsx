@@ -124,6 +124,14 @@ export default function PackageDetail() {
     return true;
   };
 
+  if (pkg) {
+    console.log("========== PACKAGEDETAIL RENDER pkg ==========");
+    console.log("PackageDetail pkg object:", pkg);
+    console.log("id =", pkg.id);
+    console.log("numericId =", (pkg as any).numericId);
+    console.log("dbId =", (pkg as any).dbId);
+  }
+
   if (loading) {
     return <DetailSkeleton />;
   }
@@ -236,7 +244,7 @@ export default function PackageDetail() {
         cycle = 'YEAR';
       }
 
-      const res = await registerSubscription(Number(pkg.id), cycle);
+      const res = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
       setIsSubmitting(false);
       setShowConfirm(false);
       if (res.success) {
