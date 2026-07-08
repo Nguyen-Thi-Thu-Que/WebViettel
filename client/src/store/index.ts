@@ -21,6 +21,7 @@ interface AuthState {
   faqs: FAQ[];
   loading: boolean;
   error: string | null;
+  authChecked: boolean;
   login: (phoneNumber: string, password?: string) => Promise<boolean>;
   registerUser: (name: string, phoneNumber: string, email: string, password?: string, subscriptionType?: string) => Promise<boolean>;
   logout: () => void;
@@ -35,21 +36,37 @@ interface AuthState {
   registerSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
+  subscriptionHistory: any[];
+  checkSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<any>;
+  fetchSubscriptionHistory: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   currentUser: null,
   transactions: [],
   faqs: [],
+  subscriptionHistory: [],
   loading: false,
   error: null,
+  authChecked: typeof window !== 'undefined' ? !localStorage.getItem('token') : true,
 
   login: async (phoneNumber, password) => {
     set({ loading: true, error: null });
     try {
       const data = await authApi.login(phoneNumber, password);
       localStorage.setItem('token', data.token);
-      set({ currentUser: data.user, loading: false });
+
+      // Restore active subscriptions on re-login
+      try {
+        const subData = await authApi.fetchActiveSubscriptions();
+        if (subData && subData.activePackages) {
+          data.user.activePackages = subData.activePackages;
+        }
+      } catch (err) {
+        console.error("Error fetching active subscriptions on login:", err);
+      }
+
+      set({ currentUser: data.user, authChecked: true, loading: false });
       
       // Auto fetch other details
       get().fetchTransactions().catch(() => {});
@@ -59,6 +76,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err: any) {
       set({ 
         error: err.response?.data?.message || 'Thông tin đăng nhập không chính xác.',
+        authChecked: true,
         loading: false 
       });
       return false;
@@ -70,11 +88,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const data = await authApi.register(name, phoneNumber, email, password, subscriptionType);
       localStorage.setItem('token', data.token);
-      set({ currentUser: data.user, loading: false });
+      set({ currentUser: data.user, authChecked: true, loading: false });
       return true;
     } catch (err: any) {
       set({
         error: err.response?.data?.message || 'Đăng ký tài khoản thất bại.',
+        authChecked: true,
         loading: false
       });
       return false;
@@ -83,17 +102,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ currentUser: null, transactions: [], faqs: [] });
+    set({ currentUser: null, authChecked: true, transactions: [], faqs: [] });
   },
 
   fetchMe: async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      set({ authChecked: true });
+      return;
+    }
     try {
       const user = await authApi.getMe();
-      set({ currentUser: user });
+
+      // Restore active subscriptions on refresh
+      try {
+        const subData = await authApi.fetchActiveSubscriptions();
+        if (subData && subData.activePackages) {
+          user.activePackages = subData.activePackages;
+        }
+      } catch (err) {
+        console.error("Error fetching active subscriptions on refresh:", err);
+      }
+
+      set({ currentUser: user, authChecked: true });
     } catch (err) {
       console.error("Error fetching current user profile:", err);
+      set({ currentUser: null, authChecked: true });
     }
   },
 
@@ -174,40 +208,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   subscribePackage: async (pkg) => {
-    try {
-      const result = await authApi.subscribePackage(pkg.id);
-      
-      set(state => {
-        if (!state.currentUser) return state;
-        
-        const isAlreadyActive = state.currentUser.activePackages.some(ap => ap.packageId === result.activePackage.packageId);
-        const updatedPackages = isAlreadyActive 
-          ? state.currentUser.activePackages 
-          : [...state.currentUser.activePackages, result.activePackage];
-
-        return {
-          currentUser: {
-            ...state.currentUser,
-            balance: result.balance,
-            activePackages: updatedPackages
-          }
-        };
-      });
-      get().fetchTransactions().catch(() => {});
-      return { success: true, message: `Đăng ký thành công gói cước ${pkg.ten}!` };
-    } catch (err: any) {
-      const msg = err.response?.data?.message || `Lỗi đăng ký gói cước ${pkg.ten}.`;
-      return { success: false, message: msg };
+    let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
+    const dayCycle = parseInt(pkg.chu_ky_ngay || '30', 10);
+    if (dayCycle === 1) {
+      cycle = 'DAY';
+    } else if (dayCycle >= 360) {
+      cycle = 'YEAR';
     }
+    return get().registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
   },
 
   registerSubscription: async (packageId, cycle) => {
     try {
       const result = await authApi.registerSubscription(packageId, cycle);
+
+      // Reload entire state from server to synchronize after registration/replacement
+      await get().fetchMe();
+      await get().fetchSubscriptionHistory();
+      await get().fetchTransactions().catch(() => {});
+
       return { success: true, message: result?.message || 'Đăng ký gói cước thành công!' };
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Lỗi đăng ký gói cước.';
       return { success: false, message: msg };
+    }
+  },
+
+  checkSubscription: async (packageId, cycle) => {
+    try {
+      return await authApi.checkSubscription(packageId, cycle);
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || err.message || 'Lỗi kiểm tra đăng ký.');
+    }
+  },
+
+  fetchSubscriptionHistory: async () => {
+    try {
+      const result = await authApi.fetchSubscriptionHistory();
+      if (result && result.success) {
+        set({ subscriptionHistory: result.history || [] });
+      }
+    } catch (err) {
+      console.error("Error fetching subscription history:", err);
     }
   },
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const subscriptionController = require('../controllers/subscriptionController');
 const { authenticateToken } = require('../middlewares/authMiddleware');
 
+router.post('/check', authenticateToken, subscriptionController.check);
 router.post('/register', authenticateToken, subscriptionController.register);
 router.get('/active', authenticateToken, subscriptionController.getActive);
 router.get('/history', authenticateToken, subscriptionController.getHistory);

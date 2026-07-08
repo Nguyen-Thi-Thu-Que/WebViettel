@@ -31,7 +31,7 @@ const userSubscriptionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'],
+    enum: ['ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED', 'REPLACED'],
     required: true,
     default: 'ACTIVE'
   },
@@ -52,6 +52,15 @@ const userSubscriptionSchema = new mongoose.Schema({
   cancelReason: {
     type: String,
     default: ''
+  },
+  replacedAt: {
+    type: Date,
+    default: null
+  },
+  replacedBySubscriptionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UserSubscription',
+    default: null
   }
 }, {
   collection: 'user_subscriptions',
@@ -59,3 +68,4 @@ const userSubscriptionSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('UserSubscription', userSubscriptionSchema);
+

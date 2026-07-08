@@ -66,6 +66,7 @@ export function toVietnamesePackage(apiPkg: any): Package {
     id: apiPkg.id,
     numericId: apiPkg.numericId,
     dbId: apiPkg.dbId,
+    is_auto_renew: apiPkg.is_auto_renew,
     ten: apiPkg.name || '',
     dohot: apiPkg.isPopular ? 'Hot' : 'normal',
     phan_loai_goi: apiPkg.category === 'data' ? 'Data' : apiPkg.category === 'combo' ? 'Combo' : apiPkg.category === 'social' ? 'Social' : 'Thoại',
@@ -269,8 +270,23 @@ export const authApi = {
     return response.data.data;
   },
 
+  checkSubscription: async (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR'): Promise<any> => {
+    const response = await axiosInstance.post('/api/subscriptions/check', { packageId, cycle });
+    return response.data;
+  },
+
   registerSubscription: async (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR'): Promise<any> => {
     const response = await axiosInstance.post('/api/subscriptions/register', { packageId, cycle });
+    return response.data;
+  },
+
+  fetchActiveSubscriptions: async (): Promise<any> => {
+    const response = await axiosInstance.get('/api/subscriptions/active');
+    return response.data;
+  },
+
+  fetchSubscriptionHistory: async (): Promise<any> => {
+    const response = await axiosInstance.get('/api/subscriptions/history');
     return response.data;
   },
 

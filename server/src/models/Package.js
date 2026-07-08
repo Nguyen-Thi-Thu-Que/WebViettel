@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const packageSchema = new mongoose.Schema({
   package_id: { type: Number, required: true, unique: true, alias: 'id' },
+  is_auto_renew: { type: Boolean, default: true },
   ma_goi: { type: String, required: true, index: true },
   ten: { type: String, required: true },
   dohot: { type: String, default: 'normal' },
@@ -37,7 +38,10 @@ const packageSchema = new mongoose.Schema({
   thoigian: { type: String },
   tang: { type: String },
   taggoiy: { type: String },
-  Nhom_Goi: { type: String }
+  Nhom_Goi: { type: String },
+  cycle_type: { type: String, default: '' },
+  service_group: { type: String, default: '' },
+  registration_policy: { type: String, default: '' }
 }, { 
   collection: 'goi_cuoc', 
   timestamps: true 

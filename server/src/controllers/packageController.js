@@ -110,6 +110,7 @@ function mapToEnglish(pkg) {
     id: idStr, // string ID cho frontend
     dbId: doc._id, // lưu MongoDB _id
     numericId: doc.package_id || doc.id, // lưu id số gốc
+    is_auto_renew: doc.is_auto_renew !== undefined ? doc.is_auto_renew : true,
     ma_goi: doc.ma_goi,
     name: doc.ten,
     price: doc.gia,

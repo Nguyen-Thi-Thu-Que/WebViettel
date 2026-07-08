@@ -4,16 +4,27 @@ import { useAuthStore } from '../store';
 import { useEffect } from 'react';
 
 export default function AdminLayout() {
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser, authChecked, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Route Guard: only admins allowed
   useEffect(() => {
+    if (!authChecked) return;
+
     if (!currentUser || currentUser.role !== 'admin') {
       navigate('/login');
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, authChecked, navigate]);
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center space-y-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-semibold text-slate-500">Đang xác thực tài khoản...</span>
+      </div>
+    );
+  }
 
   if (!currentUser || currentUser.role !== 'admin') return null;
 

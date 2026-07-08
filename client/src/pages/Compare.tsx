@@ -7,13 +7,20 @@ import SEO from '../components/SEO';
 
 export default function Compare() {
   const { compareList, packages, removeFromCompare, addToCompare, clearCompare } = usePackageStore();
-  const { currentUser, subscribePackage } = useAuthStore();
+  const { currentUser, subscribePackage, checkSubscription } = useAuthStore();
 
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showAddSelector, setShowAddSelector] = useState(false);
   const [selectedPkgIdToAdd, setSelectedPkgIdToAdd] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmSubscribePkg, setConfirmSubscribePkg] = useState<Package | null>(null);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkResult, setCheckResult] = useState<{
+    action: 'ALLOW' | 'REPLACE' | 'REJECT';
+    message: string;
+    replaceSubscriptions?: any[];
+    conflictSubscriptions?: any[];
+  } | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -40,25 +47,70 @@ export default function Compare() {
       showToast('error', 'Vui lòng đăng nhập trước khi đăng ký gói cước.');
       return;
     }
+    setCheckResult(null);
+    setCheckLoading(false);
     setConfirmSubscribePkg(pkg);
   };
 
   const handleConfirmSubscribe = async () => {
     if (!confirmSubscribePkg) return;
-    setIsSubmitting(true);
-    try {
-      const res = await subscribePackage(confirmSubscribePkg);
-      setIsSubmitting(false);
-      setConfirmSubscribePkg(null);
-      if (res.success) {
-        showToast('success', res.message);
-      } else {
-        showToast('error', res.message);
+
+    let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
+    const dayCycle = parseInt(confirmSubscribePkg.chu_ky_ngay || '30', 10);
+    if (dayCycle === 1) {
+      cycle = 'DAY';
+    } else if (dayCycle >= 360) {
+      cycle = 'YEAR';
+    }
+
+    if (!checkResult) {
+      setCheckLoading(true);
+      try {
+        const res = await checkSubscription(confirmSubscribePkg.numericId || Number(confirmSubscribePkg.id) || 0, cycle);
+        if (res.hasActive === false) {
+          // If no active subscriptions, register immediately!
+          setIsSubmitting(true);
+          try {
+            const regRes = await subscribePackage(confirmSubscribePkg);
+            setConfirmSubscribePkg(null);
+            if (regRes.success) {
+              showToast('success', regRes.message);
+            } else {
+              showToast('error', regRes.message);
+            }
+          } catch (err: any) {
+            setConfirmSubscribePkg(null);
+            showToast('error', err.message || 'Lỗi đăng ký gói cước.');
+          } finally {
+            setIsSubmitting(false);
+          }
+        } else {
+          setCheckResult(res);
+        }
+      } catch (err: any) {
+        showToast('error', err.message || 'Lỗi kiểm tra xung đột gói cước.');
+        setConfirmSubscribePkg(null);
+      } finally {
+        setCheckLoading(false);
       }
-    } catch (err: any) {
-      setIsSubmitting(false);
-      setConfirmSubscribePkg(null);
-      showToast('error', err.message || 'Lỗi đăng ký gói cước.');
+    } else {
+      if (checkResult.action === 'ALLOW' || checkResult.action === 'REPLACE') {
+        setIsSubmitting(true);
+        try {
+          const res = await subscribePackage(confirmSubscribePkg);
+          setConfirmSubscribePkg(null);
+          if (res.success) {
+            showToast('success', res.message);
+          } else {
+            showToast('error', res.message);
+          }
+        } catch (err: any) {
+          setConfirmSubscribePkg(null);
+          showToast('error', err.message || 'Lỗi đăng ký gói cước.');
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
     }
   };
 
@@ -502,28 +554,75 @@ export default function Compare() {
       {/* Subscription Confirmation Modal */}
       {confirmSubscribePkg && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
-            <h4 className="text-base font-extrabold text-slate-900 mb-2">Xác nhận đăng ký</h4>
-            <p className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
+          <div className="bg-white border border-slate-150 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left space-y-5">
+            <h4 className="text-base font-extrabold text-slate-900 border-b border-slate-50 pb-2">Xác nhận đăng ký</h4>
+            <p className="text-xs text-slate-550 leading-relaxed font-semibold">
               Bạn có chắc chắn muốn đăng ký nhanh gói cước <strong className="text-primary">{confirmSubscribePkg.ten}</strong> với giá{' '}
               <strong className="text-slate-900">{new Intl.NumberFormat('vi-VN').format(confirmSubscribePkg.gia)}đ</strong>?
               Số tiền này sẽ được trừ trực tiếp vào tài khoản ví ảo của bạn.
             </p>
-            <div className="flex space-x-3">
+
+            {/* Nhóm 3 - Cảnh báo Xung đột Gói cước (Sprint 7.3) */}
+            {checkResult && (
+              <div className={`p-4 rounded-xl border text-[11px] leading-relaxed font-semibold ${
+                checkResult.action === 'REJECT'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : checkResult.action === 'REPLACE'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-emerald-50 border-emerald-250 text-emerald-800'
+              }`}>
+                <p className="font-extrabold text-xs mb-1.5">
+                  {checkResult.action === 'REJECT' ? '⚠️ Không thể đăng ký' : checkResult.action === 'REPLACE' ? '⚠️ Cảnh báo thay thế gói' : '✅ Đăng ký song song'}
+                </p>
+                
+                {checkResult.action === 'ALLOW' && (
+                  <p>
+                    Gói cước này có thể sử dụng song song với các gói hiện tại.
+                    <br />
+                    Bạn có muốn tiếp tục đăng ký không?
+                  </p>
+                )}
+                
+                {checkResult.action === 'REPLACE' && (
+                  <div>
+                    <p className="mb-2">Gói cước này sẽ thay thế các gói đang sử dụng.</p>
+                    <p className="font-extrabold mb-1">Khi tiếp tục:</p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      <li>Các gói hiện tại sẽ bị hủy ngay lập tức.</li>
+                      <li>Quyền lợi còn lại sẽ kết thúc.</li>
+                      <li>Gói mới sẽ được kích hoạt.</li>
+                    </ul>
+                    <p className="mt-2 font-bold">Bạn có muốn tiếp tục không?</p>
+                  </div>
+                )}
+                
+                {checkResult.action === 'REJECT' && (
+                  <p>
+                    Không thể đăng ký đồng thời với các gói đang sử dụng.
+                    <br />
+                    Vui lòng hủy gói hiện tại trước khi đăng ký gói này.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex space-x-3 pt-2">
               <button
-                disabled={isSubmitting}
+                disabled={isSubmitting || checkLoading}
                 onClick={() => setConfirmSubscribePkg(null)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
               >
-                Hủy
+                {checkResult?.action === 'REJECT' ? 'Đóng' : 'Hủy'}
               </button>
-              <button
-                disabled={isSubmitting}
-                onClick={handleConfirmSubscribe}
-                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
-              >
-                {isSubmitting ? 'Đang xử lý...' : 'Xác nhận'}
-              </button>
+              {(!checkResult || checkResult.action !== 'REJECT') && (
+                <button
+                  disabled={isSubmitting || checkLoading}
+                  onClick={handleConfirmSubscribe}
+                  className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
+                >
+                  {checkLoading ? 'Đang kiểm tra...' : isSubmitting ? 'Đang xử lý...' : checkResult ? 'Xác nhận' : 'Xác nhận'}
+                </button>
+              )}
             </div>
           </div>
         </div>

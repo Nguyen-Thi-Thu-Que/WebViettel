@@ -7,10 +7,13 @@ const subscriptionSchema = new mongoose.Schema({
   registered_at: { type: String, required: true },
   expired_at: { type: String, required: true },
   is_auto_renew: { type: Boolean, default: true },
-  status: { type: String, enum: ['active', 'expired'], default: 'active' }
+  status: { type: String, enum: ['active', 'expired', 'replaced'], default: 'active' },
+  replaced_at: { type: String, default: null },
+  replaced_by_subscription_id: { type: Number, default: null }
 }, {
   collection: 'subscriptions',
   timestamps: false
 });
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);
+

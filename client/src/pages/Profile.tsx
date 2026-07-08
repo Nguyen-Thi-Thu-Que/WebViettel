@@ -31,7 +31,7 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain } = useAuthStore();
+  const { currentUser, authChecked, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain, subscriptionHistory, fetchSubscriptionHistory } = useAuthStore();
   const { packages } = usePackageStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'info';
@@ -221,13 +221,15 @@ export default function Profile() {
 
   // If user is not logged in, redirect to login
   useEffect(() => {
+    if (!authChecked) return;
+
     if (!currentUser) {
       navigate('/login');
     } else {
       useAuthStore.getState().fetchTransactions().catch(() => { });
       useAuthStore.getState().fetchFAQs().catch(() => { });
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, authChecked, navigate]);
 
   useEffect(() => {
     if (activeTab === 'history' && currentUser) {
@@ -243,6 +245,12 @@ export default function Profile() {
         }
       };
       loadHistory();
+    }
+  }, [activeTab, currentUser]);
+
+  useEffect(() => {
+    if (activeTab === 'packages' && currentUser) {
+      fetchSubscriptionHistory().catch(() => {});
     }
   }, [activeTab, currentUser]);
 
@@ -274,6 +282,15 @@ export default function Profile() {
   };
 
 
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center space-y-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-semibold text-slate-500">Đang xác thực tài khoản...</span>
+      </div>
+    );
+  }
 
   if (!currentUser) return null;
 
@@ -759,15 +776,20 @@ export default function Profile() {
                             <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{new Date(ap.activatedAt).toLocaleDateString('vi-VN')}</span></p>
                             <p>Hết hạn: <span className="text-slate-800 font-extrabold">{new Date(ap.expiresAt).toLocaleDateString('vi-VN')}</span></p>
                             <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{pkgDetail.chu_ky_ngay} ngày</span></p>
+                            {pkgDetail.is_auto_renew !== false && (
+                              <p>Gia hạn: <span className="text-slate-850 font-extrabold text-primary">Tự động</span></p>
+                            )}
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleUnsubscribeClick(ap.packageId)}
-                          className="shrink-0 text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                        >
-                          Hủy gia hạn gói
-                        </button>
+                        {pkgDetail.is_auto_renew !== false && (
+                          <button
+                            onClick={() => handleUnsubscribeClick(ap.packageId)}
+                            className="shrink-0 text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                          >
+                            Hủy gia hạn gói
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -783,6 +805,71 @@ export default function Profile() {
                   </button>
                 </div>
               )}
+
+              {/* Lịch sử đăng ký gói cước (Sprint 7.3) */}
+              <div className="border-t border-slate-100 pt-6 mt-8 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Lịch sử đăng ký gói cước</h3>
+                  <p className="text-slate-400 text-xs mt-0.5 font-medium">Nhật ký toàn bộ các gói cước đã đăng ký trên hệ thống.</p>
+                </div>
+
+                {subscriptionHistory && subscriptionHistory.length > 0 ? (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-505 font-bold uppercase tracking-wider">
+                          <th className="p-4">Tên gói</th>
+                          <th className="p-4">Ngày đăng ký</th>
+                          <th className="p-4">Ngày hết hạn</th>
+                          <th className="p-4">Chu kỳ</th>
+                          <th className="p-4">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-slate-700 font-semibold">
+                        {subscriptionHistory.map((sub) => (
+                          <tr key={sub.subscriptionId || sub._id} className="hover:bg-slate-50/40 transition-colors">
+                            <td className="p-4 font-bold text-slate-900 uppercase">
+                              {sub.packageId}
+                            </td>
+                            <td className="p-4 text-slate-550">
+                              {new Date(sub.activatedAt).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td className="p-4 text-slate-550">
+                              {new Date(sub.expiresAt).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td className="p-4 text-slate-800">
+                              {sub.cycle === 'DAY' ? '1 ngày' : sub.cycle === 'YEAR' ? '365 ngày' : '30 ngày'}
+                            </td>
+                            <td className="p-4">
+                              {sub.status === 'ACTIVE' ? (
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                  Kích hoạt
+                                </span>
+                              ) : sub.status === 'REPLACED' ? (
+                                <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                  Bị thay thế
+                                </span>
+                              ) : sub.status === 'CANCELLED' ? (
+                                <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                  Đã hủy
+                                </span>
+                              ) : (
+                                <span className="bg-slate-50 text-slate-500 border border-slate-205 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                  Hết hạn
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-xl text-center">
+                    <p className="text-slate-450 text-xs font-semibold">Chưa có lịch sử đăng ký gói cước nào.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
