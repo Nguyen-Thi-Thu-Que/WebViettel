@@ -292,7 +292,22 @@ export default function Profile() {
     );
   }
 
-  if (!currentUser) return null;
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4 p-4 text-center">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-sm w-full shadow-sm space-y-4">
+          <p className="text-slate-555 text-xs font-bold">Không thể tải thông tin tài khoản. Vui lòng đăng nhập lại.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-xl transition-all text-xs focus:outline-none"
+          >
+            Đăng nhập ngay
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -303,8 +318,8 @@ export default function Profile() {
   const { register: registerProfile, handleSubmit: handleProfileSubmit, formState: { errors: profileErrors } } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: currentUser.name,
-      email: currentUser.email
+      name: currentUser?.name || '',
+      email: currentUser?.email || ''
     }
   });
 
@@ -407,11 +422,11 @@ export default function Profile() {
         <div className="bg-white border border-slate-100 shadow-sm p-5 rounded-2xl space-y-4 text-left">
           <div className="flex items-center space-x-3 pb-4 border-b border-slate-50">
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-white text-base">
-              {currentUser.name.charAt(0)}
+              {(currentUser?.name || 'U').charAt(0)}
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 leading-tight">{currentUser.name}</h3>
-              <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">{currentUser.role === 'admin' ? 'Quản trị viên' : 'Khách hàng'}</span>
+              <h3 className="text-sm font-bold text-slate-900 leading-tight">{currentUser?.name || ''}</h3>
+              <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">{currentUser?.role === 'admin' ? 'Quản trị viên' : 'Khách hàng'}</span>
             </div>
           </div>
 
@@ -455,7 +470,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.phoneNumber}
+                    value={currentUser?.phoneNumber || ''}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>
@@ -464,7 +479,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.role === 'admin' ? 'Quản trị viên (Admin)' : 'Thuê bao di động'}
+                    value={currentUser?.role === 'admin' ? 'Quản trị viên (Admin)' : 'Thuê bao di động'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>
@@ -473,7 +488,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.subscription_type === 'tra_sau' ? 'Trả sau' : 'Trả trước'}
+                    value={currentUser?.subscription_type === 'tra_sau' ? 'Trả sau' : 'Trả trước'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>
@@ -482,7 +497,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.is_loyal_customer ? 'Khách hàng thân thiết (KHTT)' : 'Thành viên thường'}
+                    value={currentUser?.is_loyal_customer ? 'Khách hàng thân thiết (KHTT)' : 'Thành viên thường'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>
@@ -491,7 +506,7 @@ export default function Profile() {
                   <input
                     type="text"
                     disabled
-                    value={currentUser.status === 'blocked' ? 'Bị khóa' : currentUser.status === 'pending' ? 'Chờ kích hoạt' : 'Đang hoạt động'}
+                    value={currentUser?.status === 'blocked' ? 'Bị khóa' : currentUser?.status === 'pending' ? 'Chờ kích hoạt' : 'Đang hoạt động'}
                     className="w-full bg-slate-50/50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-405 cursor-not-allowed focus:outline-none"
                   />
                 </div>
@@ -754,9 +769,9 @@ export default function Profile() {
                 <p className="text-slate-400 text-xs mt-0.5 font-medium">Danh sách các gói cước dịch vụ đang kích hoạt trên thuê bao di động.</p>
               </div>
 
-              {currentUser.activePackages.length > 0 ? (
+              {(currentUser?.activePackages || []).length > 0 ? (
                 <div className="space-y-4">
-                  {currentUser.activePackages.map((ap) => {
+                  {(currentUser?.activePackages || []).map((ap) => {
                     const pkgDetail = packages.find(p => p.id === ap.packageId);
                     if (!pkgDetail) return null;
                     return (

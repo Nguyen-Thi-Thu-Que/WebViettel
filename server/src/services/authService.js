@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const Account = require('../models/Account');
-const Subscription = require('../models/Subscription');
+const UserSubscription = require('../models/UserSubscription');
 const Package = require('../models/Package');
 const { generateToken } = require('../middlewares/authMiddleware');
 
@@ -13,21 +13,23 @@ function verifyPassword(password, storedHash) {
   return password === storedHash;
 }
 
-// Map MongoDB Subscription list to frontend activePackages
+// Map MongoDB UserSubscription list to frontend activePackages
 async function getActivePackages(userId) {
-  const activeSubs = await Subscription.find({ 
-    user_id: userId, 
-    status: 'active' 
+  const now = new Date();
+  const activeSubs = await UserSubscription.find({ 
+    userId: userId, 
+    status: 'ACTIVE',
+    expiresAt: { $gt: now }
   });
 
   const activePackages = [];
   for (const sub of activeSubs) {
-    const pkg = await Package.findOne({ $or: [{ package_id: sub.package_id }, { id: sub.package_id }] });
+    const pkg = await Package.findOne({ $or: [{ package_id: sub.packageId }, { id: sub.packageId }] });
     if (pkg) {
       activePackages.push({
         packageId: pkg.ma_goi.toLowerCase(),
-        activatedAt: sub.registered_at,
-        expiresAt: sub.expired_at
+        activatedAt: sub.activatedAt,
+        expiresAt: sub.expiresAt
       });
     }
   }

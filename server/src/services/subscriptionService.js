@@ -1,5 +1,4 @@
 const UserSubscription = require('../models/UserSubscription');
-const Subscription = require('../models/Subscription');
 const Package = require('../models/Package');
 const Account = require('../models/Account');
 const mongoose = require('mongoose');
@@ -248,22 +247,10 @@ module.exports = {
     });
     await newSub.save();
 
-    const lastSub = await Subscription.findOne().sort({ subscription_id: -1 });
-    const nextSubId = lastSub ? lastSub.subscription_id + 1 : 1;
-    const legacySub = new Subscription({
-      subscription_id: nextSubId,
-      user_id: userId,
-      package_id: pkg.package_id,
-      registered_at: now.toISOString(),
-      expired_at: expiresAt.toISOString(),
-      is_auto_renew: true,
-      status: 'active'
-    });
-    await legacySub.save();
+    await newSub.save();
 
     if (conflictResult.action === 'REPLACE' && conflictResult.replaceSubscriptions) {
       const subIdsToReplace = conflictResult.replaceSubscriptions.map(s => s.subscriptionId);
-      const pkgIdsToReplace = conflictResult.replaceSubscriptions.map(s => s.packageId);
 
       await UserSubscription.updateMany(
         { _id: { $in: subIdsToReplace } },
@@ -272,17 +259,6 @@ module.exports = {
             status: 'REPLACED',
             replacedAt: now,
             replacedBySubscriptionId: newSub._id
-          }
-        }
-      );
-
-      await Subscription.updateMany(
-        { user_id: userId, package_id: { $in: pkgIdsToReplace }, status: 'active' },
-        {
-          $set: {
-            status: 'replaced',
-            replaced_at: now.toISOString(),
-            replaced_by_subscription_id: nextSubId
           }
         }
       );

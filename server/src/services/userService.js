@@ -1,5 +1,5 @@
 const Account = require('../models/Account');
-const Subscription = require('../models/Subscription');
+const UserSubscription = require('../models/UserSubscription');
 const Package = require('../models/Package');
 
 const userService = {
@@ -9,19 +9,21 @@ const userService = {
 
     for (const acc of accounts) {
       // Find active subscriptions
-      const activeSubs = await Subscription.find({ 
-        user_id: acc.user_id, 
-        status: 'active' 
+      const now = new Date();
+      const activeSubs = await UserSubscription.find({ 
+        userId: acc.user_id, 
+        status: 'ACTIVE',
+        expiresAt: { $gt: now }
       });
 
       const activePackages = [];
       for (const sub of activeSubs) {
-        const pkg = await Package.findOne({ $or: [{ package_id: sub.package_id }, { id: sub.package_id }] });
+        const pkg = await Package.findOne({ $or: [{ package_id: sub.packageId }, { id: sub.packageId }] });
         if (pkg) {
           activePackages.push({
             packageId: pkg.ma_goi.toLowerCase(),
-            activatedAt: sub.registered_at,
-            expiresAt: sub.expired_at
+            activatedAt: sub.activatedAt,
+            expiresAt: sub.expiresAt
           });
         }
       }

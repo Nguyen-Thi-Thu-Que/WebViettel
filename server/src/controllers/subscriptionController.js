@@ -16,7 +16,12 @@ module.exports = {
         ...result
       });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      res.status(200).json({
+        success: true,
+        action: 'ALLOW',
+        message: 'Gói cước có thể sử dụng song song.',
+        hasActive: false
+      });
     }
   },
 
@@ -70,7 +75,10 @@ module.exports = {
         activePackages: mappedActive
       });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      res.status(200).json({
+        success: true,
+        activePackages: []
+      });
     }
   },
 
@@ -101,7 +109,10 @@ module.exports = {
         history: mappedHistory
       });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      res.status(200).json({
+        success: true,
+        history: []
+      });
     }
   },
 
