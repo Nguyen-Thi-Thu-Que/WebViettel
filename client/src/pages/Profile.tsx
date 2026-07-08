@@ -64,6 +64,29 @@ export default function Profile() {
   const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
   const { linkWalletAddress } = useAuthStore();
 
+  // React Hook Forms (Declared at the top before any conditional returns to respect hook order)
+  const { register: registerProfile, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: '',
+      email: ''
+    }
+  });
+
+  const { register: registerPassword, handleSubmit: handlePasswordSubmit, reset: resetPasswordForm, formState: { errors: passwordErrors } } = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema)
+  });
+
+  // Reset profile form values when currentUser is populated/changed
+  useEffect(() => {
+    if (currentUser) {
+      resetProfileForm({
+        name: currentUser.name ?? '',
+        email: currentUser.email ?? ''
+      });
+    }
+  }, [currentUser, resetProfileForm]);
+
   const handleConnectWallet = async () => {
     const res = await connect();
     const config = getBlockchainConfig();
@@ -314,39 +337,38 @@ export default function Profile() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // React Hook Forms
-  const { register: registerProfile, handleSubmit: handleProfileSubmit, formState: { errors: profileErrors } } = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      name: currentUser?.name || '',
-      email: currentUser?.email || ''
-    }
-  });
-
-  const { register: registerPassword, handleSubmit: handlePasswordSubmit, reset: resetPasswordForm, formState: { errors: passwordErrors } } = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema)
-  });
-
   const onProfileSubmit = async (data: ProfileFormValues) => {
     setIsSubmittingProfile(true);
-    const success = await updateProfile(data.name, data.email);
-    setIsSubmittingProfile(false);
-    if (success) {
-      showToast('success', 'Cập nhật thông tin cá nhân thành công!');
-    } else {
+    try {
+      const success = await updateProfile(data.name, data.email);
+      if (success) {
+        showToast('success', 'Cập nhật thông tin cá nhân thành công!');
+      } else {
+        showToast('error', 'Cập nhật thông tin cá nhân thất bại.');
+      }
+    } catch (err) {
+      console.error("Error updating profile:", err);
       showToast('error', 'Cập nhật thông tin cá nhân thất bại.');
+    } finally {
+      setIsSubmittingProfile(false);
     }
   };
 
   const onPasswordSubmit = async (data: PasswordFormValues) => {
     setIsSubmittingPassword(true);
-    const success = await changePassword(data.oldPassword, data.newPassword);
-    setIsSubmittingPassword(false);
-    if (success) {
-      showToast('success', 'Thay đổi mật khẩu thành công!');
-      resetPasswordForm();
-    } else {
-      showToast('error', 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu cũ.');
+    try {
+      const success = await changePassword(data.oldPassword, data.newPassword);
+      if (success) {
+        showToast('success', 'Thay đổi mật khẩu thành công!');
+        resetPasswordForm();
+      } else {
+        showToast('error', 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu cũ.');
+      }
+    } catch (err) {
+      console.error("Error changing password:", err);
+      showToast('error', 'Đổi mật khẩu thất bại.');
+    } finally {
+      setIsSubmittingPassword(false);
     }
   };
 
