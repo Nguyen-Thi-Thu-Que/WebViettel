@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, MessageSquare, ArrowRight, Compass, ShieldCheck, Zap } from 'lucide-react';
-import { usePackageStore, useChatbotStore } from '../store';
+import { usePackageStore, useChatbotStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
 import SEO from '../components/SEO';
 
 export default function Home() {
   const { packages } = usePackageStore();
+  const { activeSubscriptions } = useAuthStore();
+  console.log('HOME_RENDER', activeSubscriptions);
   const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 

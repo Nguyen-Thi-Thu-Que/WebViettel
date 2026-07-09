@@ -36,8 +36,10 @@ interface AuthState {
   registerSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
+  activeSubscriptions: any[];
   subscriptionHistory: any[];
   checkSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<any>;
+  fetchActiveSubscriptions: () => Promise<void>;
   fetchSubscriptionHistory: () => Promise<void>;
 }
 
@@ -45,6 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   currentUser: null,
   transactions: [],
   faqs: [],
+  activeSubscriptions: [],
   subscriptionHistory: [],
   loading: false,
   error: null,
@@ -56,22 +59,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await authApi.login(phoneNumber, password);
       localStorage.setItem('token', data.token);
 
-      // Restore active subscriptions on re-login
-      try {
-        const subData = await authApi.fetchActiveSubscriptions();
-        if (subData && subData.activePackages) {
-          data.user.activePackages = subData.activePackages;
-        }
-      } catch (err) {
-        console.error("Error fetching active subscriptions on login:", err);
-      }
-
       set({ currentUser: data.user, authChecked: true, loading: false });
+
+      // Automatically fetch active subscriptions & history into global state
+      await get().fetchActiveSubscriptions().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => {});
       
       // Auto fetch other details
       get().fetchTransactions().catch(() => {});
       get().fetchFAQs().catch(() => {});
-      
       return true;
     } catch (err: any) {
       set({ 
@@ -89,6 +85,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await authApi.register(name, phoneNumber, email, password, subscriptionType);
       localStorage.setItem('token', data.token);
       set({ currentUser: data.user, authChecked: true, loading: false });
+
+      // Automatically fetch active subscriptions & history into global state
+      await get().fetchActiveSubscriptions().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => {});
+
       return true;
     } catch (err: any) {
       set({
@@ -102,32 +103,58 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ currentUser: null, authChecked: true, transactions: [], faqs: [] });
+    console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
+    console.trace('SUBSCRIPTION_HISTORY_RESET');
+    set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [] });
   },
 
   fetchMe: async () => {
+    console.log('FETCH_ME_START');
     const token = localStorage.getItem('token');
     if (!token) {
-      set({ authChecked: true });
+      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
+      console.trace('SUBSCRIPTION_HISTORY_RESET');
+      set({ authChecked: true, currentUser: null, activeSubscriptions: [], subscriptionHistory: [] });
+      console.log('FETCH_ME_DONE');
+      console.log('ACTIVE_SUBSCRIPTIONS', 0);
       return;
     }
     try {
       const user = await authApi.getMe();
-
-      // Restore active subscriptions on refresh
-      try {
-        const subData = await authApi.fetchActiveSubscriptions();
-        if (subData && subData.activePackages) {
-          user.activePackages = subData.activePackages;
-        }
-      } catch (err) {
-        console.error("Error fetching active subscriptions on refresh:", err);
-      }
-
+      console.log('CURRENT_USER', user);
       set({ currentUser: user, authChecked: true });
+
+      // Run all initial global state fetches concurrently without resetting activeSubscriptions/subscriptionHistory beforehand
+      await Promise.all([
+        get().fetchActiveSubscriptions().catch((err) => console.error("fetchActiveSubscriptions error", err)),
+        get().fetchSubscriptionHistory().catch((err) => console.error("fetchSubscriptionHistory error", err)),
+        get().fetchTransactions().catch((err) => console.error("fetchTransactions error", err)),
+        get().fetchFAQs().catch((err) => console.error("fetchFAQs error", err))
+      ]);
+
+      console.log('FETCH_ME_DONE');
+      console.log(
+        'ACTIVE_SUBSCRIPTIONS_AFTER_HYDRATE',
+        get().activeSubscriptions
+      );
+      console.log(
+        'SUBSCRIPTION_HISTORY_AFTER_HYDRATE',
+        get().subscriptionHistory
+      );
     } catch (err) {
       console.error("Error fetching current user profile:", err);
-      set({ currentUser: null, authChecked: true });
+      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
+      console.trace('SUBSCRIPTION_HISTORY_RESET');
+      set({ currentUser: null, authChecked: true, activeSubscriptions: [], subscriptionHistory: [] });
+      console.log('FETCH_ME_DONE');
+      console.log(
+        'ACTIVE_SUBSCRIPTIONS_AFTER_HYDRATE',
+        get().activeSubscriptions
+      );
+      console.log(
+        'SUBSCRIPTION_HISTORY_AFTER_HYDRATE',
+        get().subscriptionHistory
+      );
     }
   },
 
@@ -224,7 +251,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Reload entire state from server to synchronize after registration/replacement
       await get().fetchMe();
-      await get().fetchSubscriptionHistory();
+      await get().fetchActiveSubscriptions().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => {});
       await get().fetchTransactions().catch(() => {});
 
       return { success: true, message: result?.message || 'Đăng ký gói cước thành công!' };
@@ -242,14 +270,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  fetchActiveSubscriptions: async () => {
+    try {
+      const result = await authApi.fetchActiveSubscriptions();
+      console.log('ACTIVE_API_RESPONSE', result);
+      console.log('ACTIVE_RESPONSE_KEYS', Object.keys(result || {}));
+      if (result && result.activePackages) {
+        set({ activeSubscriptions: result.activePackages });
+        console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
+      } else {
+        console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
+        set({ activeSubscriptions: [] });
+        console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
+      }
+    } catch (err) {
+      console.error("Error fetching active subscriptions:", err);
+      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
+      set({ activeSubscriptions: [] });
+      console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
+    }
+  },
+
   fetchSubscriptionHistory: async () => {
     try {
       const result = await authApi.fetchSubscriptionHistory();
       if (result && result.success) {
         set({ subscriptionHistory: result.history || [] });
+      } else {
+        console.trace('SUBSCRIPTION_HISTORY_RESET');
+        set({ subscriptionHistory: [] });
       }
     } catch (err) {
       console.error("Error fetching subscription history:", err);
+      console.trace('SUBSCRIPTION_HISTORY_RESET');
+      set({ subscriptionHistory: [] });
     }
   },
 
@@ -257,12 +311,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const success = await authApi.unsubscribePackage(packageId);
       if (success) {
-        set(state => ({
-          currentUser: state.currentUser ? {
-            ...state.currentUser,
-            activePackages: state.currentUser.activePackages.filter(p => p.packageId !== packageId)
-          } : null
-        }));
+        await get().fetchActiveSubscriptions().catch(() => {});
+        await get().fetchSubscriptionHistory().catch(() => {});
         get().fetchTransactions().catch(() => {});
         return true;
       }
@@ -287,10 +337,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   }
 }));
 
-// Automatically fetch user profile on store startup if token is available
-if (typeof window !== 'undefined') {
-  useAuthStore.getState().fetchMe().catch(() => {});
-}
+
 
 // ==========================================
 // 2. PACKAGE STORE

@@ -66,8 +66,8 @@ export default function PackageDetail() {
     compareList,
     removeFromCompare
   } = usePackageStore();
-  const { currentUser, registerSubscription, checkSubscription } = useAuthStore();
-
+  const { currentUser, registerSubscription, checkSubscription, activeSubscriptions } = useAuthStore();
+  console.log('PACKAGE_DETAIL_RENDER', activeSubscriptions);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);

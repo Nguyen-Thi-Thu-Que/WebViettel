@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { User, CreditCard, History, Shield, Check, Eye, EyeOff, Copy, ExternalLink } from 'lucide-react';
-import { useAuthStore, usePackageStore } from '../store';
+import { useAuthStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
 import { getBlockchainConfig } from '../services/web3Service';
@@ -31,10 +31,18 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, authChecked, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain, subscriptionHistory, fetchSubscriptionHistory } = useAuthStore();
-  const { packages } = usePackageStore();
+  const { currentUser, authChecked, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain, activeSubscriptions, subscriptionHistory } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'info';
+
+  console.log(
+    'PROFILE_RENDER',
+    {
+      authChecked,
+      currentUser,
+      activeSubscriptions
+    }
+  );
 
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -271,11 +279,7 @@ export default function Profile() {
     }
   }, [activeTab, currentUser]);
 
-  useEffect(() => {
-    if (activeTab === 'packages' && currentUser) {
-      fetchSubscriptionHistory().catch(() => {});
-    }
-  }, [activeTab, currentUser]);
+
 
   const formatHash = (hash: string) => {
     if (!hash) return '—';
@@ -303,7 +307,6 @@ export default function Profile() {
     }
     window.open(`https://sepolia.etherscan.io/tx/${hash}`, '_blank', 'noopener,noreferrer');
   };
-
 
 
   if (!authChecked) {
@@ -791,11 +794,10 @@ export default function Profile() {
                 <p className="text-slate-400 text-xs mt-0.5 font-medium">Danh sách các gói cước dịch vụ đang kích hoạt trên thuê bao di động.</p>
               </div>
 
-              {(currentUser?.activePackages || []).length > 0 ? (
+              {(activeSubscriptions || []).length > 0 ? (
                 <div className="space-y-4">
-                  {(currentUser?.activePackages || []).map((ap) => {
-                    const pkgDetail = packages.find(p => p.id === ap.packageId);
-                    if (!pkgDetail) return null;
+                  {(activeSubscriptions || []).map((ap) => {
+                    const cycleText = ap.cycle === 'DAY' ? '1 ngày' : ap.cycle === 'YEAR' ? '365 ngày' : '30 ngày';
                     return (
                       <div
                         key={ap.packageId}
@@ -803,24 +805,25 @@ export default function Profile() {
                       >
                         <div className="space-y-1.5">
                           <div className="flex items-center space-x-2">
-                            <h4 className="text-base font-extrabold text-slate-900">{pkgDetail.ten}</h4>
+                            <h4 className="text-base font-extrabold text-slate-900">{ap.packageName || ap.packageId.toUpperCase()}</h4>
                             <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                               Đang hoạt động
                             </span>
                           </div>
-                          <p className="text-slate-500 text-xs max-w-lg font-medium">{pkgDetail.uudaitrong}</p>
+                          <p className="text-slate-555 text-xs max-w-lg font-medium">{ap.description}</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                             <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{new Date(ap.activatedAt).toLocaleDateString('vi-VN')}</span></p>
                             <p>Hết hạn: <span className="text-slate-800 font-extrabold">{new Date(ap.expiresAt).toLocaleDateString('vi-VN')}</span></p>
-                            <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{pkgDetail.chu_ky_ngay} ngày</span></p>
-                            {pkgDetail.is_auto_renew !== false && (
+                            <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{cycleText}</span></p>
+                            {ap.autoRenew !== false && (
                               <p>Gia hạn: <span className="text-slate-850 font-extrabold text-primary">Tự động</span></p>
                             )}
                           </div>
                         </div>
 
-                        {pkgDetail.is_auto_renew !== false && (
+                        {ap.autoRenew !== false && (
                           <button
+                            type="button"
                             onClick={() => handleUnsubscribeClick(ap.packageId)}
                             className="shrink-0 text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
                           >

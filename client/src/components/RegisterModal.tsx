@@ -19,7 +19,8 @@ export default function RegisterModal({
   onSuccess,
   onError
 }: RegisterModalProps) {
-  const { currentUser, registerSubscription, checkSubscription } = useAuthStore();
+  const { currentUser, registerSubscription, checkSubscription, activeSubscriptions } = useAuthStore();
+  console.log('REGISTER_MODAL_RENDER', activeSubscriptions);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkResult, setCheckResult] = useState<{

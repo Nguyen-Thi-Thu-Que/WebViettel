@@ -64,8 +64,13 @@ module.exports = {
         if (pkg) {
           mappedActive.push({
             packageId: pkg.ma_goi.toLowerCase(),
+            packageName: pkg.ten,
+            description: pkg.uudaitrong || pkg.ten,
+            cycle: sub.cycle,
             activatedAt: typeof sub.activatedAt === 'string' ? sub.activatedAt : sub.activatedAt.toISOString(),
-            expiresAt: typeof sub.expiresAt === 'string' ? sub.expiresAt : sub.expiresAt.toISOString()
+            expiresAt: typeof sub.expiresAt === 'string' ? sub.expiresAt : sub.expiresAt.toISOString(),
+            autoRenew: sub.autoRenew !== undefined ? sub.autoRenew : true,
+            status: sub.status
           });
         }
       }

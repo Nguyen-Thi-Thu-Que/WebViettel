@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useAuthStore } from './store';
 import ClientLayout from './layouts/ClientLayout';
 import AuthLayout from './layouts/AuthLayout';
 import AdminLayout from './layouts/AdminLayout';
@@ -33,6 +34,16 @@ const PageLoader = () => (
 );
 
 export default function App() {
+  const { fetchMe, authChecked } = useAuthStore();
+
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
+
+  if (!authChecked) {
+    return <PageLoader />;
+  }
+
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
