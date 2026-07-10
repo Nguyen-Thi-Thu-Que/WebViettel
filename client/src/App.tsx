@@ -57,6 +57,11 @@ export default function App() {
             <Route path="compare" element={<Compare />} />
             <Route path="survey" element={<Survey />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="profile/deposit" element={<Profile />} />
+            <Route path="profile/subscriptions" element={<Profile />} />
+            <Route path="profile/subscription-history" element={<Profile />} />
+            <Route path="profile/history" element={<Profile />} />
+            <Route path="profile/change-password" element={<Profile />} />
           </Route>
 
           {/* Auth Routing */}

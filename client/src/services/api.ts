@@ -67,6 +67,7 @@ export function toVietnamesePackage(apiPkg: any): Package {
     numericId: apiPkg.numericId,
     dbId: apiPkg.dbId,
     is_auto_renew: apiPkg.is_auto_renew,
+    support_auto_renew: apiPkg.is_auto_renew !== undefined ? apiPkg.is_auto_renew : true,
     ten: apiPkg.name || '',
     dohot: apiPkg.isPopular ? 'Hot' : 'normal',
     phan_loai_goi: apiPkg.category === 'data' ? 'Data' : apiPkg.category === 'combo' ? 'Combo' : apiPkg.category === 'social' ? 'Social' : 'Thoại',
@@ -293,6 +294,34 @@ export const authApi = {
   unsubscribePackage: async (packageId: string): Promise<boolean> => {
     const response = await axiosInstance.delete<{ success: boolean }>(`/api/auth/unsubscribe/${packageId}`);
     return response.data.success;
+  },
+
+  toggleAutoRenew: async (subscriptionId: string, autoRenew: boolean): Promise<any> => {
+    console.log({
+      subscriptionId,
+      autoRenew
+    });
+    if (subscriptionId === undefined || subscriptionId === null || autoRenew === undefined) {
+      throw new Error("Invalid request parameters: subscriptionId or autoRenew is missing");
+    }
+    const response = await axiosInstance.post('/api/subscriptions/toggle-auto-renew', { subscriptionId, autoRenew });
+    return response.data;
+  },
+
+  cancelSubscription: async (subscriptionId: string): Promise<any> => {
+    console.log({
+      subscriptionId
+    });
+    if (subscriptionId === undefined || subscriptionId === null) {
+      throw new Error("Invalid request parameters: subscriptionId is missing");
+    }
+    const response = await axiosInstance.post('/api/subscriptions/cancel', { subscriptionId });
+    return response.data;
+  },
+
+  clearSubscriptionHistory: async (): Promise<any> => {
+    const response = await axiosInstance.delete('/api/subscriptions/history');
+    return response.data;
   },
 
   linkWallet: async (walletAddress: string): Promise<User> => {

@@ -1,15 +1,46 @@
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Shield, Check, Eye, EyeOff, Copy, ExternalLink } from 'lucide-react';
+import { User, CreditCard, History, Shield, Check, Eye, EyeOff, Copy, ExternalLink, Clock, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
 import { getBlockchainConfig } from '../services/web3Service';
 import type { Transaction } from '../types';
+
+// Format datetime in Asia/Ho_Chi_Minh timezone
+const formatDateTime = (dateInput: string | Date | number): string => {
+  if (!dateInput) return '—';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '—';
+  
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour12: false
+  };
+  
+  const formatter = new Intl.DateTimeFormat('vi-VN', options);
+  const parts = formatter.formatToParts(d);
+  
+  let hour = '00', minute = '00', day = '01', month = '01', year = '2026';
+  for (const part of parts) {
+    if (part.type === 'hour') hour = part.value;
+    else if (part.type === 'minute') minute = part.value;
+    else if (part.type === 'day') day = part.value;
+    else if (part.type === 'month') month = part.value;
+    else if (part.type === 'year') year = part.value;
+  }
+  
+  return `${hour}:${minute} - ${day}/${month}/${year}`;
+};
 
 // Schemas for forms
 const profileSchema = z.object({
@@ -31,9 +62,31 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, authChecked, transactions, unsubscribePackage, updateProfile, changePassword, depositBlockchain, activeSubscriptions, subscriptionHistory } = useAuthStore();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'info';
+  const location = useLocation();
+  const { 
+    currentUser, 
+    authChecked, 
+    transactions, 
+    updateProfile, 
+    changePassword, 
+    depositBlockchain, 
+    activeSubscriptions, 
+    subscriptionHistory,
+    cancelSubscription,
+    toggleAutoRenew,
+    clearSubscriptionHistory
+  } = useAuthStore();
+  
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.endsWith('/deposit')) return 'topup';
+    if (path.endsWith('/subscriptions')) return 'subscriptions';
+    if (path.endsWith('/subscription-history')) return 'subscription-history';
+    if (path.endsWith('/history')) return 'history';
+    if (path.endsWith('/change-password')) return 'change-password';
+    return 'info';
+  };
+  const activeTab = getActiveTab();
 
   console.log(
     'PROFILE_RENDER',
@@ -55,6 +108,8 @@ export default function Profile() {
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
+  const [cancellingAutoRenewPkgId, setCancellingAutoRenewPkgId] = useState<string | null>(null);
+  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
 
   // Show/Hide password states
   const [showOldPassword, setShowOldPassword] = useState(false);
@@ -64,7 +119,9 @@ export default function Profile() {
   // Submitting states to prevent double submits
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
-  const [isUnsubmitting, setIsUnsubmitting] = useState(false);
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+  const [isTogglingRenew, setIsTogglingRenew] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [selectedTxDetail, setSelectedTxDetail] = useState<Transaction | null>(null);
   const showDetailModal = !!selectedTxDetail;
 
@@ -206,8 +263,21 @@ export default function Profile() {
         console.warn('Gas estimation failed, using standard transaction gas limit', gasErr);
       }
 
-      const feeData = await provider.getFeeData();
-      const gasPrice = feeData.gasPrice || ethers.parseUnits('10', 'gwei');
+      let feeData = null;
+      let gasPrice = ethers.parseUnits('10', 'gwei');
+      try {
+        feeData = await provider.getFeeData();
+        gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('10', 'gwei');
+      } catch (feeErr) {
+        console.warn('Failed to get fee data, falling back to legacy gas price:', feeErr);
+        try {
+          const rawGasPrice = await provider.send('eth_gasPrice', []);
+          gasPrice = BigInt(rawGasPrice);
+        } catch (innerErr) {
+          console.warn('Fallback to static gas price of 10 gwei');
+        }
+      }
+
       const totalGasCost = gasEstimate * gasPrice;
       const totalRequired = valueWei + totalGasCost;
 
@@ -217,10 +287,30 @@ export default function Profile() {
         return;
       }
 
-      const txResponse = await signer.sendTransaction({
-        to: config.receiverWallet,
-        value: valueWei
-      });
+      let txResponse;
+      try {
+        if (feeData && feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+          txResponse = await signer.sendTransaction({
+            to: config.receiverWallet,
+            value: valueWei,
+            maxFeePerGas: feeData.maxFeePerGas,
+            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas
+          });
+        } else {
+          txResponse = await signer.sendTransaction({
+            to: config.receiverWallet,
+            value: valueWei,
+            gasPrice: gasPrice
+          });
+        }
+      } catch (txErr: any) {
+        console.warn('EIP-1559 transaction failed or maxPriorityFeePerGas unsupported, falling back to legacy transaction:', txErr);
+        txResponse = await signer.sendTransaction({
+          to: config.receiverWallet,
+          value: valueWei,
+          gasPrice: gasPrice
+        });
+      }
 
       showToast('success', 'Giao dịch đã được gửi lên Blockchain. Vui lòng chờ xác nhận...');
 
@@ -377,30 +467,81 @@ export default function Profile() {
 
 
 
-  const handleUnsubscribeClick = (pkgId: string) => {
-    setCancellingPkgId(pkgId);
+  const handleToggleAutoRenew = async (pkgId: string, autoRenewVal: boolean) => {
+    setIsTogglingRenew(true);
+    try {
+      const success = await toggleAutoRenew(pkgId, autoRenewVal);
+      if (success) {
+        showToast('success', autoRenewVal ? 'Đã bật gia hạn tự động.' : 'Đã tắt gia hạn tự động.');
+      } else {
+        showToast('error', 'Thay đổi gia hạn tự động thất bại.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', 'Thay đổi gia hạn tự động thất bại.');
+    } finally {
+      setIsTogglingRenew(false);
+      setCancellingAutoRenewPkgId(null);
+    }
   };
 
-  const handleConfirmUnsubscribe = async () => {
+  const handleConfirmToggleAutoRenewFalse = async () => {
+    if (cancellingAutoRenewPkgId) {
+      await handleToggleAutoRenew(cancellingAutoRenewPkgId, false);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
     if (cancellingPkgId) {
-      setIsUnsubmitting(true);
+      setIsCancellingSubscription(true);
       try {
-        await unsubscribePackage(cancellingPkgId);
-        showToast('success', 'Đã hủy gia hạn gói cước thành công.');
-      } catch (err) {
-        showToast('error', 'Hủy gia hạn gói cước thất bại.');
+        const success = await cancelSubscription(cancellingPkgId);
+        if (success) {
+          showToast('success', 'Đã hủy đăng ký gói cước thành công.');
+        } else {
+          showToast('error', 'Hủy đăng ký gói cước thất bại.');
+        }
+      } catch (err: any) {
+        console.error(err);
+        showToast('error', 'Hủy đăng ký gói cước thất bại.');
       } finally {
-        setIsUnsubmitting(false);
+        setIsCancellingSubscription(false);
         setCancellingPkgId(null);
       }
     }
   };
 
+  const handleConfirmClearHistory = async () => {
+    setIsClearingHistory(true);
+    try {
+      const success = await clearSubscriptionHistory();
+      if (success) {
+        showToast('success', 'Xóa lịch sử đăng ký thành công.');
+      } else {
+        showToast('error', 'Xóa lịch sử đăng ký thất bại.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', 'Xóa lịch sử đăng ký thất bại.');
+    } finally {
+      setIsClearingHistory(false);
+      setShowClearHistoryModal(false);
+    }
+  };
+
+  const getCancellingPkgCode = (subId: string | null) => {
+    if (!subId) return '';
+    const sub = activeSubscriptions.find(s => s.subscriptionId === subId);
+    return sub ? (sub.packageName || sub.packageId).toUpperCase() : '';
+  };
+
   const tabs = [
-    { id: 'info', label: 'Hồ sơ cá nhân', icon: User },
-    { id: 'topup', label: 'Nạp tiền tài khoản', icon: CreditCard },
-    { id: 'packages', label: 'Gói cước đang dùng', icon: Shield },
-    { id: 'history', label: 'Lịch sử giao dịch', icon: History }
+    { id: 'info', label: 'Hồ sơ cá nhân', icon: User, path: '/profile' },
+    { id: 'topup', label: 'Nạp tiền tài khoản', icon: CreditCard, path: '/profile/deposit' },
+    { id: 'subscriptions', label: 'Gói cước đang dùng', icon: Shield, path: '/profile/subscriptions' },
+    { id: 'subscription-history', label: 'Lịch sử đăng ký gói cước', icon: Clock, path: '/profile/subscription-history' },
+    { id: 'history', label: 'Lịch sử giao dịch', icon: History, path: '/profile/history' },
+    { id: 'change-password', label: 'Đổi mật khẩu', icon: KeyRound, path: '/profile/change-password' }
   ];
 
   // Breadcrumbs schema for Profile Page
@@ -462,7 +603,7 @@ export default function Profile() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setSearchParams({ tab: tab.id })}
+                  onClick={() => navigate(tab.path)}
                   className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left focus:outline-none cursor-pointer ${isSelected
                       ? 'bg-red-50/70 text-primary border-l-2 border-primary pl-4'
                       : 'text-slate-550 hover:bg-slate-50 hover:text-slate-950'
@@ -565,89 +706,6 @@ export default function Profile() {
                   </button>
                 </div>
               </form>
-
-              {/* Password Change Form */}
-              <div className="border-t border-slate-50 pt-6 space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Thay đổi mật khẩu</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Mật khẩu mới phải dài tối thiểu 6 ký tự để bảo mật.</p>
-                </div>
-
-                <form onSubmit={handlePasswordSubmit(onPasswordSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu hiện tại</label>
-                    <div className="relative flex items-center">
-                      <input
-                        type={showOldPassword ? 'text' : 'password'}
-                        placeholder="Nhập mật khẩu cũ..."
-                        {...registerPassword('oldPassword')}
-                        className={`w-full bg-slate-50 border ${passwordErrors.oldPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowOldPassword(!showOldPassword)}
-                        aria-label={showOldPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                      >
-                        {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {passwordErrors.oldPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.oldPassword.message}</p>}
-                  </div>
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu mới</label>
-                    <div className="relative flex items-center">
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        placeholder="Mật khẩu mới..."
-                        {...registerPassword('newPassword')}
-                        className={`w-full bg-slate-50 border ${passwordErrors.newPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {passwordErrors.newPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.newPassword.message}</p>}
-                  </div>
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nhập lại mật khẩu</label>
-                    <div className="relative flex items-center">
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Nhập lại mật khẩu mới..."
-                        {...registerPassword('confirmNewPassword')}
-                        className={`w-full bg-slate-50 border ${passwordErrors.confirmNewPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
-                          } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                        className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {passwordErrors.confirmNewPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.confirmNewPassword.message}</p>}
-                  </div>
-                  <div className="md:col-span-3 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={isSubmittingPassword}
-                      className="bg-white border border-slate-200 hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-600 hover:text-slate-900 px-5 py-2.5 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
-                    >
-                      {isSubmittingPassword ? 'Đang thay đổi...' : 'Thay đổi mật khẩu'}
-                    </button>
-                  </div>
-                </form>
-              </div>
             </div>
           )}
 
@@ -787,7 +845,7 @@ export default function Profile() {
           )}
 
           {/* Tab 3: Active Subscriptions List */}
-          {activeTab === 'packages' && (
+          {activeTab === 'subscriptions' && (
             <div className="space-y-6 text-left">
               <div className="border-b border-slate-50 pb-4">
                 <h2 className="text-lg font-bold text-slate-900">Gói cước đang sử dụng</h2>
@@ -803,33 +861,80 @@ export default function Profile() {
                         key={ap.packageId}
                         className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-4 relative overflow-hidden"
                       >
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 flex-1">
                           <div className="flex items-center space-x-2">
-                            <h4 className="text-base font-extrabold text-slate-900">{ap.packageName || ap.packageId.toUpperCase()}</h4>
+                            <h4 className="text-base font-extrabold text-slate-900 uppercase">{ap.packageName || ap.packageId.toUpperCase()}</h4>
                             <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                              Đang hoạt động
+                              ĐANG HOẠT ĐỘNG
                             </span>
                           </div>
                           <p className="text-slate-555 text-xs max-w-lg font-medium">{ap.description}</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{new Date(ap.activatedAt).toLocaleDateString('vi-VN')}</span></p>
-                            <p>Hết hạn: <span className="text-slate-800 font-extrabold">{new Date(ap.expiresAt).toLocaleDateString('vi-VN')}</span></p>
+                            <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.activatedAt)}</span></p>
+                            <p>Hết hạn: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.expiresAt)}</span></p>
                             <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{cycleText}</span></p>
-                            {ap.autoRenew !== false && (
-                              <p>Gia hạn: <span className="text-slate-850 font-extrabold text-primary">Tự động</span></p>
+                            {ap.support_auto_renew !== false && (
+                              ap.autoRenew !== false ? (
+                                <p>Gia hạn: <span className="text-primary font-extrabold">TỰ ĐỘNG</span></p>
+                              ) : (
+                                <p>Gia hạn: <span className="text-amber-600 font-extrabold">ĐÃ TẮT GIA HẠN TỰ ĐỘNG</span></p>
+                              )
                             )}
                           </div>
+                          {ap.support_auto_renew !== false && ap.autoRenew === false && (
+                            <div className="mt-2 flex items-center space-x-1.5 text-[10px] text-amber-600 font-bold uppercase tracking-wider">
+                              <span>🟠 Sẽ ngừng sử dụng khi hết hạn</span>
+                            </div>
+                          )}
                         </div>
 
-                        {ap.autoRenew !== false && (
-                          <button
-                            type="button"
-                            onClick={() => handleUnsubscribeClick(ap.packageId)}
-                            className="shrink-0 text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                          >
-                            Hủy gia hạn gói
-                          </button>
-                        )}
+                        <div className="flex flex-wrap gap-2 shrink-0 md:items-center">
+                          {ap.support_auto_renew !== false ? (
+                            ap.autoRenew !== false ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setCancellingAutoRenewPkgId(ap.subscriptionId)}
+                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                >
+                                  Hủy gia hạn
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                                  className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                >
+                                  Hủy đăng ký
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAutoRenew(ap.subscriptionId, true)}
+                                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                >
+                                  Gia hạn lại
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                                  className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                >
+                                  Hủy đăng ký
+                                </button>
+                              </>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                              className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                            >
+                                Hủy đăng ký
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -845,71 +950,189 @@ export default function Profile() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Lịch sử đăng ký gói cước (Sprint 7.3) */}
-              <div className="border-t border-slate-100 pt-6 mt-8 space-y-4">
+          {/* Tab 3.5: Subscription History */}
+          {activeTab === 'subscription-history' && (
+            <div className="space-y-6 text-left">
+              <div className="border-b border-slate-50 pb-4 flex justify-between items-center">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Lịch sử đăng ký gói cước</h3>
+                  <h2 className="text-lg font-bold text-slate-900">Lịch sử đăng ký gói cước</h2>
                   <p className="text-slate-400 text-xs mt-0.5 font-medium">Nhật ký toàn bộ các gói cước đã đăng ký trên hệ thống.</p>
                 </div>
-
-                {subscriptionHistory && subscriptionHistory.length > 0 ? (
-                  <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-505 font-bold uppercase tracking-wider">
-                          <th className="p-4">Tên gói</th>
-                          <th className="p-4">Ngày đăng ký</th>
-                          <th className="p-4">Ngày hết hạn</th>
-                          <th className="p-4">Chu kỳ</th>
-                          <th className="p-4">Trạng thái</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 text-slate-700 font-semibold">
-                        {subscriptionHistory.map((sub) => (
-                          <tr key={sub.subscriptionId || sub._id} className="hover:bg-slate-50/40 transition-colors">
-                            <td className="p-4 font-bold text-slate-900 uppercase">
-                              {sub.packageId}
-                            </td>
-                            <td className="p-4 text-slate-550">
-                              {new Date(sub.activatedAt).toLocaleDateString('vi-VN')}
-                            </td>
-                            <td className="p-4 text-slate-550">
-                              {new Date(sub.expiresAt).toLocaleDateString('vi-VN')}
-                            </td>
-                            <td className="p-4 text-slate-800">
-                              {sub.cycle === 'DAY' ? '1 ngày' : sub.cycle === 'YEAR' ? '365 ngày' : '30 ngày'}
-                            </td>
-                            <td className="p-4">
-                              {sub.status === 'ACTIVE' ? (
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                  Kích hoạt
-                                </span>
-                              ) : sub.status === 'REPLACED' ? (
-                                <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                  Bị thay thế
-                                </span>
-                              ) : sub.status === 'CANCELLED' ? (
-                                <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                  Đã hủy
-                                </span>
-                              ) : (
-                                <span className="bg-slate-50 text-slate-500 border border-slate-205 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                  Hết hạn
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-xl text-center">
-                    <p className="text-slate-450 text-xs font-semibold">Chưa có lịch sử đăng ký gói cước nào.</p>
-                  </div>
-                )}
+                {(() => {
+                  const historyList = (subscriptionHistory || []).filter(sub => {
+                    const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                    return sub.status === 'CANCELLED' || sub.status === 'EXPIRED' || sub.status === 'REPLACED' || isExpired;
+                  });
+                  if (historyList.length > 0) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setShowClearHistoryModal(true)}
+                        className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-150 px-4 py-2 rounded-xl transition-all focus:outline-none cursor-pointer"
+                      >
+                        Xóa lịch sử
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
+
+              {(() => {
+                const historyList = (subscriptionHistory || []).filter(sub => {
+                  const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                  return sub.status === 'CANCELLED' || sub.status === 'EXPIRED' || sub.status === 'REPLACED' || isExpired;
+                });
+
+                if (historyList.length > 0) {
+                  return (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-550 font-bold uppercase tracking-wider">
+                            <th className="p-4">Tên gói</th>
+                            <th className="p-4">Ngày đăng ký</th>
+                            <th className="p-4">Ngày hết hạn</th>
+                            <th className="p-4">Chu kỳ</th>
+                            <th className="p-4">Trạng thái</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 text-slate-700 font-semibold">
+                          {historyList.map((sub) => {
+                            const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                            const subStatus = isExpired ? 'EXPIRED' : sub.status;
+                            return (
+                              <tr key={sub.subscriptionId || sub._id} className="hover:bg-slate-50/40 transition-colors">
+                                <td className="p-4 font-bold text-slate-900 uppercase">
+                                  {sub.packageId}
+                                </td>
+                                <td className="p-4 text-slate-550">
+                                  {formatDateTime(sub.activatedAt)}
+                                </td>
+                                <td className="p-4 text-slate-550">
+                                  {formatDateTime(sub.expiresAt)}
+                                </td>
+                                <td className="p-4 text-slate-800">
+                                  {sub.cycle === 'DAY' ? '1 ngày' : sub.cycle === 'YEAR' ? '365 ngày' : '30 ngày'}
+                                </td>
+                                <td className="p-4">
+                                  {subStatus === 'REPLACED' ? (
+                                    <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                      Bị thay thế
+                                    </span>
+                                  ) : subStatus === 'CANCELLED' ? (
+                                    <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                      Đã hủy
+                                    </span>
+                                  ) : (
+                                    <span className="bg-slate-50 text-slate-500 border border-slate-205 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
+                                      Hết hạn
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="bg-slate-50 border border-slate-200/50 p-10 rounded-2xl text-center max-w-sm mx-auto space-y-4">
+                      <p className="text-slate-500 text-xs font-semibold">Bạn chưa có lịch sử đăng ký gói cước.</p>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          )}
+
+          {/* Tab 5: Change Password */}
+          {activeTab === 'change-password' && (
+            <div className="space-y-6 text-left">
+              <div className="border-b border-slate-50 pb-4">
+                <h2 className="text-lg font-bold text-slate-900">Thay đổi mật khẩu</h2>
+                <p className="text-slate-400 text-xs mt-0.5 font-medium">Mật khẩu mới phải dài tối thiểu 6 ký tự để bảo mật.</p>
+              </div>
+
+              <form onSubmit={handlePasswordSubmit(onPasswordSubmit)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu hiện tại</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showOldPassword ? 'text' : 'password'}
+                      placeholder="Nhập mật khẩu cũ..."
+                      {...registerPassword('oldPassword')}
+                      className={`w-full bg-slate-50 border ${passwordErrors.oldPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                        } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPassword(!showOldPassword)}
+                      aria-label={showOldPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    >
+                      {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.oldPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.oldPassword.message}</p>}
+                </div>
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mật khẩu mới</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      placeholder="Mật khẩu mới..."
+                      {...registerPassword('newPassword')}
+                      className={`w-full bg-slate-50 border ${passwordErrors.newPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                        } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.newPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.newPassword.message}</p>}
+                </div>
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nhập lại mật khẩu</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Nhập lại mật khẩu mới..."
+                      {...registerPassword('confirmNewPassword')}
+                      className={`w-full bg-slate-50 border ${passwordErrors.confirmNewPassword ? 'border-red-500' : 'border-slate-200 focus:border-primary/50 focus:bg-white'
+                        } rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {passwordErrors.confirmNewPassword && <p className="text-[9px] text-red-500 mt-0.5">{passwordErrors.confirmNewPassword.message}</p>}
+                </div>
+                <div className="md:col-span-3 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingPassword}
+                    className="bg-white border border-slate-200 hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-605 hover:text-slate-950 px-5 py-2.5 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer"
+                  >
+                    {isSubmittingPassword ? 'Đang thay đổi...' : 'Thay đổi mật khẩu'}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
@@ -1022,29 +1245,98 @@ export default function Profile() {
 
 
 
-      {/* Subscription Unsubscribe Confirmation Modal */}
+      {/* Subscription Full Cancel Confirmation Modal */}
       {cancellingPkgId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
-            <h4 className="text-base font-extrabold text-slate-900 mb-2">Hủy gói cước di động</h4>
+            <h4 className="text-base font-extrabold text-slate-900 mb-2">Hủy đăng ký gói cước</h4>
+            <div className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
+              <p>Bạn có chắc chắn muốn hủy gói cước <strong className="text-primary">{getCancellingPkgCode(cancellingPkgId)}</strong> không?</p>
+              <ul className="list-disc pl-4 mt-2 space-y-1">
+                <li>Gói sẽ ngừng sử dụng ngay lập tức.</li>
+                <li>Thao tác này không thể hoàn tác.</li>
+              </ul>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                disabled={isCancellingSubscription}
+                onClick={() => setCancellingPkgId(null)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50"
+              >
+                Quay lại
+              </button>
+              <button
+                disabled={isCancellingSubscription}
+                onClick={handleConfirmCancel}
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
+              >
+                {isCancellingSubscription ? 'Đang hủy...' : 'Xác nhận hủy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Unsubscribe Auto-Renew Confirmation Modal */}
+      {cancellingAutoRenewPkgId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
+            <h4 className="text-base font-extrabold text-slate-900 mb-2">Hủy gia hạn gói cước</h4>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold">
-              Bạn có chắc chắn muốn hủy gia hạn gói cước <strong className="text-primary">{cancellingPkgId.toUpperCase()}</strong>?
+              Bạn có chắc chắn muốn hủy gia hạn gói cước <strong className="text-primary">{getCancellingPkgCode(cancellingAutoRenewPkgId)}</strong>?
               Bạn vẫn tiếp tục sử dụng dung lượng còn lại cho đến hết thời hạn chu kỳ hiện tại.
             </p>
             <div className="flex space-x-3">
               <button
-                disabled={isUnsubmitting}
-                onClick={() => setCancellingPkgId(null)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50"
+                disabled={isTogglingRenew}
+                onClick={() => setCancellingAutoRenewPkgId(null)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50"
               >
                 Hủy bỏ
               </button>
               <button
-                disabled={isUnsubmitting}
-                onClick={handleConfirmUnsubscribe}
+                disabled={isTogglingRenew}
+                onClick={handleConfirmToggleAutoRenewFalse}
                 className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
               >
-                {isUnsubmitting ? 'Đang hủy...' : 'Đồng ý hủy'}
+                {isTogglingRenew ? 'Đang tắt...' : 'Đồng ý hủy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Subscription History Confirmation Modal */}
+      {showClearHistoryModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
+            <h4 className="text-base font-extrabold text-slate-900 mb-2">Xóa lịch sử đăng ký gói cước</h4>
+            <div className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold space-y-2">
+              <p>Bạn có chắc chắn muốn xóa lịch sử đăng ký gói cước không?</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-amber-700 text-[10px] space-y-1">
+                <p>Lưu ý:</p>
+                <ul className="list-disc pl-3 space-y-0.5">
+                  <li>Chỉ xóa lịch sử hiển thị.</li>
+                  <li>Không ảnh hưởng đến các gói đang hoạt động.</li>
+                  <li>Không ảnh hưởng đến số dư tài khoản.</li>
+                  <li>Không ảnh hưởng đến dữ liệu thanh toán.</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                disabled={isClearingHistory}
+                onClick={() => setShowClearHistoryModal(false)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                disabled={isClearingHistory}
+                onClick={handleConfirmClearHistory}
+                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
+              >
+                {isClearingHistory ? 'Đang xóa...' : 'Xóa lịch sử'}
               </button>
             </div>
           </div>

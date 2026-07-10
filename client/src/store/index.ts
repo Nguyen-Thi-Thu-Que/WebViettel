@@ -35,6 +35,9 @@ interface AuthState {
   subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
   registerSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
+  toggleAutoRenew: (subscriptionId: string, autoRenew: boolean) => Promise<boolean>;
+  cancelSubscription: (subscriptionId: string) => Promise<boolean>;
+  clearSubscriptionHistory: () => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
   activeSubscriptions: any[];
   subscriptionHistory: any[];
@@ -319,6 +322,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     } catch (err) {
       console.error("Error unsubscribing package:", err);
+      return false;
+    }
+  },
+
+  toggleAutoRenew: async (subscriptionId, autoRenew) => {
+    try {
+      await authApi.toggleAutoRenew(subscriptionId, autoRenew);
+      await get().fetchActiveSubscriptions().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => {});
+      return true;
+    } catch (err) {
+      console.error("Error toggling auto renew:", err);
+      return false;
+    }
+  },
+
+  cancelSubscription: async (subscriptionId) => {
+    try {
+      await authApi.cancelSubscription(subscriptionId);
+      await get().fetchActiveSubscriptions().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => {});
+      return true;
+    } catch (err) {
+      console.error("Error cancelling subscription:", err);
+      return false;
+    }
+  },
+
+  clearSubscriptionHistory: async () => {
+    try {
+      await authApi.clearSubscriptionHistory();
+      await get().fetchSubscriptionHistory().catch(() => {});
+      return true;
+    } catch (err) {
+      console.error("Error clearing subscription history:", err);
       return false;
     }
   },

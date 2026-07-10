@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
+const { ethers } = require('ethers');
 const Account = require('../models/Account');
 const UserSubscription = require('../models/UserSubscription');
 const Deposit = require('../models/Deposit');
 const Package = require('../models/Package');
+const subscriptionService = require('./subscriptionService');
 
 // Verification helper function via JSON-RPC
 const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, rpcUrl) => {
@@ -27,6 +29,17 @@ const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, r
 
     const tx = txResult.result;
 
+    console.log(
+      '========== BLOCKCHAIN TX =========='
+    );
+    console.log({
+      txHash,
+      txTo: tx.to,
+      txValue: tx.value,
+      expectedReceiver,
+      expectedEthAmount
+    });
+
     // 2. Validate receiver address (case insensitive comparison)
     if (!tx.to || tx.to.toLowerCase() !== expectedReceiver.toLowerCase()) {
       console.error(`Receiver mismatch. Tx to: ${tx.to}, Expected: ${expectedReceiver}`);
@@ -42,8 +55,20 @@ const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, r
     const allowedDiff = BigInt(Math.floor(0.0001 * 1e18));
     const diff = txValueWei > expectedValueWei ? txValueWei - expectedValueWei : expectedValueWei - txValueWei;
 
+    console.log(
+      '========== VALUE CHECK =========='
+    );
+    console.log({
+      txValueWei:
+        txValueWei.toString(),
+      expectedValueWei:
+        expectedValueWei.toString(),
+      diff:
+        diff.toString()
+    });
+
     if (diff > allowedDiff) {
-      console.error(`Value mismatch. Tx value Wei: ${tx.value} (${ethers.utils.formatEther(tx.value)} ETH), Expected Wei: ${expectedValueWei}`);
+      console.error(`Value mismatch. Tx value Wei: ${tx.value} (${ethers.formatEther(tx.value)} ETH), Expected Wei: ${expectedValueWei}`);
       return false;
     }
 
@@ -67,6 +92,11 @@ const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, r
 
     const receipt = receiptResult.result;
     
+    console.log(
+      '========== RECEIPT =========='
+    );
+    console.log(receipt);
+    
     // status '0x1' is success, '0x0' is failure
     if (receipt.status !== '0x1') {
       console.error("Blockchain transaction failed. Status:", receipt.status);
@@ -81,6 +111,127 @@ const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, r
 };
 
 const transactionService = {
+  // Process Blockchain deposit
+  depositBlockchain: async (userId, amount, network, txHash, walletAddress) => {
+    console.log('========== BLOCKCHAIN DEPOSIT START ==========');
+    console.log('INPUT:', {
+      userId,
+      amount,
+      network,
+      txHash,
+      walletAddress
+    });
+
+    if (
+      isNaN(Number(amount)) ||
+      Number(amount) <= 0 ||
+      !txHash?.trim() ||
+      !walletAddress?.trim() ||
+      !network?.trim()
+    ) {
+      throw new Error('Thiếu thông tin yêu cầu giao dịch nạp tiền blockchain.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      console.log('STEP 1');
+      const existingDep = await Deposit.findOne({
+        $or: [
+          { txHash: txHash },
+          { tx_hash: txHash }
+        ]
+      }).session(session);
+      console.log('existingDep:', existingDep);
+      if (existingDep) {
+        throw new Error('Giao dịch đã được xử lý.');
+      }
+
+      console.log('STEP 2');
+      const account = await Account.findOne({ user_id: userId }).session(session);
+      console.log('account:', {
+        user_id: account?.user_id,
+        balance: account?.balance
+      });
+      if (!account) {
+        throw new Error('Tài khoản không tồn tại.');
+      }
+
+      console.log('STEP 3');
+      const expectedReceiver = process.env.RECEIVER_WALLET;
+      console.log('expectedReceiver:', expectedReceiver);
+      if (!expectedReceiver) {
+        throw new Error('Chưa cấu hình địa chỉ ví nhận trên server.');
+      }
+
+      console.log('STEP 4');
+      const exchangeRate = parseFloat(process.env.ETH_EXCHANGE_RATE || '75000000');
+      console.log('exchangeRate:', exchangeRate);
+
+      console.log('STEP 5');
+      const expectedEthAmount = Number(amount) / exchangeRate;
+      console.log('expectedEthAmount:', expectedEthAmount);
+
+      console.log('STEP 6');
+      const rpcUrl = process.env.RPC_URL || 'https://sepolia.drpc.org';
+      console.log('rpcUrl:', rpcUrl);
+
+      console.log('STEP 7');
+      const isValidTx = await verifyBlockchainTx(txHash, expectedReceiver, expectedEthAmount, rpcUrl);
+      console.log('STEP 8 isValidTx:', isValidTx);
+
+      if (!isValidTx) {
+        throw new Error('Xác minh giao dịch blockchain thất bại. Vui lòng kiểm tra lại Hash hoặc số tiền.');
+      }
+
+      console.log('STEP 9');
+      const numericAmount = Number(amount);
+      account.balance += numericAmount;
+      console.log('balance after deposit:', account.balance);
+
+      console.log('STEP 10');
+      await account.save({ session });
+
+      const lastDep = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
+      const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
+
+      console.log('STEP 11');
+      console.log('Creating Deposit...');
+      await Deposit.create([{
+        deposit_id: nextId,
+        user_id: userId,
+        amountVND: numericAmount,
+        amountETH: expectedEthAmount.toString(),
+        exchangeRate: exchangeRate,
+        txHash: txHash,
+        walletAddress: walletAddress.toLowerCase(),
+        network: network,
+        status: 'success',
+
+        // legacy compatibility
+        amount: numericAmount,
+        fiat_equivalent: numericAmount,
+        tx_hash: txHash
+      }], { session });
+
+      console.log('STEP 12');
+      await session.commitTransaction();
+      console.log('========== BLOCKCHAIN DEPOSIT SUCCESS ==========');
+      return {
+        balance: account.balance
+      };
+    } catch (error) {
+      console.error('========== BLOCKCHAIN DEPOSIT ERROR ==========');
+      console.error(error);
+      console.error(error.stack);
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  },
+
   // 1. Process Virtual deposit
   depositFiat: async (userId, amount) => {
     const session = await mongoose.startSession();
@@ -100,20 +251,31 @@ const transactionService = {
       const lastDep = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
       const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
 
+      const exchangeRate = parseFloat(process.env.ETH_EXCHANGE_RATE || '75000000');
+      const virtualHash = `virtual_fiat_dep_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+      const walletAddr = account.wallet_address || 'Virtual Wallet';
+
       await Deposit.create([{
         deposit_id: nextId,
         user_id: userId,
-        amountETH: 0,
-        fiat_equivalent: amount,
         amountVND: amount,
-        tx_hash: `virtual_fiat_dep_${Date.now()}_${Math.floor(Math.random()*1000)}`,
-        wallet_address: account.wallet_address || 'Virtual Wallet',
+        amountETH: '0',
+        exchangeRate: exchangeRate,
+        txHash: virtualHash,
+        walletAddress: walletAddr.toLowerCase(),
         network: 'VietQR',
-        status: 'success'
+        status: 'success',
+
+        // legacy compatibility
+        amount: amount,
+        fiat_equivalent: amount,
+        tx_hash: virtualHash
       }], { session });
 
       await session.commitTransaction();
-      return account.balance;
+      return {
+        balance: account.balance
+      };
     } catch (error) {
       await session.abortTransaction();
       throw error;
@@ -155,15 +317,13 @@ const transactionService = {
       }
 
       const activatedAt = new Date();
-      const cycleDays = parseInt(pkg.chu_ky_ngay) || 30;
-      const expiresAt = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000);
-
-      let cycle = 'MONTH';
-      if (cycleDays === 1) {
-        cycle = 'DAY';
-      } else if (cycleDays >= 360) {
-        cycle = 'YEAR';
-      }
+      const metadata = subscriptionService.getPkgMetadata(pkg);
+      const expiresAt = subscriptionService.calculateExpiryDate(
+        activatedAt,
+        metadata.duration,
+        metadata.cycle_type,
+        metadata.validity_mode
+      );
 
       // 1. Create UserSubscription
       await UserSubscription.create([{
@@ -171,8 +331,10 @@ const transactionService = {
         packageId: pkg.package_id,
         activatedAt,
         expiresAt,
-        cycle,
-        autoRenew: true,
+        cycle: metadata.cycle,
+        duration: metadata.duration,
+        cycleType: metadata.cycle_type,
+        autoRenew: metadata.support_auto_renew,
         status: 'ACTIVE'
       }], { session });
 

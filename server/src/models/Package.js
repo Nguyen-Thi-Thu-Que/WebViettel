@@ -41,7 +41,10 @@ const packageSchema = new mongoose.Schema({
   Nhom_Goi: { type: String },
   cycle_type: { type: String, default: '' },
   service_group: { type: String, default: '' },
-  registration_policy: { type: String, default: '' }
+  registration_policy: { type: String, default: '' },
+  duration: { type: Number },
+  support_auto_renew: { type: Boolean },
+  validity_mode: { type: String }
 }, { 
   collection: 'goi_cuoc', 
   timestamps: true 

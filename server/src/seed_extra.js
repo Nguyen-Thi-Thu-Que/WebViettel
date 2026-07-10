@@ -32,9 +32,9 @@ async function seedExtra() {
     }
 
     // 2. Clear existing collections
-    console.log("Cleaning accounts, subscriptions, and deposits collections...");
+    console.log("Cleaning accounts, user_subscriptions, and deposits collections...");
     await db.collection('accounts').deleteMany({});
-    await db.collection('subscriptions').deleteMany({});
+    await db.collection('user_subscriptions').deleteMany({});
     await db.collection('deposits').deleteMany({});
 
     // 3. Seed accounts (2 customers, 1 admin)
@@ -81,7 +81,7 @@ async function seedExtra() {
     console.log("Successfully seeded 3 accounts (2 user, 1 admin).");
 
     // 4. Seed 15 Subscriptions
-    console.log("Seeding subscriptions collection...");
+    console.log("Seeding user_subscriptions collection...");
     const subscriptionsData = [];
     for (let i = 1; i <= 15; i++) {
       const userId = (i % 2) === 1 ? 1 : 2;
@@ -91,17 +91,19 @@ async function seedExtra() {
       const expiredDate = new Date(registeredDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       subscriptionsData.push({
-        subscription_id: i,
-        user_id: userId,
-        package_id: packageId,
-        registered_at: registeredDate.toISOString(),
-        expired_at: expiredDate.toISOString(),
-        is_auto_renew: i % 3 !== 0,
-        status: expiredDate.getTime() < Date.now() ? "expired" : "active"
+        userId: userId,
+        packageId: packageId,
+        registeredAt: registeredDate,
+        activatedAt: registeredDate,
+        startedAt: registeredDate,
+        expiresAt: expiredDate,
+        status: expiredDate.getTime() < Date.now() ? "EXPIRED" : "ACTIVE",
+        autoRenew: i % 3 !== 0,
+        cycle: 'MONTH'
       });
     }
-    await db.collection('subscriptions').insertMany(subscriptionsData);
-    console.log("Successfully seeded 15 subscriptions.");
+    await db.collection('user_subscriptions').insertMany(subscriptionsData);
+    console.log("Successfully seeded 15 user_subscriptions.");
 
     // 5. Seed 15 Deposits
     console.log("Seeding deposits collection...");

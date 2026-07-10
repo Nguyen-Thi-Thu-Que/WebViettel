@@ -45,6 +45,12 @@ const userSubscriptionSchema = new mongoose.Schema({
     enum: ['DAY', 'MONTH', 'YEAR'],
     required: true
   },
+  duration: {
+    type: Number
+  },
+  cycleType: {
+    type: String
+  },
   cancelledAt: {
     type: Date,
     default: null

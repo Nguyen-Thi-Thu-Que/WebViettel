@@ -63,6 +63,7 @@ module.exports = {
         const pkg = await Package.findOne({ package_id: sub.packageId });
         if (pkg) {
           mappedActive.push({
+            subscriptionId: sub._id,
             packageId: pkg.ma_goi.toLowerCase(),
             packageName: pkg.ten,
             description: pkg.uudaitrong || pkg.ten,
@@ -70,6 +71,7 @@ module.exports = {
             activatedAt: typeof sub.activatedAt === 'string' ? sub.activatedAt : sub.activatedAt.toISOString(),
             expiresAt: typeof sub.expiresAt === 'string' ? sub.expiresAt : sub.expiresAt.toISOString(),
             autoRenew: sub.autoRenew !== undefined ? sub.autoRenew : true,
+            support_auto_renew: pkg.support_auto_renew !== undefined ? pkg.support_auto_renew : (pkg.is_auto_renew !== undefined ? pkg.is_auto_renew : true),
             status: sub.status
           });
         }
@@ -131,17 +133,59 @@ module.exports = {
 
   toggleAutoRenew: async (req, res, next) => {
     try {
-      res.status(501).json({ message: 'Chức năng bật/tắt tự động gia hạn chưa được triển khai.' });
+      const userId = req.user.user_id;
+      const { subscriptionId, autoRenew } = req.body;
+
+      if (!subscriptionId || autoRenew === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request payload'
+        });
+      }
+
+      const updatedSub = await subscriptionService.updateAutoRenew(userId, subscriptionId, autoRenew);
+      res.status(200).json({
+        success: true,
+        message: autoRenew ? 'Bật tự động gia hạn thành công!' : 'Tắt tự động gia hạn thành công!',
+        data: updatedSub
+      });
     } catch (err) {
-      next(err);
+      res.status(400).json({ success: false, message: err.message });
     }
   },
 
   cancel: async (req, res, next) => {
     try {
-      res.status(501).json({ message: 'Chức năng hủy gói chưa được triển khai.' });
+      const userId = req.user.user_id;
+      const { subscriptionId } = req.body;
+
+      if (!subscriptionId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request payload'
+        });
+      }
+
+      await subscriptionService.cancelSubscription(userId, subscriptionId);
+      res.status(200).json({
+        success: true,
+        message: 'Hủy đăng ký gói cước thành công!'
+      });
     } catch (err) {
-      next(err);
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
+  clearHistory: async (req, res, next) => {
+    try {
+      const userId = req.user.user_id;
+      await subscriptionService.clearSubscriptionHistory(userId);
+      res.status(200).json({
+        success: true,
+        message: 'Xóa lịch sử đăng ký gói cước thành công!'
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
     }
   }
 };

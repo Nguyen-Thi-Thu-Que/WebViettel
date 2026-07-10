@@ -2,29 +2,43 @@ const transactionService = require('../services/transactionService');
 
 const transactionController = {
   deposit: async (req, res, next) => {
+    console.log(req.body);
     try {
       const { amount, method, txHash, walletAddress, network } = req.body;
-      if (!amount) {
+      if (amount === undefined || amount === null || amount === '') {
+        console.error("Deposit Controller Error: Missing amount");
         return res.status(400).json({
           success: false,
           message: 'Số tiền nạp là bắt buộc.'
         });
       }
 
-      const result = await transactionService.deposit(
-        req.user.user_id,
-        amount,
-        network || method,
-        txHash,
-        walletAddress
-      );
+      let result;
+      if (txHash && walletAddress && network) {
+        console.log("Routing to blockchain deposit: transactionService.depositBlockchain");
+        result = await transactionService.depositBlockchain(
+          req.user.user_id,
+          amount,
+          network,
+          txHash,
+          walletAddress
+        );
+      } else {
+        console.log("Routing to fiat deposit: transactionService.depositFiat");
+        result = await transactionService.depositFiat(
+          req.user.user_id,
+          amount
+        );
+      }
+
       return res.status(200).json({
         success: true,
         message: `Nạp tiền thành công! Số dư mới là ${result.balance.toLocaleString()}đ.`,
         data: result
       });
     } catch (error) {
-      res.status(400).json({
+      console.error('DEPOSIT ERROR:', error);
+      return res.status(400).json({
         success: false,
         message: error.message
       });
