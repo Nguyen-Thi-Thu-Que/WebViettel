@@ -15,6 +15,8 @@ import SEO from '../components/SEO';
 import Breadcrumb from '../components/Breadcrumb';
 import { calculateSimilarity } from '../utils/similarity';
 import { canViewPackage } from '../utils/permission';
+import type { Package } from '../types';
+import RegisterModal from '../components/RegisterModal';
 
 function DetailSkeleton() {
   return (
@@ -79,6 +81,17 @@ export default function PackageDetail() {
     replaceSubscriptions?: any[];
     conflictSubscriptions?: any[];
   } | null>(null);
+  const [selectedRelatedPkg, setSelectedRelatedPkg] = useState<Package | null>(null);
+  const [isRelatedModalOpen, setIsRelatedModalOpen] = useState(false);
+
+  const handleSubscribeOpenForRelated = (rPkg: Package) => {
+    if (!currentUser) {
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
+      return;
+    }
+    setSelectedRelatedPkg(rPkg);
+    setIsRelatedModalOpen(true);
+  };
 
   // Auto scroll to top on router parameter change
   useEffect(() => {
@@ -372,7 +385,9 @@ export default function PackageDetail() {
 
       {/* Toast Notification */}
       {toastMsg && (
-        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-bold bg-white text-slate-800 border-l-primary`}>
+        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-bold bg-white text-slate-800 ${
+          toastMsg.type === 'success' ? 'border-l-emerald-500' : 'border-l-red-500'
+        }`}>
           {toastMsg.text}
         </div>
       )}
@@ -555,8 +570,7 @@ export default function PackageDetail() {
               <PackageCard
                 key={rPkg.id}
                 pkg={rPkg}
-                onSubscribeSuccess={(msg) => showToast('success', msg)}
-                onSubscribeError={(msg) => showToast('error', msg)}
+                onSubscribe={handleSubscribeOpenForRelated}
               />
             ))}
           </div>
@@ -690,6 +704,19 @@ export default function PackageDetail() {
             </div>
           </div>
         </div>
+      )}
+      {/* Related Package RegisterModal */}
+      {selectedRelatedPkg && (
+        <RegisterModal
+          isOpen={isRelatedModalOpen}
+          onClose={() => {
+            setSelectedRelatedPkg(null);
+            setIsRelatedModalOpen(false);
+          }}
+          pkg={selectedRelatedPkg}
+          onSuccess={(msg) => showToast('success', msg)}
+          onError={(msg) => showToast('error', msg)}
+        />
       )}
     </div>
   );

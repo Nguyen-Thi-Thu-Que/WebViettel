@@ -112,8 +112,7 @@ export default function Packages() {
 
   const handleSubscribeOpen = (pkg: Package) => {
     if (!currentUser) {
-      setToast({ type: 'error', text: 'Vui lòng đăng nhập để đăng ký gói cước.' });
-      setTimeout(() => setToast(null), 3000);
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
       return;
     }
     setSelectedPkg(pkg);

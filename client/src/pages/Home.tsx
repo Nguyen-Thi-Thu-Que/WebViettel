@@ -3,14 +3,32 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, MessageSquare, ArrowRight, Compass, ShieldCheck, Zap } from 'lucide-react';
 import { usePackageStore, useChatbotStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
+import RegisterModal from '../components/RegisterModal';
 import SEO from '../components/SEO';
+import type { Package } from '../types';
 
 export default function Home() {
   const { packages } = usePackageStore();
-  const { activeSubscriptions } = useAuthStore();
+  const { activeSubscriptions, currentUser } = useAuthStore();
   console.log('HOME_RENDER', activeSubscriptions);
   const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleSubscribeOpen = (pkg: Package) => {
+    if (!currentUser) {
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
+      return;
+    }
+    setSelectedPkg(pkg);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setSelectedPkg(null);
+    setIsModalOpen(false);
+  };
 
   const popularPackages = packages.filter(p => p.dohot !== 'normal').slice(0, 4);
 
@@ -188,8 +206,7 @@ export default function Home() {
             <PackageCard
               key={pkg.id}
               pkg={pkg}
-              onSubscribeSuccess={(msg) => showToast('success', msg)}
-              onSubscribeError={(msg) => showToast('error', msg)}
+              onSubscribe={handleSubscribeOpen}
             />
           ))}
         </div>
@@ -258,6 +275,17 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Subscription Modal overlay */}
+      {selectedPkg && (
+        <RegisterModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          pkg={selectedPkg}
+          onSuccess={(msg) => showToast('success', msg)}
+          onError={(msg) => showToast('error', msg)}
+        />
+      )}
     </div>
   );
 }

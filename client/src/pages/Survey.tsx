@@ -1,9 +1,11 @@
 import { Sparkles, Compass, ArrowLeft, ArrowRight, RefreshCw, Check } from 'lucide-react';
-import { useSurveyStore, usePackageStore } from '../store';
+import { useSurveyStore, usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
+import RegisterModal from '../components/RegisterModal';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SEO from '../components/SEO';
+import type { Package } from '../types';
 
 export default function Survey() {
   const { packages } = usePackageStore();
@@ -17,11 +19,28 @@ export default function Survey() {
     calculateRecommendations
   } = useSurveyStore();
 
+  const { currentUser } = useAuthStore();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
     setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSubscribeOpen = (pkg: Package) => {
+    if (!currentUser) {
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
+      return;
+    }
+    setSelectedPkg(pkg);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setSelectedPkg(null);
+    setIsModalOpen(false);
   };
 
   const steps = [
@@ -260,8 +279,7 @@ export default function Survey() {
                     <PackageCard
                       key={pkg.id}
                       pkg={pkg}
-                      onSubscribeSuccess={(msg) => showToast('success', msg)}
-                      onSubscribeError={(msg) => showToast('error', msg)}
+                      onSubscribe={handleSubscribeOpen}
                     />
                   ))}
                 </div>
@@ -302,6 +320,17 @@ export default function Survey() {
           </div>
         )}
       </div>
+
+      {/* Subscription Modal overlay */}
+      {selectedPkg && (
+        <RegisterModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          pkg={selectedPkg}
+          onSuccess={(msg) => showToast('success', msg)}
+          onError={(msg) => showToast('error', msg)}
+        />
+      )}
     </div>
   );
 }

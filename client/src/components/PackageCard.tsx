@@ -1,33 +1,20 @@
 import { ArrowRightLeft, Sparkles, Wifi, Phone, PhoneCall, MessageSquare, ArrowRight, Check, Gift, Globe } from 'lucide-react';
 import type { Package } from '../types';
-import { usePackageStore, useAuthStore } from '../store';
-import React, { useState } from 'react';
+import { usePackageStore } from '../store';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import RegisterModal from './RegisterModal';
 
 interface PackageCardProps {
   pkg: Package;
   onSubscribe?: (pkg: Package) => void;
-  onSubscribeSuccess?: (msg: string) => void;
-  onSubscribeError?: (msg: string) => void;
 }
 
 const PackageCard = React.memo(function PackageCard({
   pkg,
-  onSubscribe,
-  onSubscribeSuccess,
-  onSubscribeError
+  onSubscribe
 }: PackageCardProps) {
-  console.log("========== PACKAGECARD RECEIVED PROPS ==========");
-  console.log("Package card pkg:", pkg);
-  console.log("id =", pkg.id);
-  console.log("numericId =", (pkg as any).numericId);
-  console.log("dbId =", (pkg as any).dbId);
-
   const { addToCompare, compareList, removeFromCompare } = usePackageStore();
-  const { currentUser } = useAuthStore();
   const isInCompare = compareList.some((p) => p.id === pkg.id);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const isValid = (val: any) => {
     if (
@@ -54,22 +41,12 @@ const PackageCard = React.memo(function PackageCard({
   };
 
   const handleSubscribeClick = () => {
-    if (!currentUser) {
-      if (onSubscribeError) {
-        onSubscribeError('Vui lòng đăng nhập để đăng ký gói cước.');
-      }
-      return;
-    }
     if (onSubscribe) {
       onSubscribe(pkg);
-    } else {
-      setShowConfirm(true);
     }
   };
 
   const isHot = pkg.dohot === 'Hot';
-
-
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-350 p-4 sm:p-4.5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative text-xs font-semibold select-none text-left h-full min-h-[290px]">
@@ -196,17 +173,6 @@ const PackageCard = React.memo(function PackageCard({
           <ArrowRight className="w-3 h-3 ml-1 transition-transform group-hover/lnk:translate-x-0.5" />
         </Link>
       </div>
-
-      {/* Portal-rendered local fallback modal if parent did not provide page-level registration container */}
-      {!onSubscribe && showConfirm && (
-        <RegisterModal
-          isOpen={showConfirm}
-          pkg={pkg}
-          onClose={() => setShowConfirm(false)}
-          onSuccess={onSubscribeSuccess}
-          onError={onSubscribeError}
-        />
-      )}
     </div>
   );
 });
