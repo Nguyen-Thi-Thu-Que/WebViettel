@@ -12,6 +12,49 @@ interface RegisterModalProps {
   onError?: (msg: string) => void;
 }
 
+/**
+ * Chuyển reasonCode + conflictingPackage → thông báo văn bản thân thiện.
+ * Chỉ trả về string, không có button hay action nào.
+ */
+function resolveConflictText(
+  action: string,
+  reasonCode: string | undefined,
+  rawMessage: string,
+  conflictingPkg?: { ma_goi?: string; ten?: string; chu_ky_ngay?: string | number }
+): string {
+  const pkgLabel = conflictingPkg
+    ? [conflictingPkg.ma_goi || conflictingPkg.ten, conflictingPkg.chu_ky_ngay ? `${conflictingPkg.chu_ky_ngay} ngày` : '']
+        .filter(Boolean).join(' ')
+    : '';
+
+  switch (reasonCode) {
+    case 'DUPLICATE_LONG_TERM':
+      return 'Bạn đã đăng ký gói này. Gói tháng, gói quý và gói năm không hỗ trợ đăng ký nhiều lần cùng lúc.';
+
+    case 'LONG_TERM_CONFLICT':
+      return pkgLabel
+        ? `Bạn đang sử dụng gói ${pkgLabel}. Theo quy định, mỗi thuê bao chỉ được sử dụng một gói dài hạn tại một thời điểm. Vui lòng hủy gói hiện tại hoặc chờ hết hạn.`
+        : 'Thuê bao của bạn đang có một gói dài hạn khác đang hoạt động. Theo quy định, mỗi thuê bao chỉ được sử dụng một gói dài hạn tại một thời điểm. Vui lòng hủy gói hiện tại hoặc chờ hết hạn.';
+
+    case 'BASE_PACKAGE_REQUIRED':
+      return 'Gói này yêu cầu thuê bao đang sử dụng một gói Data hoặc Combo phù hợp. Vui lòng đăng ký gói Data trước.';
+
+    case 'REPLACE_REQUIRED':
+      return pkgLabel
+        ? `Bạn đang sử dụng gói ${pkgLabel}. Vui lòng hủy gói hiện tại trước khi đăng ký gói mới.`
+        : 'Vui lòng hủy gói hiện tại trước khi đăng ký gói mới.';
+
+    case 'SAME_SYSTEM_CONFLICT':
+      return 'Bạn đang sử dụng một gói có ưu đãi tương tự. Vui lòng hủy gói hiện tại hoặc chờ hết hạn trước khi đăng ký gói mới.';
+
+    default:
+      // Fallback: dùng message từ backend nếu có, hoặc text mặc định theo action
+      if (rawMessage && rawMessage.length > 0) return rawMessage;
+      if (action === 'REJECT') return 'Không thể đăng ký đồng thời với các gói đang sử dụng. Vui lòng hủy gói hiện tại trước khi đăng ký gói này.';
+      return rawMessage;
+  }
+}
+
 export default function RegisterModal({
   isOpen,
   pkg,
@@ -24,8 +67,14 @@ export default function RegisterModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkResult, setCheckResult] = useState<{
-    action: 'ALLOW' | 'REPLACE' | 'REJECT';
+    action: 'ALLOW' | 'REPLACE' | 'REJECT' | 'RENEW_SHORT';
     message: string;
+    reasonCode?: string;
+    conflictingPackage?: {
+      ma_goi?: string;
+      ten?: string;
+      chu_ky_ngay?: string | number;
+    };
     replaceSubscriptions?: any[];
     conflictSubscriptions?: any[];
   } | null>(null);
@@ -121,7 +170,7 @@ export default function RegisterModal({
       }
     } else {
       // Step 2: User confirmed check warnings, call register API
-      if (checkResult.action === 'ALLOW' || checkResult.action === 'REPLACE') {
+      if (checkResult.action === 'ALLOW' || checkResult.action === 'REPLACE' || checkResult.action === 'RENEW_SHORT') {
         setIsSubmitting(true);
         try {
           const res = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
@@ -216,7 +265,7 @@ export default function RegisterModal({
             </div>
           </div>
 
-          {/* Nhóm 3 - Cảnh báo Xung đột Gói cước (Sprint 7.3) */}
+          {/* Nhóm 3 - Cảnh báo Xung đột Gói cước */}
           {checkResult && (
             <div className={`p-4 rounded-xl border text-[11px] leading-relaxed font-semibold ${
               checkResult.action === 'REJECT'
@@ -226,9 +275,13 @@ export default function RegisterModal({
                   : 'bg-emerald-50 border-emerald-250 text-emerald-800'
             }`}>
               <p className="font-extrabold text-xs mb-1.5">
-                {checkResult.action === 'REJECT' ? '⚠️ Không thể đăng ký' : checkResult.action === 'REPLACE' ? '⚠️ Cảnh báo thay thế gói' : '✅ Đăng ký song song'}
+                {checkResult.action === 'REJECT'
+                  ? '⚠️ Không thể đăng ký'
+                  : checkResult.action === 'REPLACE'
+                    ? '⚠️ Cảnh báo thay thế gói'
+                    : '✅ Đăng ký song song'}
               </p>
-              
+
               {checkResult.action === 'ALLOW' && (
                 <p>
                   Gói cước này có thể sử dụng song song với các gói hiện tại.
@@ -236,7 +289,15 @@ export default function RegisterModal({
                   Bạn có muốn tiếp tục đăng ký không?
                 </p>
               )}
-              
+
+              {checkResult.action === 'RENEW_SHORT' && (
+                <p>
+                  Gói cước sẽ được gia hạn ngay lập tức. Thời gian và ưu đãi sẽ được tính lại từ đầu.
+                  <br />
+                  Bạn có muốn tiếp tục không?
+                </p>
+              )}
+
               {checkResult.action === 'REPLACE' && (
                 <div>
                   <p className="mb-2">Gói cước này sẽ thay thế các gói đang sử dụng.</p>
@@ -249,12 +310,17 @@ export default function RegisterModal({
                   <p className="mt-2 font-bold">Bạn có muốn tiếp tục không?</p>
                 </div>
               )}
-              
+
               {checkResult.action === 'REJECT' && (
                 <p>
-                  Không thể đăng ký đồng thời với các gói đang sử dụng.
-                  <br />
-                  Vui lòng hủy gói hiện tại trước khi đăng ký gói này.
+                  {resolveConflictText(
+                    checkResult.action,
+                    checkResult.reasonCode,
+                    checkResult.message,
+                    checkResult.conflictingPackage ||
+                      checkResult.conflictSubscriptions?.[0] ||
+                      checkResult.replaceSubscriptions?.[0]
+                  )}
                 </p>
               )}
             </div>

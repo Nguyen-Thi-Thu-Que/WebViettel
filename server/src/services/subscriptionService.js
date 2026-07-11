@@ -120,37 +120,82 @@ const validateBasePackage = async (activeSubs) => {
 };
 
 /**
- * BƯỚC 4 – Kiểm tra chồng LONG_TERM.
- * Nếu gói mới is_long_term và có bất kỳ gói active nào cũng is_long_term => REJECT.
+ * BƯỚC 4+5 – Kiểm tra xung đột theo benefit_group.
+ *
+ * Quy tắc:
+ *   - Khác benefit_group  → ALLOW ngay (ví dụ: FACEBOOK + GENERAL_DATA)
+ *   - Cùng benefit_group  → kiểm tra tiếp:
+ *       * Gói mới là ADDON_DATA (is_addon=true hoặc benefit_group=ADDON_DATA) → ALLOW
+ *       * Cùng hệ + cả hai dài ngày (duration >= 30) → REJECT
+ *       * Ngược lại → tiếp tục xuống bước 6 (registration_policy)
+ *
+ * Trả về:
+ *   { action, message, hasActive, conflictingPackage } | null
+ * null = chưa quyết định, cần tiếp tục bước 6.
  */
-const checkLongTermConflict = async (activeSubs, newPkg) => {
-  if (!newPkg.is_long_term) return null;
-  const activePkgIds = activeSubs.map(s => s.packageId);
-  const activePkgs = await Package.find({ package_id: { $in: activePkgIds } });
-  const conflictLong = activePkgs.find(p => p.is_long_term === true);
-  if (conflictLong) {
-    return {
-      action: 'REJECT',
-      message: `Bạn đang sử dụng gói dài hạn ${conflictLong.ma_goi}. Không thể đăng ký thêm gói dài hạn khác. Vui lòng hủy gói cũ trước.`,
-      hasActive: true
-    };
-  }
-  return null;
-};
+const checkBenefitGroupConflict = async (activeSubs, newPkg) => {
+  const newGroup = (newPkg.benefit_group || '').toUpperCase();
+  const newDuration = parseInt(newPkg.chu_ky_ngay || '30', 10);
+  const newIsAddon = newPkg.is_addon === true || newGroup === 'ADDON_DATA';
 
-/**
- * BƯỚC 5 – Kiểm tra allow_parallel_with.
- * Nếu BẤT KỲ active package nào cho phép chạy song song với system_type của gói mới => ALLOW.
- */
-const canRunParallel = async (activeSubs, newPkg) => {
-  const newSysType = (newPkg.system_type || '').toUpperCase();
-  if (!newSysType) return false;
   const activePkgIds = activeSubs.map(s => s.packageId);
   const activePkgs = await Package.find({ package_id: { $in: activePkgIds } });
-  return activePkgs.some(p => {
-    const allowList = (p.allow_parallel_with || []).map(t => t.toUpperCase());
-    return allowList.includes(newSysType);
-  });
+
+  // Nếu benefit_group chưa được set trên bất kỳ gói nào → bỏ qua bước này
+  const allEmpty = !newGroup && activePkgs.every(p => !(p.benefit_group || '').trim());
+  if (allEmpty) return null;
+
+  // Gói mới là ADDON_DATA → ALLOW ngay mà không cần kiểm tra hệ
+  if (newIsAddon) return null;
+
+  for (const activePkg of activePkgs) {
+    const activeGroup = (activePkg.benefit_group || '').toUpperCase();
+    const activeIsAddon = activePkg.is_addon === true || activeGroup === 'ADDON_DATA';
+
+    // Bỏ qua gói active là addon
+    if (activeIsAddon) continue;
+
+    // Nếu một trong hai chưa có benefit_group → bỏ qua cặp này
+    if (!newGroup || !activeGroup) continue;
+
+    if (newGroup !== activeGroup) {
+      // Khác hệ → tiếp tục vòng lặp, không REJECT vì cặp này OK
+      continue;
+    }
+
+    // Cùng hệ → kiểm tra có phải cả hai dài ngày không
+    const activeDuration = parseInt(activePkg.chu_ky_ngay || '30', 10);
+    const bothLongTerm = newDuration >= 30 && activeDuration >= 30;
+
+    if (bothLongTerm) {
+      const pkgLabel = `${activePkg.ma_goi} ${activeDuration} ngày`;
+      const groupLabel = {
+        FACEBOOK: 'Facebook',
+        YOUTUBE: 'YouTube',
+        TIKTOK: 'TikTok',
+        SPORT: 'thể thao',
+        MOVIE: 'xem phim',
+        GENERAL_DATA: 'Data',
+        VOICE_SMS: 'thoại / SMS',
+        COMBO: 'Combo'
+      }[newGroup] || newGroup;
+      return {
+        action: 'REJECT',
+        reasonCode: 'SAME_BENEFIT_GROUP',
+        message: `Bạn đang sử dụng gói ${pkgLabel}. Theo quy định, không thể đăng ký thêm một gói ${groupLabel} dài hạn khác. Vui lòng hủy gói hiện tại hoặc chờ hết hạn.`,
+        conflictingPackage: {
+          ma_goi: activePkg.ma_goi,
+          ten: activePkg.ten,
+          chu_ky_ngay: activePkg.chu_ky_ngay
+        },
+        hasActive: true
+      };
+    }
+    // Cùng hệ nhưng gói mới ngắn ngày → ALLOW (ví dụ: 3FB30 + FB15K)
+  }
+
+  // Tất cả cặp đều OK hoặc khác hệ → chưa quyết định, sang bước 6
+  return null;
 };
 
 // ─── Utility functions used by conflict helpers and registerSubscription ─────
@@ -303,9 +348,8 @@ const subscriptionService = {
    *   1. Trùng chính gói
    *   2. requires_base_package
    *   3. is_addon → ALLOW ngay
-   *   4. is_long_term chồng nhau → REJECT
-   *   5. allow_parallel_with → ALLOW ngay
-   *   6. registration_policy cũ (REPLACE / REJECT)
+   *   4. Khác benefit_group → ALLOW | Cùng benefit_group + dài ngày → REJECT
+   *   5. registration_policy cũ (REPLACE / REJECT)
    */
   checkSubscriptionConflict: async (userId, packageId) => {
     const account = await Account.findOne({ user_id: userId });
@@ -353,17 +397,12 @@ const subscriptionService = {
       return { action: 'ALLOW', message: 'Gói tiện ích bổ sung có thể sử dụng song song.', hasActive: true };
     }
 
-    // ── BƯỚC 4: Chồng LONG_TERM ──────────────────────────────────────────
-    const longTermResult = await checkLongTermConflict(activeSubs, pkg);
-    if (longTermResult) return longTermResult;
+    // ── BƯỚC 4: benefit_group conflict check ─────────────────────────────
+    // Khác hệ → ALLOW | Cùng hệ + dài ngày → REJECT | Cùng hệ + ngắn ngày → pass qua
+    const benefitGroupResult = await checkBenefitGroupConflict(activeSubs, pkg);
+    if (benefitGroupResult) return benefitGroupResult;
 
-    // ── BƯỚC 5: allow_parallel_with ──────────────────────────────────────
-    const parallel = await canRunParallel(activeSubs, pkg);
-    if (parallel) {
-      return { action: 'ALLOW', message: 'Gói cước có thể sử dụng song song.', hasActive: true };
-    }
-
-    // ── BƯỚC 6: registration_policy cũ ───────────────────────────────────
+    // ── BƯỚC 5: registration_policy cũ ───────────────────────────────────
     return await applyRegistrationPolicy(activeSubs, pkg, newMetadata);
   },
 

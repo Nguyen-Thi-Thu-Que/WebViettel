@@ -61,7 +61,11 @@ const packageSchema = new mongoose.Schema({
   requires_base_package: { type: Boolean, default: false },
 
   // Danh sách system_type được phép chạy song song với gói này
-  allow_parallel_with: { type: [String], default: [] }
+  allow_parallel_with: { type: [String], default: [] },
+
+  // Hệ ưu đãi của gói — dùng để kiểm tra xung đột cùng hệ
+  // Giá trị: GENERAL_DATA | FACEBOOK | YOUTUBE | TIKTOK | SPORT | MOVIE | VOICE_SMS | COMBO | ADDON_DATA
+  benefit_group: { type: String, default: '' }
 }, { 
   collection: 'goi_cuoc', 
   timestamps: true 
