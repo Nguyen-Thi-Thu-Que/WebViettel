@@ -44,7 +44,24 @@ const packageSchema = new mongoose.Schema({
   registration_policy: { type: String, default: '' },
   duration: { type: Number },
   support_auto_renew: { type: Boolean },
-  validity_mode: { type: String }
+  validity_mode: { type: String },
+
+  // --- Subscription Conflict Engine fields ---
+  // Phân loại hệ thống để kiểm tra xung đột song song
+  // Ví dụ: 'DATA_BASE', 'DATA_UTILITY', 'COMBO', 'VOICE_SMS', 'ADDON'
+  system_type: { type: String, default: '' },
+
+  // Gói tiện ích bổ sung — luôn ALLOW song song với mọi gói khác
+  is_addon: { type: Boolean, default: false },
+
+  // Gói dài hạn — không cho phép chồng với is_long_term khác
+  is_long_term: { type: Boolean, default: false },
+
+  // Gói này yêu cầu user đang có gói DATA_BASE hoặc COMBO active
+  requires_base_package: { type: Boolean, default: false },
+
+  // Danh sách system_type được phép chạy song song với gói này
+  allow_parallel_with: { type: [String], default: [] }
 }, { 
   collection: 'goi_cuoc', 
   timestamps: true 
