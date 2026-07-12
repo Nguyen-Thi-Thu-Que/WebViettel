@@ -868,7 +868,6 @@ export default function Profile() {
                               ĐANG HOẠT ĐỘNG
                             </span>
                           </div>
-                          <p className="text-slate-555 text-xs max-w-lg font-medium">{ap.description}</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                             <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.activatedAt)}</span></p>
                             <p>Hết hạn: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.expiresAt)}</span></p>
