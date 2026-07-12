@@ -68,19 +68,13 @@ export default function PackageDetail() {
     compareList,
     removeFromCompare
   } = usePackageStore();
-  const { currentUser, registerSubscription, checkSubscription, activeSubscriptions } = useAuthStore();
+  const { currentUser, activeSubscriptions } = useAuthStore();
   console.log('PACKAGE_DETAIL_RENDER', activeSubscriptions);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const [checkLoading, setCheckLoading] = useState(false);
-  const [checkResult, setCheckResult] = useState<{
-    action: 'ALLOW' | 'REPLACE' | 'REJECT';
-    message: string;
-    replaceSubscriptions?: any[];
-    conflictSubscriptions?: any[];
-  } | null>(null);
+  // Modal state for main package
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modal state for related packages
   const [selectedRelatedPkg, setSelectedRelatedPkg] = useState<Package | null>(null);
   const [isRelatedModalOpen, setIsRelatedModalOpen] = useState(false);
 
@@ -250,80 +244,7 @@ export default function PackageDetail() {
       showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
       return;
     }
-    setCheckResult(null);
-    setCheckLoading(false);
-    setShowConfirm(true);
-  };
-
-  const handleConfirmSubscribe = async () => {
-    if (currentUser && currentUser.balance < pkg.gia) {
-      showToast('error', 'Số dư tài khoản không đủ để đăng ký gói cước này.');
-      setShowConfirm(false);
-      return;
-    }
-
-    let cycle: 'DAY' | 'MONTH' | 'YEAR' = 'MONTH';
-    const dayCycle = parseInt(pkg.chu_ky_ngay || '30', 10);
-    if (dayCycle === 1) {
-      cycle = 'DAY';
-    } else if (dayCycle >= 360) {
-      cycle = 'YEAR';
-    }
-
-    if (!checkResult) {
-      setCheckLoading(true);
-      try {
-        const res = await checkSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
-        if (res.hasActive === false) {
-          // If no active subscriptions, register immediately!
-          setIsSubmitting(true);
-          try {
-            const regRes = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
-            setShowConfirm(false);
-            if (regRes.success) {
-              showToast('success', regRes.message);
-            } else {
-              showToast('error', regRes.message);
-            }
-          } catch (err: any) {
-            setShowConfirm(false);
-            showToast('error', err.message || 'Lỗi đăng ký gói cước.');
-          } finally {
-            setIsSubmitting(false);
-          }
-        } else {
-          setCheckResult(res);
-        }
-      } catch (err: any) {
-        showToast('error', err.message || 'Lỗi kiểm tra xung đột gói cước.');
-        setShowConfirm(false);
-      } finally {
-        setCheckLoading(false);
-      }
-    } else {
-      if (checkResult.action === 'ALLOW' || checkResult.action === 'REPLACE') {
-        setIsSubmitting(true);
-        try {
-          const res = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
-          setShowConfirm(false);
-          if (res.success) {
-            showToast('success', res.message);
-          } else {
-            showToast('error', res.message);
-          }
-        } catch (err: any) {
-          setShowConfirm(false);
-          showToast('error', err.message || 'Lỗi đăng ký gói cước.');
-        } finally {
-          setIsSubmitting(false);
-        }
-      }
-    }
-  };
-
-  const getCycleLabel = (cycleDays: string) => {
-    if (!cycleDays) return '—';
-    return cycleDays.includes('ngày') ? cycleDays : `${cycleDays} ngày`;
+    setIsModalOpen(true);
   };
 
   // Find related packages sorted by similarity score + fallback to do_uu_tien
@@ -577,134 +498,15 @@ export default function PackageDetail() {
         </section>
       )}
 
-      {/* Subscription Confirmation Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left space-y-5">
-            <h4 className="text-base font-extrabold text-slate-900 border-b border-slate-50 pb-2">Xác nhận đăng ký</h4>
-            
-            {/* Nhóm 1 – Thông tin gói cước */}
-            <div className="space-y-2">
-              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thông tin gói cước</h5>
-              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-semibold">Tên gói cước:</span>
-                  <span className="font-extrabold text-slate-900">{pkg.ten} ({pkg.ma_goi})</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-semibold">Giá gói:</span>
-                  <span className="font-extrabold text-slate-900">{pkg.gia.toLocaleString()} VNĐ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-semibold">Chu kỳ sử dụng:</span>
-                  <span className="font-extrabold text-slate-900">{getCycleLabel(pkg.chu_ky_ngay)}</span>
-                </div>
-              </div>
-            </div>
+      {/* Main Package RegisterModal */}
+      <RegisterModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        pkg={pkg}
+        onSuccess={(msg) => showToast('success', msg)}
+        onError={(msg) => showToast('error', msg)}
+      />
 
-            {/* Nhóm 2 – Thanh toán */}
-            <div className="space-y-2">
-              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thanh toán</h5>
-              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-semibold">Phương thức:</span>
-                  <span className="font-bold text-slate-900">Số dư tài khoản</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-semibold">Số dư hiện tại:</span>
-                  <span className="font-bold text-slate-900">{(currentUser?.balance || 0).toLocaleString()} VNĐ</span>
-                </div>
-                {currentUser && currentUser.balance >= pkg.gia ? (
-                  <div className="flex justify-between border-t border-slate-100/50 pt-1.5 mt-1.5">
-                    <span className="text-slate-500 font-semibold">Số dư dự kiến:</span>
-                    <span className="font-bold text-emerald-600">{(currentUser.balance - pkg.gia).toLocaleString()} VNĐ</span>
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-red-650 bg-red-50/60 border border-red-100 rounded-lg p-2 leading-relaxed font-semibold">
-                    Số dư hiện tại có thể không đủ để đăng ký gói cước này. Hệ thống sẽ kiểm tra lại khi bạn xác nhận.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Nhóm 3 - Cảnh báo Xung đột Gói cước (Sprint 7.3) */}
-            {checkResult && (
-              <div className={`p-4 rounded-xl border text-[11px] leading-relaxed font-semibold ${
-                checkResult.action === 'REJECT'
-                  ? 'bg-red-50 border-red-200 text-red-700'
-                  : checkResult.action === 'REPLACE'
-                    ? 'bg-amber-50 border-amber-200 text-amber-800'
-                    : 'bg-emerald-50 border-emerald-250 text-emerald-800'
-              }`}>
-                <p className="font-extrabold text-xs mb-1.5">
-                  {checkResult.action === 'REJECT' ? '⚠️ Không thể đăng ký' : checkResult.action === 'REPLACE' ? '⚠️ Cảnh báo thay thế gói' : '✅ Đăng ký song song'}
-                </p>
-                
-                {checkResult.action === 'ALLOW' && (
-                  <p>
-                    Gói cước này có thể sử dụng song song với các gói hiện tại.
-                    <br />
-                    Bạn có muốn tiếp tục đăng ký không?
-                  </p>
-                )}
-                
-                {checkResult.action === 'REPLACE' && (
-                  <div>
-                    <p className="mb-2">Gói cước này sẽ thay thế các gói đang sử dụng.</p>
-                    <p className="font-extrabold mb-1">Khi tiếp tục:</p>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      <li>Các gói hiện tại sẽ bị hủy ngay lập tức.</li>
-                      <li>Quyền lợi còn lại sẽ kết thúc.</li>
-                      <li>Gói mới sẽ được kích hoạt.</li>
-                    </ul>
-                    <p className="mt-2 font-bold">Bạn có muốn tiếp tục không?</p>
-                  </div>
-                )}
-                
-                {checkResult.action === 'REJECT' && (
-                  <p>
-                    Không thể đăng ký đồng thời với các gói đang sử dụng.
-                    <br />
-                    Vui lòng hủy gói hiện tại trước khi đăng ký gói này.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Nhóm 4 – Lưu ý */}
-            {!checkResult && (
-              <div className="space-y-1.5">
-                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lưu ý</h5>
-                <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
-                  Sau khi xác nhận đăng ký, hệ thống sẽ tiến hành kiểm tra xung đột gói cước và trừ số dư trong tài khoản để kích hoạt gói mới.
-                </p>
-              </div>
-            )}
-
-            {/* Nút thao tác */}
-            <div className="flex space-x-3 pt-2">
-              <button
-                type="button"
-                disabled={isSubmitting || checkLoading}
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-605 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none cursor-pointer disabled:opacity-50"
-              >
-                {checkResult?.action === 'REJECT' ? 'Đóng' : 'Hủy'}
-              </button>
-              {(!checkResult || checkResult.action !== 'REJECT') && (
-                <button
-                  type="button"
-                  disabled={isSubmitting || checkLoading}
-                  onClick={handleConfirmSubscribe}
-                  className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50 flex items-center justify-center"
-                >
-                  {checkLoading ? 'Đang kiểm tra...' : isSubmitting ? 'Đang xử lý...' : checkResult ? 'Xác nhận' : 'Xác nhận đăng ký'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       {/* Related Package RegisterModal */}
       {selectedRelatedPkg && (
         <RegisterModal
