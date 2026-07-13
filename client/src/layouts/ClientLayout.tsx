@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import Chatbot from '../components/Chatbot';
 import CompareDrawer from '../components/CompareDrawer';
 
 export default function ClientLayout() {
@@ -12,7 +11,6 @@ export default function ClientLayout() {
         <Outlet />
       </main>
       <Footer />
-      <Chatbot />
       <CompareDrawer />
     </div>
   );

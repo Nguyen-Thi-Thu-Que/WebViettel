@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, MessageSquare, ArrowRight, Compass, ShieldCheck, Zap } from 'lucide-react';
-import { usePackageStore, useChatbotStore, useAuthStore } from '../store';
+import { usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
 import RegisterModal from '../components/RegisterModal';
 import SEO from '../components/SEO';
@@ -114,11 +114,17 @@ export default function Home() {
 
           <div className="flex flex-wrap items-center gap-3.5 pt-4">
             <Link
-              to="/survey"
+              to="/chatbot"
               className="bg-primary hover:bg-primary-hover text-white font-bold px-6 py-3.5 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 shadow-sm hover:shadow-md cursor-pointer"
             >
-              <span>Tìm gói cước phù hợp (Khảo sát)</span>
+              <span>Tư vấn AI cùng Viettel</span>
               <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/survey"
+              className="bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-6 py-3.5 rounded-xl text-xs font-bold transition-colors text-center"
+            >
+              Tìm gói cước phù hợp (Khảo sát)
             </Link>
             <Link
               to="/packages"
@@ -225,13 +231,13 @@ export default function Home() {
               Bạn có thắc mắc về gói cước, cách đăng ký hay cách hủy? Bắt đầu chat ngay với AI Chatbot để nhận phản hồi nhanh chóng 24/7.
             </p>
           </div>
-          <button
-            onClick={() => useChatbotStore.getState().setIsOpen(true)}
-            className="flex items-center space-x-1.5 text-xs text-primary font-bold hover:underline focus:outline-none cursor-pointer"
+          <Link
+            to="/chatbot"
+            className="flex items-center space-x-1.5 text-xs text-primary font-bold hover:underline"
           >
             <span>Bắt đầu Chat ngay</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          </Link>
         </div>
 
         {/* Wizard Survey CTA */}

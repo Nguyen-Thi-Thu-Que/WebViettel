@@ -1,20 +1,41 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, Trash2, ArrowRight } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, ArrowRight } from 'lucide-react';
 import { useChatbotStore } from '../store';
 import type { ChatMessage } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
+import aiAvatar from '../image/AI.png';
+
+const Markdown = ReactMarkdown as any;
+
+const getReactNodeText = (node: any): string => {
+  if (!node) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getReactNodeText).join('');
+  if (typeof node === 'object' && node.props && node.props.children) {
+    return getReactNodeText(node.props.children);
+  }
+  return '';
+};
 
 export default function Chatbot() {
   const { messages, isOpen, setIsOpen, sendMessage, clearHistory } = useChatbotStore();
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: 'smooth',
+    });
   };
 
   useEffect(() => {
@@ -39,9 +60,7 @@ export default function Chatbot() {
     setInputText('');
   };
 
-  const handleQuickQuestion = (question: string) => {
-    sendMessage(question);
-  };
+
 
   const handleActionClick = (action: Exclude<ChatMessage['suggestedAction'], undefined>) => {
     if (action.type === 'view_details') {
@@ -60,16 +79,8 @@ export default function Chatbot() {
     }
   };
 
-  const quickPrompts = [
-    'Gói data khủng',
-    'Xem YouTube & TikTok',
-    'Gói gọi thoại rẻ',
-    'Làm khảo sát nhu cầu'
-  ];
-
   return (
     <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end text-xs font-semibold">
-      {/* Expanded Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -77,19 +88,21 @@ export default function Chatbot() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 50 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="w-[360px] sm:w-[400px] h-[500px] bg-white/95 backdrop-blur-md border border-slate-100 shadow-2xl rounded-2xl flex flex-col mb-4 overflow-hidden z-50 text-left"
+            className="w-[92vw] sm:w-[380px] bg-white/95 backdrop-blur-md border border-slate-100 shadow-2xl rounded-2xl flex flex-col mb-4 overflow-hidden z-50 text-left"
+            style={{ minHeight: '400px', maxHeight: '75vh', height: '65vh' }}
           >
             {/* Header */}
-            <div className="bg-primary p-4 flex items-center justify-between text-white">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-                  <Bot className="w-5 h-5 text-white" />
-                </div>
+            <div className="bg-primary p-4 flex items-center justify-between text-white shadow-md">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={aiAvatar}
+                  alt="Viettel AI"
+                  className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-sm"
+                />
                 <div>
-                  <h4 className="text-sm font-bold">Trợ lý ảo Viettel AI</h4>
-                  <p className="text-[10px] text-white/75 flex items-center">
-                    <span className="w-1.5 h-1.5 bg-emerald-450 rounded-full mr-1.5 animate-pulse" />
-                    Sẵn sàng hỗ trợ bạn
+                  <h4 className="text-sm font-bold leading-tight">ViettelAI</h4>
+                  <p className="text-[10px] text-white/80 font-normal">
+                    Trợ lý tư vấn gói cước Viettel 24/7
                   </p>
                 </div>
               </div>
@@ -111,31 +124,99 @@ export default function Chatbot() {
             </div>
 
             {/* Messages Feed */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-slate-50/50">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-slate-50/50"
+            >
               {messages.map((msg) => (
-                <div
+                <motion.div
                   key={msg.id}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start space-x-2`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start gap-3`}
                 >
                   {msg.sender === 'bot' && (
-                    <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200/60 flex items-center justify-center shrink-0 mt-0.5">
-                      <Bot className="w-4 h-4 text-primary" />
-                    </div>
+                    <img
+                      src={aiAvatar}
+                      alt="AI Avatar"
+                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-100 shadow-sm"
+                    />
                   )}
-                  <div className="max-w-[75%] space-y-2">
+                  <div className="max-w-[85%] space-y-2">
                     <div
-                      className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm ${msg.sender === 'user'
-                          ? 'bg-primary text-white rounded-tr-none'
-                          : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
+                      className={`px-4 py-3 rounded-2xl text-xs leading-7 shadow-sm break-words ${msg.sender === 'user'
+                        ? 'bg-primary text-white rounded-tr-none whitespace-pre-wrap'
+                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
                         }`}
                     >
-                      {/* Render bold text helper */}
-                      {msg.text.split('**').map((part, i) =>
-                        i % 2 === 1 ? (
-                          <strong key={i} className={`font-bold ${msg.sender === 'user' ? 'text-white' : 'text-slate-900'}`}>
-                            {part}
-                          </strong>
-                        ) : part
+                      {msg.sender === 'user' ? (
+                        msg.text.split('**').map((part, i) =>
+                          i % 2 === 1 ? (
+                            <strong key={i} className="font-bold text-white">
+                              {part}
+                            </strong>
+                          ) : part
+                        )
+                      ) : (
+                        <div className="bot-msg-markdown space-y-2 text-xs leading-7 text-slate-800">
+                          <Markdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeSanitize]}
+                            components={{
+                              li: ({ children, ...props }: any) => {
+                                const textContent = getReactNodeText(children);
+                                if (textContent.startsWith('Tên gói:')) {
+                                  const rest = textContent.substring('Tên gói:'.length);
+                                  return (
+                                    <li className="list-none mt-0 mb-1" {...props}>
+                                      <span className="font-semibold text-base text-slate-900">Tên gói:</span>
+                                      <span className="font-semibold text-base text-primary ml-1">{rest}</span>
+                                    </li>
+                                  );
+                                }
+                                if (textContent.startsWith('Giá:')) {
+                                  const rest = textContent.substring('Giá:'.length);
+                                  return (
+                                    <li className="list-none mt-0 mb-1" {...props}>
+                                      <span className="font-semibold text-slate-700">Giá:</span>
+                                      <span className="text-red-600 font-semibold ml-1">{rest}</span>
+                                    </li>
+                                  );
+                                }
+                                if (textContent.startsWith('Data:')) {
+                                  const rest = textContent.substring('Data:'.length);
+                                  return (
+                                    <li className="list-none mt-0 mb-1" {...props}>
+                                      <span className="font-semibold text-slate-700">Data:</span>
+                                      <span className="text-blue-600 font-medium ml-1">{rest}</span>
+                                    </li>
+                                  );
+                                }
+                                if (textContent.startsWith('Chu kỳ:')) {
+                                  const rest = textContent.substring('Chu kỳ:'.length);
+                                  return (
+                                    <li className="list-none mt-0 mb-1" {...props}>
+                                      <span className="font-semibold text-slate-700">Chu kỳ:</span>
+                                      <span className="text-gray-500 ml-1">{rest}</span>
+                                    </li>
+                                  );
+                                }
+                                return <li className="ml-4 list-disc mt-0 mb-1" {...props}>{children}</li>;
+                              },
+                              ul: ({ children }: any) => <ul className="mt-0 mb-1.5 pl-4 list-disc">{children}</ul>,
+                              p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                              table: ({ children }: any) => <table className="w-full border-collapse border border-slate-200 my-2">{children}</table>,
+                              th: ({ children }: any) => <th className="border border-slate-200 px-3 py-1.5 bg-slate-50 font-semibold">{children}</th>,
+                              td: ({ children }: any) => <td className="border border-slate-200 px-3 py-1.5">{children}</td>,
+                              h1: ({ children }: any) => <h1 className="text-sm font-bold mt-3 mb-1">{children}</h1>,
+                              h2: ({ children }: any) => <h2 className="text-xs font-bold mt-2.5 mb-1">{children}</h2>,
+                              h3: ({ children }: any) => <h3 className="text-xs font-bold mt-2 mb-1">{children}</h3>,
+                            }}
+                          >
+                            {msg.text.replace(/\n\s*\n/g, '\n')}
+                          </Markdown>
+                        </div>
                       )}
                     </div>
 
@@ -150,17 +231,19 @@ export default function Chatbot() {
                       </button>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
 
               {/* Typing Indicator */}
               {isTyping && (
-                <div className="flex justify-start items-start space-x-2">
-                  <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200/60 flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="bg-white border border-slate-100 p-3 rounded-2xl rounded-tl-none">
-                    <div className="flex space-x-1">
+                <div className="flex justify-start items-start gap-3">
+                  <img
+                    src={aiAvatar}
+                    alt="AI Avatar"
+                    className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-100 shadow-sm"
+                  />
+                  <div className="bg-white border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none">
+                    <div className="flex space-x-1 py-1">
                       <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
                       <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
                       <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
@@ -169,21 +252,10 @@ export default function Chatbot() {
                 </div>
               )}
 
-              <div ref={messagesEndRef} />
+              {/* Removed messagesEndRef div to rely solely on messagesContainerRef.scrollTo */}
             </div>
 
-            {/* Quick suggestions chips */}
-            <div className="px-4 py-2 border-t border-slate-100 flex space-x-2 overflow-x-auto no-scrollbar shrink-0 bg-white">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => handleQuickQuestion(prompt)}
-                  className="shrink-0 bg-slate-50 border border-slate-200 hover:border-primary/30 hover:text-primary px-3.5 py-1.5 rounded-xl text-[9px] text-slate-550 transition-colors font-bold focus:outline-none cursor-pointer"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+
 
             {/* Input Form */}
             <form onSubmit={handleSend} className="p-3 border-t border-slate-100 bg-white flex items-center space-x-2">

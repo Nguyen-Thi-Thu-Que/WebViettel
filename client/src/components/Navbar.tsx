@@ -48,7 +48,8 @@ export default function Navbar() {
     { label: 'Trang chủ', path: '/' },
     { label: 'Gói cước', path: '/packages' },
     { label: 'So sánh', path: '/compare' },
-    { label: 'Khảo sát', path: '/survey' }
+    { label: 'Khảo sát', path: '/survey' },
+    { label: 'Tư vấn AI', path: '/chatbot' }
   ];
 
   return (

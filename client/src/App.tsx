@@ -13,6 +13,7 @@ const PackageDetail = lazy(() => import('./pages/PackageDetail'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Survey = lazy(() => import('./pages/Survey'));
 const Profile = lazy(() => import('./pages/Profile'));
+const ChatbotPage = lazy(() => import('./pages/ChatbotPage'));
 
 // Lazy loading auth pages
 const Login = lazy(() => import('./pages/Auth/Login'));
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="profile/subscription-history" element={<Profile />} />
             <Route path="profile/history" element={<Profile />} />
             <Route path="profile/change-password" element={<Profile />} />
+            <Route path="chatbot" element={<ChatbotPage />} />
           </Route>
 
           {/* Auth Routing */}

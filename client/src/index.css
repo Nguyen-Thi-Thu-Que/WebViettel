@@ -185,3 +185,42 @@
 .delay-300 {
   animation-delay: 300ms;
 }
+
+/* Bot message custom typography styles for package info */
+.bot-msg-markdown p {
+  margin-bottom: 0.5rem;
+}
+.bot-msg-markdown p:last-child {
+  margin-bottom: 0;
+}
+.bot-msg-markdown strong {
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+.bot-msg-markdown ul, .bot-msg-markdown ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  list-style-type: disc;
+}
+.bot-msg-markdown li {
+  margin-bottom: 0.25rem;
+}
+.bot-msg-markdown h1, .bot-msg-markdown h2, .bot-msg-markdown h3 {
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+  color: var(--color-secondary);
+}
+.bot-msg-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.bot-msg-markdown th, .bot-msg-markdown td {
+  border: 1px solid #E2E8F0;
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+}
+.bot-msg-markdown th {
+  background-color: #F8FAFC;
+}
