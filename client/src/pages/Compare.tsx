@@ -8,8 +8,7 @@ import RegisterModal from '../components/RegisterModal';
 
 export default function Compare() {
   const { compareList, packages, removeFromCompare, addToCompare, clearCompare } = usePackageStore();
-  const { currentUser, activeSubscriptions } = useAuthStore();
-  console.log('COMPARE_RENDER', activeSubscriptions);
+  const { currentUser } = useAuthStore();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showAddSelector, setShowAddSelector] = useState(false);
   const [selectedPkgIdToAdd, setSelectedPkgIdToAdd] = useState('');

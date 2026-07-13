@@ -106,25 +106,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
-    console.trace('SUBSCRIPTION_HISTORY_RESET');
     set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [] });
   },
 
   fetchMe: async () => {
-    console.log('FETCH_ME_START');
     const token = localStorage.getItem('token');
     if (!token) {
-      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
-      console.trace('SUBSCRIPTION_HISTORY_RESET');
       set({ authChecked: true, currentUser: null, activeSubscriptions: [], subscriptionHistory: [] });
-      console.log('FETCH_ME_DONE');
-      console.log('ACTIVE_SUBSCRIPTIONS', 0);
       return;
     }
     try {
       const user = await authApi.getMe();
-      console.log('CURRENT_USER', user);
       set({ currentUser: user, authChecked: true });
 
       // Run all initial global state fetches concurrently without resetting activeSubscriptions/subscriptionHistory beforehand
@@ -134,30 +126,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         get().fetchTransactions().catch((err) => console.error("fetchTransactions error", err)),
         get().fetchFAQs().catch((err) => console.error("fetchFAQs error", err))
       ]);
-
-      console.log('FETCH_ME_DONE');
-      console.log(
-        'ACTIVE_SUBSCRIPTIONS_AFTER_HYDRATE',
-        get().activeSubscriptions
-      );
-      console.log(
-        'SUBSCRIPTION_HISTORY_AFTER_HYDRATE',
-        get().subscriptionHistory
-      );
     } catch (err) {
       console.error("Error fetching current user profile:", err);
-      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
-      console.trace('SUBSCRIPTION_HISTORY_RESET');
       set({ currentUser: null, authChecked: true, activeSubscriptions: [], subscriptionHistory: [] });
-      console.log('FETCH_ME_DONE');
-      console.log(
-        'ACTIVE_SUBSCRIPTIONS_AFTER_HYDRATE',
-        get().activeSubscriptions
-      );
-      console.log(
-        'SUBSCRIPTION_HISTORY_AFTER_HYDRATE',
-        get().subscriptionHistory
-      );
     }
   },
 
@@ -276,21 +247,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   fetchActiveSubscriptions: async () => {
     try {
       const result = await authApi.fetchActiveSubscriptions();
-      console.log('ACTIVE_API_RESPONSE', result);
-      console.log('ACTIVE_RESPONSE_KEYS', Object.keys(result || {}));
       if (result && result.activePackages) {
         set({ activeSubscriptions: result.activePackages });
-        console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
       } else {
-        console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
         set({ activeSubscriptions: [] });
-        console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
       }
     } catch (err) {
       console.error("Error fetching active subscriptions:", err);
-      console.trace('ACTIVE_SUBSCRIPTIONS_RESET');
       set({ activeSubscriptions: [] });
-      console.log('ACTIVE_STORE_AFTER_SET', get().activeSubscriptions);
     }
   },
 
@@ -300,12 +264,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (result && result.success) {
         set({ subscriptionHistory: result.history || [] });
       } else {
-        console.trace('SUBSCRIPTION_HISTORY_RESET');
         set({ subscriptionHistory: [] });
       }
     } catch (err) {
       console.error("Error fetching subscription history:", err);
-      console.trace('SUBSCRIPTION_HISTORY_RESET');
       set({ subscriptionHistory: [] });
     }
   },
@@ -535,30 +497,11 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       };
 
       const data = await packageApi.fetchPackages(mergedParams);
-      
-      console.log("========== STORE fetchPackages BEFORE SAVE ==========");
-      if (data.packages && data.packages.length > 0) {
-        const first = data.packages[0];
-        console.log("First package object in fetched data:", first);
-        console.log("id =", first.id);
-        console.log("numericId =", (first as any).numericId);
-        console.log("dbId =", (first as any).dbId);
-      }
 
       set({ 
         packages: data.packages || [], 
         loading: false 
       });
-
-      console.log("========== STORE fetchPackages AFTER SAVE ==========");
-      const savedList = get().packages;
-      if (savedList && savedList.length > 0) {
-        const first = savedList[0];
-        console.log("First package object saved in store packages list:", first);
-        console.log("id =", first.id);
-        console.log("numericId =", (first as any).numericId);
-        console.log("dbId =", (first as any).dbId);
-      }
     } catch (err: any) {
       console.error("Error fetching packages from API:", err);
       set({
@@ -574,22 +517,7 @@ export const usePackageStore = create<PackageState>((set, get) => ({
     try {
       const pkg = await packageApi.fetchPackageById(id);
 
-      console.log("========== STORE fetchPackageById BEFORE SAVE ==========");
-      console.log("Package object fetched:", pkg);
-      console.log("id =", pkg.id);
-      console.log("numericId =", (pkg as any).numericId);
-      console.log("dbId =", (pkg as any).dbId);
-
       set({ currentPackage: pkg, loading: false });
-
-      console.log("========== STORE fetchPackageById AFTER SAVE ==========");
-      const saved = get().currentPackage;
-      if (saved) {
-        console.log("Package object saved in store currentPackage:", saved);
-        console.log("id =", saved.id);
-        console.log("numericId =", (saved as any).numericId);
-        console.log("dbId =", (saved as any).dbId);
-      }
     } catch (err: any) {
       console.error(`Error fetching package ${id} from API:`, err);
       set({ 

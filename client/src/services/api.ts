@@ -21,11 +21,6 @@ export interface FilterOptions {
 export function toVietnamesePackage(apiPkg: any): Package {
   if (!apiPkg) return {} as Package;
 
-  console.log("========== toVietnamesePackage INPUT ==========");
-  console.log("Input package:", apiPkg);
-  console.log("Input id =", apiPkg.id);
-  console.log("Input numericId =", apiPkg.numericId);
-  console.log("Input dbId =", apiPkg.dbId);
 
   const price = apiPkg.price || 0;
   const phan_khuc_gia = price < 50000 ? 'Gia_re' : price <= 150000 ? 'Trung_binh' : 'Cao_cap';
@@ -95,11 +90,6 @@ export function toVietnamesePackage(apiPkg: any): Package {
     loai_mang: apiPkg.loai_mang || ''
   };
 
-  console.log("========== toVietnamesePackage OUTPUT ==========");
-  console.log("Output package:", vnPkg);
-  console.log("Output id =", vnPkg.id);
-  console.log("Output numericId =", (vnPkg as any).numericId);
-  console.log("Output dbId =", (vnPkg as any).dbId);
 
   return vnPkg as Package;
 }
@@ -153,14 +143,6 @@ export const packageApi = {
     const response = await axiosInstance.get<any>(API_BASE_URL, { params });
     const rawData = response.data;
 
-    console.log("========== API RESPONSE fetchPackages ==========");
-    if (rawData.packages && rawData.packages.length > 0) {
-      const firstRaw = rawData.packages[0];
-      console.log("First raw package in list:", firstRaw);
-      console.log("Raw list id =", firstRaw.id);
-      console.log("Raw list numericId =", firstRaw.numericId);
-      console.log("Raw list dbId =", firstRaw.dbId);
-    }
 
     return {
       packages: (rawData.packages || []).map(toVietnamesePackage),
@@ -174,11 +156,6 @@ export const packageApi = {
   fetchPackageById: async (id: string): Promise<Package> => {
     const response = await axiosInstance.get<any>(`${API_BASE_URL}/${id}`);
 
-    console.log("========== API RESPONSE fetchPackageById ==========");
-    console.log("Raw package from API:", response.data);
-    console.log("Raw id =", response.data?.id);
-    console.log("Raw numericId =", response.data?.numericId);
-    console.log("Raw dbId =", response.data?.dbId);
 
     return toVietnamesePackage(response.data);
   },
@@ -297,10 +274,6 @@ export const authApi = {
   },
 
   toggleAutoRenew: async (subscriptionId: string, autoRenew: boolean): Promise<any> => {
-    console.log({
-      subscriptionId,
-      autoRenew
-    });
     if (subscriptionId === undefined || subscriptionId === null || autoRenew === undefined) {
       throw new Error("Invalid request parameters: subscriptionId or autoRenew is missing");
     }
@@ -309,9 +282,6 @@ export const authApi = {
   },
 
   cancelSubscription: async (subscriptionId: string): Promise<any> => {
-    console.log({
-      subscriptionId
-    });
     if (subscriptionId === undefined || subscriptionId === null) {
       throw new Error("Invalid request parameters: subscriptionId is missing");
     }
@@ -375,8 +345,21 @@ export const faqApi = {
 // 5. Chatbot APIs
 export const chatbotApi = {
   sendMessage: async (message: string): Promise<{ text: string; suggestedAction?: any }> => {
-    const response = await axiosInstance.post<{ success: boolean; data: { text: string; suggestedAction?: any } }>('/api/chatbot/message', { message });
-    return response.data.data;
+    const response = await axiosInstance.post<{ success: boolean; message: string; data: any }>('/api/chatbot/message', { message });
+
+    const rawData = response.data.data;
+    // Backend trả data là string thô (reply từ Ollama) hoặc object { text, suggestedAction }
+    if (typeof rawData === 'string') {
+      return { text: rawData };
+    }
+    if (rawData && typeof rawData === 'object' && rawData.text) {
+      return { text: rawData.text, suggestedAction: rawData.suggestedAction };
+    }
+    // Fallback: thử đọc từ message field nếu data không hợp lệ
+    if (response.data.message && response.data.success) {
+      console.warn('[ChatbotAPI] Falling back to response.data.message');
+    }
+    return { text: String(rawData ?? '') };
   },
 
   fetchConfig: async (): Promise<ChatbotConfig> => {

@@ -28,8 +28,7 @@ export default function Packages() {
     reset
   } = usePackageStore();
 
-  const { currentUser, activeSubscriptions } = useAuthStore();
-  console.log('PACKAGES_RENDER', activeSubscriptions);
+  const { currentUser } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State for Managing active Subscription Modal

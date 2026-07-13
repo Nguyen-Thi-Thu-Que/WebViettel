@@ -9,8 +9,7 @@ import type { Package } from '../types';
 
 export default function Home() {
   const { packages } = usePackageStore();
-  const { activeSubscriptions, currentUser } = useAuthStore();
-  console.log('HOME_RENDER', activeSubscriptions);
+  const { currentUser } = useAuthStore();
   const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);

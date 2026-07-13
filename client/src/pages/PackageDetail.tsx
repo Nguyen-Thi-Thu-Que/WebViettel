@@ -68,8 +68,7 @@ export default function PackageDetail() {
     compareList,
     removeFromCompare
   } = usePackageStore();
-  const { currentUser, activeSubscriptions } = useAuthStore();
-  console.log('PACKAGE_DETAIL_RENDER', activeSubscriptions);
+  const { currentUser } = useAuthStore();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   // Modal state for main package
@@ -138,13 +137,7 @@ export default function PackageDetail() {
     return true;
   };
 
-  if (pkg) {
-    console.log("========== PACKAGEDETAIL RENDER pkg ==========");
-    console.log("PackageDetail pkg object:", pkg);
-    console.log("id =", pkg.id);
-    console.log("numericId =", (pkg as any).numericId);
-    console.log("dbId =", (pkg as any).dbId);
-  }
+
 
   if (loading) {
     return <DetailSkeleton />;

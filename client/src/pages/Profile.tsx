@@ -88,14 +88,6 @@ export default function Profile() {
   };
   const activeTab = getActiveTab();
 
-  console.log(
-    'PROFILE_RENDER',
-    {
-      authChecked,
-      currentUser,
-      activeSubscriptions
-    }
-  );
 
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
