@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { Package, User, FAQ, Transaction, ChatbotConfig } from '../types';
+import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -370,6 +370,16 @@ export const chatbotApi = {
   updateConfig: async (config: ChatbotConfig): Promise<ChatbotConfig> => {
     const response = await axiosInstance.put<{ success: boolean; data: ChatbotConfig }>('/api/chatbot/config', config);
     return response.data.data;
+  },
+
+  fetchHistory: async (): Promise<ChatMessage[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: ChatMessage[] }>('/api/chatbot/history');
+    return response.data.data;
+  },
+
+  clearHistory: async (): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>('/api/chatbot/history');
+    return response.data.success;
   }
 };
 

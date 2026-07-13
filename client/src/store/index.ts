@@ -610,7 +610,8 @@ interface ChatbotState {
   sendMessage: (text: string) => Promise<void>;
   fetchConfig: () => Promise<void>;
   updateConfig: (config: ChatbotConfig) => Promise<boolean>;
-  clearHistory: () => void;
+  clearHistory: () => Promise<void>;
+  hydrateHistory: () => Promise<void>;
 }
 
 const INITIAL_WELCOME_MSG: ChatMessage = {
@@ -679,8 +680,51 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
     }
   },
 
-  clearHistory: () => set({ messages: [INITIAL_WELCOME_MSG] })
+  clearHistory: async () => {
+    const currentUser = useAuthStore.getState().currentUser;
+    if (currentUser) {
+      try {
+        await chatbotApi.clearHistory();
+      } catch (err) {
+        console.error("Error clearing chatbot history on server:", err);
+      }
+    }
+    set({ messages: [INITIAL_WELCOME_MSG] });
+  },
+
+  hydrateHistory: async () => {
+    const currentUser = useAuthStore.getState().currentUser;
+    if (currentUser) {
+      try {
+        const history = await chatbotApi.fetchHistory();
+        if (history && history.length > 0) {
+          set({ messages: history });
+        } else {
+          set({ messages: [INITIAL_WELCOME_MSG] });
+        }
+      } catch (err) {
+        console.error("Error fetching chatbot history:", err);
+      }
+    } else {
+      set({ messages: [INITIAL_WELCOME_MSG] });
+    }
+  }
 }));
+
+// Subscribe to currentUser changes to hydrate chatbot history
+let lastUserId: string | null | undefined = undefined;
+
+useAuthStore.subscribe((state) => {
+  const currentUserId = state.currentUser?.id;
+  if (currentUserId !== lastUserId) {
+    lastUserId = currentUserId;
+    if (state.currentUser) {
+      useChatbotStore.getState().hydrateHistory();
+    } else {
+      useChatbotStore.setState({ messages: [INITIAL_WELCOME_MSG] });
+    }
+  }
+});
 
 // ==========================================
 // 4. SURVEY STORE
