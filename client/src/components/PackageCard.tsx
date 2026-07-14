@@ -36,7 +36,10 @@ const PackageCard = React.memo(function PackageCard({
     if (isInCompare) {
       removeFromCompare(pkg.id);
     } else {
-      addToCompare(pkg);
+      const res = addToCompare(pkg);
+      if (res && !res.success) {
+        alert(res.message);
+      }
     }
   };
 

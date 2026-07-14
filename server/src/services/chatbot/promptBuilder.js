@@ -101,7 +101,9 @@ const formatIntent = (intent) => {
   if (intent.packageCodes && intent.packageCodes.length > 0) {
     lines.push(`Mã gói được hỏi: ${intent.packageCodes.join(', ')}`);
   }
-  if (intent.budget !== null && intent.budget !== undefined) {
+  if (intent.budgetMin !== null && intent.budgetMin !== undefined && intent.budgetMax !== null && intent.budgetMax !== undefined) {
+    lines.push(`Khoảng ngân sách: ${Number(intent.budgetMin).toLocaleString('vi-VN')}đ - ${Number(intent.budgetMax).toLocaleString('vi-VN')}đ`);
+  } else if (intent.budget !== null && intent.budget !== undefined) {
     lines.push(`Ngân sách: ${Number(intent.budget).toLocaleString('vi-VN')}đ`);
   }
   if (intent.cheap) lines.push('Phân khúc: Giá rẻ');

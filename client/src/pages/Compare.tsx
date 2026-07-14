@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightLeft, X, Bot, Plus, Check, ShieldAlert } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
@@ -7,13 +7,46 @@ import SEO from '../components/SEO';
 import RegisterModal from '../components/RegisterModal';
 
 export default function Compare() {
-  const { compareList, packages, removeFromCompare, addToCompare, clearCompare } = usePackageStore();
+  const { compareList, packages, removeFromCompare, addToCompare, clearCompare, fetchPackages, loading, error } = usePackageStore();
   const { currentUser } = useAuthStore();
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showAddSelector, setShowAddSelector] = useState(false);
   const [selectedPkgIdToAdd, setSelectedPkgIdToAdd] = useState('');
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (packages.length === 0) {
+      fetchPackages();
+    }
+  }, [packages.length, fetchPackages]);
+
+  if (loading && packages.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] text-xs font-semibold text-slate-500 space-y-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span className="animate-pulse">Đang tải dữ liệu...</span>
+      </div>
+    );
+  }
+
+  if (error && packages.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200 p-12 rounded-2xl max-w-lg mx-auto text-center space-y-5 shadow-sm my-12 text-xs font-semibold">
+        <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-primary mx-auto">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-extrabold text-slate-900">Không thể tải dữ liệu</h3>
+        <p className="text-slate-500 font-medium">{error}</p>
+        <button
+          onClick={() => fetchPackages()}
+          className="inline-flex items-center space-x-1.5 bg-primary hover:bg-primary-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });

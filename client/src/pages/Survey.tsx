@@ -2,13 +2,13 @@ import { Sparkles, Compass, ArrowLeft, ArrowRight, RefreshCw, Check } from 'luci
 import { useSurveyStore, usePackageStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
 import RegisterModal from '../components/RegisterModal';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SEO from '../components/SEO';
 import type { Package } from '../types';
 
 export default function Survey() {
-  const { packages } = usePackageStore();
+  const { packages, fetchPackages } = usePackageStore();
   const {
     answers,
     currentStep,
@@ -23,6 +23,12 @@ export default function Survey() {
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (packages.length === 0) {
+      fetchPackages();
+    }
+  }, [packages.length, fetchPackages]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -117,13 +123,13 @@ export default function Survey() {
 
       {/* Header Info */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center space-x-2 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-emerald-700 mx-auto">
-          <Compass className="w-3.5 h-3.5 text-emerald-600" />
-          <span>HỆ THỐNG GỢI Ý GÓI CƯỚC THÔNG MINH BẰNG THUẬT TOÁN AI</span>
+        <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-amber-700 mx-auto">
+          <Compass className="w-3.5 h-3.5 text-amber-600" />
+          <span>HỆ THỐNG GỢI Ý GÓI CƯỚC THỬ NGHIỆM (DEMO SPRINT 8.1)</span>
         </div>
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Khảo sát chọn gói cước</h1>
         <p className="text-slate-500 text-xs max-w-md mx-auto font-medium">
-          Trả lời ngắn gọn 4 câu hỏi khảo sát thói quen sử dụng, hệ thống AI sẽ chọn ra 3 gói cước tối ưu chi phí nhất.
+          Khảo sát thói quen sử dụng. Kết quả hiển thị dưới đây là gợi ý giả định (thuật toán mẫu) phục vụ thử nghiệm giao diện.
         </p>
       </div>
 
@@ -264,13 +270,13 @@ export default function Survey() {
             {currentStep === 4 && (
               <div className="space-y-8 py-2">
                 <div className="text-center space-y-2">
-                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mx-auto border border-emerald-100">
-                    <Sparkles className="w-6 h-6 fill-emerald-600" />
+                  <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-650 mx-auto border border-amber-100">
+                    <Sparkles className="w-6 h-6 fill-amber-600 text-amber-600" />
                   </div>
-                  <h3 className="text-lg font-black text-slate-900">Đã tìm thấy các gói cước tối ưu!</h3>
-                  <p className="text-slate-500 text-xs font-medium">
-                    Dựa trên thói quen sử dụng đã khai báo, thuật toán AI gợi ý các gói cước Viettel sau:
-                  </p>
+                  <h3 className="text-lg font-black text-slate-900">Đề xuất gợi ý giả định (Mẫu)</h3>
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-center text-[11px] font-semibold max-w-md mx-auto">
+                    ⚠️ Đây là dữ liệu gợi ý mẫu (giả định) cho mục đích thử nghiệm giao diện ở Sprint 8.1. Thuật toán AI thực tế kết nối với dữ liệu thật sẽ được triển khai ở Sprint sau.
+                  </div>
                 </div>
 
                 {/* Suggested cards */}
