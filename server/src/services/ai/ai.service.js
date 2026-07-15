@@ -27,7 +27,7 @@ const generateContent = async (prompt) => {
       console.log('[AI Provider] (Fallback): ollama');
       console.log('[AI Model] (Fallback):', ollamaModel);
       try {
-        const response = await ollamaProvider.generateResponse(prompt, 15000);
+        const response = await ollamaProvider.generateResponse(prompt, 30000);
         console.timeEnd("[Chatbot AI] Generate");
         console.log('[AI Response]:', response);
         return response;
@@ -42,7 +42,7 @@ const generateContent = async (prompt) => {
     console.log('[AI Provider]: ollama');
     console.log('[AI Model]:', ollamaModel);
     try {
-      const response = await ollamaProvider.generateResponse(prompt, 15000);
+      const response = await ollamaProvider.generateResponse(prompt, 30000);
       console.timeEnd("[Chatbot AI] Generate");
       console.log('[AI Response]:', response);
       return response;

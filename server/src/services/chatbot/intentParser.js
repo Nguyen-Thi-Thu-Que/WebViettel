@@ -127,9 +127,22 @@ const intentParser = (message) => {
 
   // 1. Phân tích ngân sách
   const cleanMsg = lowerMessage.replace(/\./g, '');
+  let cleanMsgForBudget = cleanMsg;
+
+  // Loại bỏ các từ khóa tiện ích/mã mạng chứa số
+  const serviceKeywords = ['tv360', 'tv 360', '5g', '4g', '3g', '2g'];
+  for (const kw of serviceKeywords) {
+    cleanMsgForBudget = cleanMsgForBudget.replace(new RegExp(kw, 'gi'), '');
+  }
+
+  // Loại bỏ các mã gói cước được trích xuất
+  const extractedCodes = extractPackageCodes(message);
+  for (const code of extractedCodes) {
+    cleanMsgForBudget = cleanMsgForBudget.replace(new RegExp(code, 'gi'), '');
+  }
 
   // Kiểm tra khoảng giá trước (ví dụ: "3 đến 4 triệu", "3-4tr")
-  const rangeMatch = cleanMsg.match(/(\d+)\s*(tr|triệu|k|nghìn|đ|đồng)?\s*(?:đến|to|-)\s*(\d+)\s*(k|đ|đồng|nghìn|tr|triệu)/i);
+  const rangeMatch = cleanMsgForBudget.match(/(\d+)\s*(tr|triệu|k|nghìn|đ|đồng)?\s*(?:đến|to|-)\s*(\d+)\s*(k|đ|đồng|nghìn|tr|triệu)/i);
   if (rangeMatch) {
     const num1 = parseInt(rangeMatch[1], 10);
     const unit1 = rangeMatch[2] ? rangeMatch[2].toLowerCase() : null;
@@ -147,7 +160,7 @@ const intentParser = (message) => {
 
     result.budget = result.budgetMax;
   } else {
-    const priceMatch = cleanMsg.match(/(\d+)\s*(k|đ|đồng|nghìn|tr|triệu)/i);
+    const priceMatch = cleanMsgForBudget.match(/(\d+)\s*(k|đ|đồng|nghìn|tr|triệu)/i);
     if (priceMatch) {
       const num = parseInt(priceMatch[1], 10);
       const unit = priceMatch[2].toLowerCase();
@@ -155,7 +168,7 @@ const intentParser = (message) => {
       else if (unit === 'tr' || unit === 'triệu') result.budget = num * 1000000;
       else if (unit === 'đ' || unit === 'đồng') result.budget = num < 1000 ? num * 1000 : num;
     } else {
-      const standalonePriceMatch = cleanMsg.match(/(?:khoảng|tầm|giá|dưới|hơn|khoang|tam|gia|duoi|hon)\s*(\d+)\b/i);
+      const standalonePriceMatch = cleanMsgForBudget.match(/(?:khoảng|tầm|giá|dưới|hơn|khoang|tam|gia|duoi|hon)\s*(\d+)\b/i);
       if (standalonePriceMatch) {
         const num = parseInt(standalonePriceMatch[1], 10);
         if (num >= 5 && num <= 1000) result.budget = num * 1000;
@@ -195,7 +208,7 @@ const intentParser = (message) => {
   const dataKeywords = [
     'data', 'mạng', 'internet', 'dung lượng', 'gb', 'mb', 'gbs', 'mbs',
     'lướt web', 'online', 'web', 'mang', 'dung luong', 'luot web',
-    'truy cập', 'streaming', 'tải', 'download'
+    'truy cập', 'streaming', 'tải', 'download', 'truy cập mạng', 'dùng mạng'
   ];
   const voiceKeywords = [
     'gọi', 'thoại', 'phút', 'nội mạng', 'ngoại mạng', 'alo', 'call',

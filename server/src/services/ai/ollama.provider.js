@@ -4,7 +4,7 @@ const { TextDecoder } = require('util');
 /**
  * Gọi Ollama API bằng model cấu hình từ .env
  */
-const generateResponse = (prompt, timeoutMs = 15000) => {
+const generateResponse = (prompt, timeoutMs = 30000) => {
   return new Promise((resolve, reject) => {
     const model = process.env.OLLAMA_MODEL || "qwen2.5:3b";
     const hostRaw = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";

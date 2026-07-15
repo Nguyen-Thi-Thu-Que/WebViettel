@@ -79,18 +79,20 @@ const matchPackages = (packages, intent) => {
 
   // 1. Exact package code
   if (packageCodes && packageCodes.length > 0) {
-    const exactPackages = packages.filter(p => 
+    return packages.filter(p => 
       p.ma_goi && packageCodes.some(code => p.ma_goi.toLowerCase() === code.toLowerCase())
     );
-    if (exactPackages.length > 0) {
-      return exactPackages;
-    }
   }
 
   // Xác định user đang hỏi nội dung giải trí cụ thể
   const askedSpecificSocial = needYoutube || needTiktok || needFacebook || needMovie || needSocial;
   const wantCheapData = cheap && needData && !needCombo;
   const pureDataVoiceQuery = (needData || needVoice) && !askedSpecificSocial && !needAddon;
+
+  const isBudgetOnlyQuery = (budget !== null || (budgetMin !== null && budgetMax !== null)) &&
+    !needData && !needVoice && !needSms && !needYoutube && !needTiktok && 
+    !needFacebook && !needTV360 && !needMovie && !needSocial && !need5G && 
+    !needLongTerm && !needShortTerm && !needCombo && !needAddon && !needYearly;
 
   // Lọc bước đầu tiên: các bộ lọc cứng (Hard Filters) KHÔNG bao gồm ngân sách (Budget)
   const filteredPackages = packages.filter(pkg => {
@@ -156,6 +158,9 @@ const matchPackages = (packages, intent) => {
   // 5. Scoring: Chỉ chạy scoring sau khi đã qua toàn bộ hard filter
   const scoredPackages = finalFilteredPackages.map(pkg => {
     let score = 1;
+    if (isBudgetOnlyQuery) {
+      score += 50;
+    }
     const cycleDay = parseInt(pkg.chu_ky_ngay) || 0;
     const bg = pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '';
     const isAddon = isAddonSocialPackage(pkg);

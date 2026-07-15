@@ -120,13 +120,84 @@ const chatbotService = {
       if (topPackages.length === 0) {
         console.timeEnd('[Chatbot] Total');
         return {
-          text: 'Hiện chưa tìm thấy gói đúng với yêu cầu của bạn. Bạn muốn ưu tiên data, gọi thoại hay ngân sách bao nhiêu?',
+          text: 'Hiện tại chưa tìm thấy gói cước nào phù hợp với yêu cầu của bạn. Bạn vui lòng điều chỉnh lại điều kiện tìm kiếm (ví dụ: thay đổi khoảng giá, dung lượng data hoặc thời gian chu kỳ cước) để tìm được gói phù hợp nhé.',
           suggestedAction: null
         };
       }
 
-      // 5. Sanitize — chỉ giữ trường cần thiết
-      const cleanPackages = topPackages.map(sanitizePackage);
+      // 5. Sanitize và tính toán các cờ boolean ở backend
+      const cleanPackages = topPackages.map(pkg => {
+        const hasRealData = (p) => {
+          if (!p.data_theo_ngay) return false;
+          const s = String(p.data_theo_ngay).trim().toUpperCase();
+          return s !== '0' && s !== '0GB' && s !== '0 GB' && !s.startsWith('0') && s !== 'KHÔNG' && s !== 'KHONG';
+        };
+
+        const hasRealVoice = (p) => {
+          const check = (val) => {
+            if (!val) return false;
+            const s = String(val).trim().toUpperCase();
+            return s !== '0' && s !== '0 PHÚT' && s !== '0 PHUT' && !s.startsWith('0') && s !== 'KHÔNG' && s !== 'KHONG';
+          };
+          return !!(check(p.free_noi_mang) || check(p.free_ngoai_mang));
+        };
+
+        const hasRealSms = (p) => {
+          if (!p.sms) return false;
+          const s = String(p.sms).trim().toUpperCase();
+          return s !== '0' && s !== '0 SMS' && s !== '0 TIN NHẮN' && s !== '0 TIN NHAN' && !s.startsWith('0') && s !== 'KHÔNG' && s !== 'KHONG';
+        };
+
+        const hasTV360 = (p) => {
+          const check = (val) => val && /tv360/i.test(String(val));
+          return !!(check(p.tien_ich_free) || check(p.uudaitrong));
+        };
+
+        const hasFacebook = (p) => {
+          const check = (val) => val && /facebook|fb/i.test(String(val));
+          return !!(check(p.tien_ich_free) || check(p.uudaitrong) || (p.benefit_group && /facebook|fb/i.test(String(p.benefit_group))));
+        };
+
+        const hasYoutube = (p) => {
+          const check = (val) => val && /youtube|yt/i.test(String(val));
+          return !!(check(p.tien_ich_free) || check(p.uudaitrong) || (p.benefit_group && /youtube|yt/i.test(String(p.benefit_group))));
+        };
+
+        const hasTiktok = (p) => {
+          const check = (val) => val && /tiktok/i.test(String(val));
+          return !!(check(p.tien_ich_free) || check(p.uudaitrong) || (p.benefit_group && /tiktok/i.test(String(p.benefit_group))));
+        };
+
+        const hasMovie = (p) => {
+          const check = (val) => val && /phim|movie|cinema/i.test(String(val));
+          return !!(check(p.tien_ich_free) || check(p.uudaitrong) || (p.benefit_group && /movie/i.test(String(p.benefit_group))));
+        };
+
+        return {
+          ma_goi: pkg.ma_goi || '',
+          ten: pkg.ten || '',
+          gia: pkg.gia != null ? Number(pkg.gia) : 0,
+          chu_ky_ngay: pkg.chu_ky_ngay != null ? String(pkg.chu_ky_ngay) : '',
+          data_theo_ngay: pkg.data_theo_ngay || '',
+          free_noi_mang: pkg.free_noi_mang || '',
+          free_ngoai_mang: pkg.free_ngoai_mang || '',
+          sms: pkg.sms || '',
+          tien_ich_free: pkg.tien_ich_free || '',
+          uudaitrong: pkg.uudaitrong || '',
+          dieu_kien_dang_ky: pkg.dieu_kien_dang_ky || '',
+          dangky: pkg.dangky || '',
+          huygiahan: pkg.huygiahan || '',
+          huygoicuoc: pkg.huygoicuoc || '',
+          hasData: hasRealData(pkg),
+          hasVoice: hasRealVoice(pkg),
+          hasSms: hasRealSms(pkg),
+          hasTV360: hasTV360(pkg),
+          hasFacebook: hasFacebook(pkg),
+          hasYoutube: hasYoutube(pkg),
+          hasTiktok: hasTiktok(pkg),
+          hasMovie: hasMovie(pkg)
+        };
+      });
 
       // 6. Xây dựng prompt — Sprint 6 Hotfix: truyền intent vào buildPrompt
       const prompt = buildPrompt(message, cleanPackages, intent);

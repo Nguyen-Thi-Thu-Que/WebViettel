@@ -2,94 +2,115 @@
  * Task 3: System Prompt dùng XML tags để gò LLM.
  * Nghiêm cấm hallucination. Trung thực về dữ liệu thiếu/không khớp.
  */
-const SYSTEM_PROMPT = `<system_role>
-Bạn là chuyên viên tư vấn gói cước di động Viettel nhiệt tình, chuyên nghiệp và chính xác 100%. 
-Nhiệm vụ của bạn là dựa TRỰC TIẾP VÀ DUY NHẤT vào thông tin DỮ LIỆU GÓI CƯỚC được cung cấp để trả lời câu hỏi của người dùng.
-</system_role>
-<strict_rules>
-1. KHÔNG ẢO GIÁC (NO HALLUCINATION): Tuyệt đối KHÔNG ĐƯỢC tự sáng tạo, bịa đặt số liệu, giá tiền, dung lượng, phút gọi hoặc tiện ích không có trong DỮ LIỆU GÓI CƯỚC.
-2. ĐỊNH DANH ỨNG DỤNG & GIỚI HẠN: Tuyệt đối không đánh tráo tên ứng dụng (Ví dụ: TV360 khác hoàn toàn với YouTube/TikTok). KHÔNG dùng từ "thả ga", "không giới hạn" hay "miễn phí" nếu gói cước có quy định số phút/GB cụ thể (ví dụ: 35 phút thì phải báo chính xác là 35 phút).
-3. TRUNG THỰC: Nếu gói cước trong dữ liệu không đáp ứng đúng yêu cầu của khách (ví dụ khách cần gọi ngoại mạng nhưng gói cước ghi '0'), phải nói rõ: "Dạ, gói cước này chỉ ưu đãi data/nội mạng, chưa bao gồm ưu đãi ngoại mạng ạ".
-4. THỜI GIAN VÀ ĐƠN VỊ DATA: Hiểu chính xác 30 ngày = 1 tháng, 90 ngày = 3 tháng, 180 ngày = 6 tháng, 360 ngày = 1 năm. Phải đọc kỹ dung lượng cấp theo "Ngày" (VD: 1GB/ngày) hay theo "Chu kỳ" (VD: 15GB/15 ngày).
-5. LỜI VĂN KHÁCH QUAN: TUYỆT ĐỐI KHÔNG dùng các từ ngữ mang tính chủ quan, đánh giá như: "phù hợp nếu", "dùng vừa phải", "nhiều hơn", "tốt hơn", "dành cho sinh viên", "đáp ứng nhu cầu", "lý tưởng cho", "có thể phù hợp" — TRỪ KHI dữ liệu cung cấp có ghi chính xác mô tả đó.
-6. GIỚI HẠN NGỮ CẢNH: Chỉ tư vấn ĐÚNG những gói có trong <package_data_context>. Không nhắc, không đề xuất bất kỳ gói nào ngoài danh sách này. Nếu danh sách chỉ có 1 gói, chỉ giới thiệu duy nhất gói đó.
-7. XỬ LÝ KHI TRỐNG: Nếu <package_data_context> trống hoặc không có dữ liệu, trả lời đúng nguyên văn câu sau: "Hiện chưa tìm thấy gói đúng với yêu cầu của bạn. Bạn muốn ưu tiên data, gọi thoại hay ngân sách bao nhiêu?"
-8. FORMAT: Trình bày ngắn gọn, lịch sự. Dùng gạch đầu dòng (-) cho tên gói cước, giá, chu kỳ, và ưu đãi. Luôn kết thúc bằng một câu hỏi gợi mở xem khách hàng có muốn biết cú pháp đăng ký không.
-</strict_rules>`;
+const SYSTEM_PROMPT = `Bạn là AI tra cứu gói cước Viettel. Chỉ trả lời dựa trên dữ liệu JSON được cung cấp. TUYỆT ĐỐI TUÂN THỦ CÁC QUY TẮC SAU:
+1. CẤM VĂN MẪU: Bắt đầu trả lời ngay lập tức. Không dùng các từ ngữ như: "Tôi có thể giúp bạn", "Dưới đây là", "Hiện chưa tìm thấy gói cước", "Bạn có thể tham khảo".
+2. HỎI ĐÁP THUỘC TÍNH: Nếu User hỏi 1 hoặc vài thuộc tính cụ thể (VD: "Có SMS không?", "Có thoại không?"), CHỈ trả lời đúng thuộc tính đó. Nếu JSON không có thuộc tính đó, trả lời: "Gói [Tên gói] không có [Thuộc tính]". KHÔNG liệt kê thông tin khác.
+3. TƯ VẤN/SO SÁNH GÓI: Nếu User yêu cầu tư vấn, cho xem gói hoặc so sánh, HÃY IN RA DANH SÁCH theo định dạng chuẩn bên dưới.
+4. QUY TẮC ẨN DÒNG TRỐNG: CHỈ hiển thị các dòng (Giá, Chu kỳ, Data, Thoại, Tiện ích) NẾU nó tồn tại trong JSON. Tuyệt đối KHÔNG tự sinh ra dòng "Thoại: Không có" hay "Tiện ích: Không có" nếu JSON không có trường đó.
+ĐỊNH DẠNG CHUẨN (Chỉ hiện các dòng có dữ liệu):
+**[Tên gói]**
+- Giá: [Giá]
+- Chu kỳ: [Chu kỳ]
+- Data: [Data]
+- Thoại: [Thoại]
+- Tiện ích: [Tiện ích]
+- Đăng ký: Soạn [Tên gói] gửi 191`;
+
+const hasRealData = (pkg) => {
+  if (!pkg.data_theo_ngay) return false;
+  const s = String(pkg.data_theo_ngay).trim().toUpperCase();
+  return s !== '0' && s !== '0GB' && s !== '0 GB' && !s.startsWith('0');
+};
+
+const hasRealVoice = (pkg) => {
+  const check = (val) => {
+    if (!val) return false;
+    const s = String(val).trim().toUpperCase();
+    return s !== '0' && s !== '0 PHÚT' && s !== '0 PHUT' && !s.startsWith('0');
+  };
+  return check(pkg.free_noi_mang) || check(pkg.free_ngoai_mang);
+};
+
+const hasRealSms = (pkg) => {
+  if (!pkg.sms) return false;
+  const s = String(pkg.sms).trim().toUpperCase();
+  return s !== '0' && s !== '0 SMS' && !s.startsWith('0');
+};
 
 /**
  * Task 2: Hàm `formatPackageToText(pkg)` — convert object gói cước thành Text thuần túy.
  * KHÔNG truyền JSON thô vào LLM.
- * Format yêu cầu đúng từng ký tự.
  */
 const formatPackageToText = (pkg) => {
   if (!pkg) return '';
 
-  const ten = String(pkg.ten || pkg.ma_goi || '').trim();
-  const gia = pkg.gia != null ? Number(pkg.gia).toLocaleString('vi-VN') : '0';
-  const chu_ky_ngay = String(pkg.chu_ky_ngay != null ? pkg.chu_ky_ngay : '30').trim();
+  const dataValid = hasRealData(pkg);
+  const voiceValid = hasRealVoice(pkg);
+  const smsValid = hasRealSms(pkg);
 
-  // Tên gói, Giá, Chu kỳ: Bắt buộc in ra. Format Giá có dấu chấm hàng nghìn.
-  const lines = [
-    `- Tên gói: ${ten}`,
-    `- Giá: ${gia} VNĐ`,
-    `- Chu kỳ: ${chu_ky_ngay} ngày`
-  ];
+  const tienIch = String(pkg.tien_ich_free || '').toUpperCase() + ' ' + String(pkg.uudaitrong || '').toUpperCase();
+  const hasTv360 = tienIch.includes('TV360');
+  const hasFb = tienIch.includes('FACEBOOK') || tienIch.includes('FB');
+  const hasYtb = tienIch.includes('YOUTUBE') || tienIch.includes('YT');
+  const hasTiktok = tienIch.includes('TIKTOK');
+  const hasMovie = tienIch.includes('PHIM') || tienIch.includes('MOVIE') || tienIch.includes('CINEMA') || (pkg.benefit_group && pkg.benefit_group.toUpperCase() === 'MOVIE');
 
-  // Data: Bỏ qua nếu là '0' hoặc '0GB' (không phân biệt hoa thường)
-  const cleanData = String(pkg.data_theo_ngay != null ? pkg.data_theo_ngay : '').trim();
-  const isDataValid = cleanData && cleanData !== '0' && cleanData.toUpperCase() !== '0GB';
-
-  // Chi tiết ưu đãi (uudaitrong): Bỏ qua nếu là '0'
-  const cleanUuDai = String(pkg.uudaitrong != null ? pkg.uudaitrong : '').trim();
-  const isUuDaiValid = cleanUuDai && cleanUuDai !== '0';
-
-  if (isDataValid) {
-    if (isUuDaiValid) {
-      lines.push(`- Data: ${cleanData} (Tổng quan: ${cleanUuDai})`);
-    } else {
-      lines.push(`- Data: ${cleanData}`);
-    }
-  } else if (isUuDaiValid) {
-    lines.push(`- Chi tiết ưu đãi: ${cleanUuDai}`);
-  }
-
-  // Gọi nội mạng, Gọi ngoại mạng, SMS, Tiện ích khác: Chỉ thêm vào chuỗi nếu khác '0'
-  const cleanNoiMang = String(pkg.free_noi_mang != null ? pkg.free_noi_mang : '').trim();
-  if (cleanNoiMang && cleanNoiMang !== '0') {
-    lines.push(`- Gọi nội mạng: ${cleanNoiMang}`);
-  }
-
-  const cleanNgoaiMang = String(pkg.free_ngoai_mang != null ? pkg.free_ngoai_mang : '').trim();
-  if (cleanNgoaiMang && cleanNgoaiMang !== '0') {
-    lines.push(`- Gọi ngoại mạng: ${cleanNgoaiMang}`);
-  }
-
-  const cleanSms = String(pkg.sms != null ? pkg.sms : '').trim();
-  if (cleanSms && cleanSms !== '0') {
-    lines.push(`- SMS: ${cleanSms}`);
-  }
-
-  const cleanTienIch = String(pkg.tien_ich_free != null ? pkg.tien_ich_free : '').trim();
-  if (cleanTienIch && cleanTienIch !== '0') {
-    lines.push(`- Tiện ích khác: ${cleanTienIch}`);
-  }
-
-  const cleanDangKy = String(pkg.dangky != null ? pkg.dangky : '').trim();
-  if (cleanDangKy && cleanDangKy !== '0') {
-    lines.push(`- Đăng ký: ${cleanDangKy}`);
-  }
-
-  return lines.join('\n');
+  return `<package>
+  <ma_goi>${pkg.ma_goi || ''}</ma_goi>
+  <ten>${pkg.ten || ''}</ten>
+  <gia>${pkg.gia != null ? pkg.gia : 0}</gia>
+  <chu_ky_ngay>${pkg.chu_ky_ngay || ''}</chu_ky_ngay>
+  <data_theo_ngay>${pkg.data_theo_ngay || ''}</data_theo_ngay>
+  <free_noi_mang>${pkg.free_noi_mang || ''}</free_noi_mang>
+  <free_ngoai_mang>${pkg.free_ngoai_mang || ''}</free_ngoai_mang>
+  <sms>${pkg.sms || ''}</sms>
+  <tien_ich_free>${pkg.tien_ich_free || ''}</tien_ich_free>
+  <uudaitrong>${pkg.uudaitrong || ''}</uudaitrong>
+  <dieu_kien_dang_ky>${pkg.dieu_kien_dang_ky || ''}</dieu_kien_dang_ky>
+  <dangky>${pkg.dangky || ''}</dangky>
+  <huygiahan>${pkg.huygiahan || ''}</huygiahan>
+  <huygoicuoc>${pkg.huygoicuoc || ''}</huygoicuoc>
+  <hasData>${dataValid}</hasData>
+  <hasVoice>${voiceValid}</hasVoice>
+  <hasSms>${smsValid}</hasSms>
+  <hasTV360>${hasTv360}</hasTV360>
+  <hasFacebook>${hasFb}</hasFacebook>
+  <hasYoutube>${hasYtb}</hasYoutube>
+  <hasTiktok>${hasTiktok}</hasTiktok>
+  <hasMovie>${hasMovie}</hasMovie>
+</package>`;
 };
 
 /**
  * Task 2: Format toàn bộ mảng gói cước thành text block.
- * Join bằng \n\n, tối đa 3 gói.
+ * Join bằng \n\n.
  */
 const formatPackagesToText = (packages) => {
   if (!packages || packages.length === 0) return '';
-  return packages.slice(0, 3).map(formatPackageToText).join('\n\n');
+  
+  const sanitized = packages.map(pkg => {
+    const cleanPkg = { ...pkg };
+    
+    // 1. Định dạng giá tiền (price hoặc gia)
+    if (cleanPkg.gia !== undefined && cleanPkg.gia !== null && !isNaN(Number(cleanPkg.gia))) {
+      cleanPkg.gia = Number(cleanPkg.gia).toLocaleString('vi-VN') + 'đ';
+    }
+    if (cleanPkg.price !== undefined && cleanPkg.price !== null && !isNaN(Number(cleanPkg.price))) {
+      cleanPkg.price = Number(cleanPkg.price).toLocaleString('vi-VN') + 'đ';
+    }
+    
+    // 2. Xóa bỏ hoàn toàn (delete) các thuộc tính (keys) nếu giá trị (value) của chúng là: 0, "0", null, false, hoặc ""
+    const deleteValues = [0, '0', null, false, ''];
+    for (const key of Object.keys(cleanPkg)) {
+      if (deleteValues.includes(cleanPkg[key])) {
+        delete cleanPkg[key];
+      }
+    }
+    
+    return cleanPkg;
+  });
+
+  return JSON.stringify(sanitized, null, 2);
 };
 
 /**
@@ -122,12 +143,93 @@ const formatIntent = (intent) => {
 /**
  * Task 2 + Task 3: Xây dựng prompt gửi AI.
  */
+const getDailyGb = (pkg) => {
+  if (!pkg.data_theo_ngay) return 0;
+  const str = String(pkg.data_theo_ngay).trim().toUpperCase();
+  const matchDay = str.match(/([\d.]+)\s*GB\s*\/\s*(NGÀY|NGAY|D|DAY)/i);
+  if (matchDay) return parseFloat(matchDay[1]);
+  const matchMonth = str.match(/([\d.]+)\s*GB\s*\/\s*(THÁNG|THANG|M|MONTH)/i);
+  if (matchMonth) return parseFloat(matchMonth[1]) / 30;
+  const matchRaw = str.match(/([\d.]+)\s*GB/i);
+  if (matchRaw) return parseFloat(matchRaw[1]) / (parseInt(pkg.chu_ky_ngay) || 30);
+  return 0;
+};
+
+const packageRanking = (packages, intent) => {
+  if (!packages || packages.length <= 1 || !intent) return packages;
+
+  const ranked = [...packages];
+
+  ranked.sort((a, b) => {
+    // 1. YouTube/TikTok/Facebook check
+    if (intent.needYoutube || intent.needTiktok || intent.needFacebook) {
+      const matchBenefit = (pkg) => {
+        const bg = pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '';
+        const tienIch = String(pkg.tien_ich_free || '').toUpperCase() + ' ' + String(pkg.uudaitrong || '').toUpperCase();
+        if (intent.needYoutube && (bg === 'YOUTUBE' || tienIch.includes('YOUTUBE') || tienIch.includes('YT'))) return 1;
+        if (intent.needTiktok && (bg === 'TIKTOK' || tienIch.includes('TIKTOK'))) return 1;
+        if (intent.needFacebook && (bg === 'FACEBOOK' || tienIch.includes('FACEBOOK') || tienIch.includes('FB'))) return 1;
+        return 0;
+      };
+      const mbA = matchBenefit(a);
+      const mbB = matchBenefit(b);
+      if (mbB !== mbA) return mbB - mbA;
+    }
+
+    // 2. Combo check
+    if (intent.needCombo) {
+      const dA = hasRealData(a) ? 1 : 0;
+      const dB = hasRealData(b) ? 1 : 0;
+      if (dB !== dA) return dB - dA;
+
+      const vA = hasRealVoice(a) ? 1 : 0;
+      const vB = hasRealVoice(b) ? 1 : 0;
+      if (vB !== vA) return vB - vA;
+
+      const sA = hasRealSms(a) ? 1 : 0;
+      const sB = hasRealSms(b) ? 1 : 0;
+      if (sB !== sA) return sB - sA;
+    }
+
+    // 3. Need Data check
+    if (intent.needData) {
+      const gbA = getDailyGb(a);
+      const gbB = getDailyGb(b);
+      if (gbB !== gbA) return gbB - gbA;
+
+      const rdA = hasRealData(a) ? 1 : 0;
+      const rdB = hasRealData(b) ? 1 : 0;
+      if (rdB !== rdA) return rdB - rdA;
+
+      const cbA = (hasRealData(a) && hasRealVoice(a)) ? 1 : 0;
+      const cbB = (hasRealData(b) && hasRealVoice(b)) ? 1 : 0;
+      if (cbB !== cbA) return cbB - cbA;
+
+      if (a.gia !== b.gia) return a.gia - b.gia;
+    }
+
+    // 4. Need Voice check
+    if (intent.needVoice) {
+      const vA = hasRealVoice(a) ? 1 : 0;
+      const vB = hasRealVoice(b) ? 1 : 0;
+      if (vB !== vA) return vB - vA;
+
+      const cbA = (hasRealData(a) && hasRealVoice(a)) ? 1 : 0;
+      const cbB = (hasRealData(b) && hasRealVoice(b)) ? 1 : 0;
+      if (cbB !== cbA) return cbB - cbA;
+    }
+
+    return 0;
+  });
+
+  return ranked;
+};
+
 const buildPrompt = (userMessage, packages, intent) => {
-  // Task 2: text thuần túy — KHÔNG truyền JSON thô
-  const packageText = formatPackagesToText(packages);
+  const rankedPackages = packageRanking(packages, intent);
+  const packageText = formatPackagesToText(rankedPackages);
   const intentBlock = formatIntent(intent);
 
-  // Task 3: Cấu trúc XML gò LLM chặt chẽ
   const prompt = `${SYSTEM_PROMPT}
 
 <intent_context>
