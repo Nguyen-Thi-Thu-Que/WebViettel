@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers } from '../types';
-import { packageApi, authApi, transactionApi, faqApi, chatbotApi } from '../services/api';
+import { packageApi, authApi, transactionApi, faqApi, chatbotApi, surveyApi } from '../services/api';
 
 export function isAllowedForUser(pkg: Package, user: any): boolean {
   // Hiện tại vẫn hiển thị bình thường.
@@ -732,13 +732,19 @@ useAuthStore.subscribe((state) => {
 // 4. SURVEY STORE
 // ==========================================
 interface SurveyState {
+  questions: any[];
   answers: SurveyAnswers;
   currentStep: number;
   recommendedPackages: Package[];
+  loading: boolean;
+  hasHistory: boolean;
   setAnswer: <K extends keyof SurveyAnswers>(field: K, value: SurveyAnswers[K]) => void;
   setStep: (step: number) => void;
   resetSurvey: () => void;
-  calculateRecommendations: (allPackages: Package[]) => void;
+  fetchConfig: (answers?: SurveyAnswers) => Promise<void>;
+  submitAnswers: () => Promise<void>;
+  fetchHistory: () => Promise<boolean>;
+  deleteHistory: () => Promise<void>;
 }
 
 const INITIAL_ANSWERS: SurveyAnswers = {
@@ -749,77 +755,104 @@ const INITIAL_ANSWERS: SurveyAnswers = {
 };
 
 export const useSurveyStore = create<SurveyState>((set, get) => ({
+  questions: [],
   answers: INITIAL_ANSWERS,
   currentStep: 0,
   recommendedPackages: [],
+  loading: false,
+  hasHistory: false,
 
   setAnswer: (field, value) => {
-    set(state => ({
-      answers: {
+    set(state => {
+      const newAnswers = {
         ...state.answers,
         [field]: value
-      }
-    }));
+      };
+      // Gọi fetchConfig bất đồng bộ để cập nhật tính khả dụng (disabled) của các câu hỏi tiếp theo
+      get().fetchConfig(newAnswers);
+      return { answers: newAnswers };
+    });
   },
 
   setStep: (step) => set({ currentStep: step }),
 
   resetSurvey: () => set({ answers: INITIAL_ANSWERS, currentStep: 0, recommendedPackages: [] }),
 
-  calculateRecommendations: (allPackages) => {
-    const { answers } = get();
-    const scoredPackages = allPackages.map(pkg => {
-      let score = 0;
+  fetchConfig: async (answersParam) => {
+    set({ loading: true });
+    try {
+      const activeAnswers = answersParam || get().answers;
+      const questions = await surveyApi.fetchConfig(activeAnswers);
+      set({ questions, loading: false });
+    } catch (err) {
+      console.error("Error fetching survey configs:", err);
+      set({ loading: false });
+    }
+  },
 
-      // 1. Budget Score
-      if (answers.budget === 'under_50' && pkg.gia <= 50000) score += 30;
-      else if (answers.budget === '50_100' && pkg.gia > 50000 && pkg.gia <= 100000) score += 30;
-      else if (answers.budget === '100_200' && pkg.gia > 100000 && pkg.gia <= 200000) score += 30;
-      else if (answers.budget === 'above_200' && pkg.gia > 200000) score += 30;
-      else if (answers.budget === 'any') score += 10;
+  submitAnswers: async () => {
+    set({ loading: true });
+    try {
+      const { answers } = get();
+      const res = await surveyApi.submitAnswers(answers);
+      set({
+        answers: res.answers,
+        recommendedPackages: res.recommendedPackages,
+        hasHistory: true,
+        loading: false
+      });
+    } catch (err) {
+      console.error("Error submitting survey answers:", err);
+      set({ loading: false });
+    }
+  },
 
-      // 2. Data Demand Score
-      let dataPerDay = 0;
-      if (pkg.data_theo_ngay) {
-        const match = pkg.data_theo_ngay.replace(',', '.').match(/(\d+(\.\d+)?)\s*GB\/ngày/i);
-        if (match) {
-          dataPerDay = parseFloat(match[1]);
-        } else {
-          const matchTotal = pkg.data_theo_ngay.replace(',', '.').match(/(\d+(\.\d+)?)\s*GB/i);
-          if (matchTotal) {
-            dataPerDay = parseFloat(matchTotal[1]) / (parseInt(pkg.chu_ky_ngay) || 30);
-          }
-        }
+  fetchHistory: async () => {
+    const currentUser = useAuthStore.getState().currentUser;
+    if (!currentUser) return false;
+
+    set({ loading: true });
+    try {
+      const res = await surveyApi.fetchHistory();
+      if (res.hasHistory && res.answers && res.recommendedPackages) {
+        set({
+          answers: res.answers,
+          recommendedPackages: res.recommendedPackages,
+          hasHistory: true,
+          currentStep: get().questions.length || 8, // Hướng thẳng tới màn hình kết quả
+          loading: false
+        });
+        // Tải lại cấu hình khả dụng (disabled) dựa trên lịch sử đã tải
+        await get().fetchConfig(res.answers);
+        return true;
       }
+      set({ hasHistory: false, loading: false });
+      return false;
+    } catch (err) {
+      console.error("Error fetching survey history:", err);
+      set({ hasHistory: false, loading: false });
+      return false;
+    }
+  },
 
-      if (answers.dataDemand === 'unlimited' && pkg.id === 'umax300') score += 40;
-      else if (answers.dataDemand === 'high' && dataPerDay >= 3) score += 30;
-      else if (answers.dataDemand === 'medium' && dataPerDay >= 1 && dataPerDay < 3) score += 30;
-      else if (answers.dataDemand === 'low' && dataPerDay > 0 && dataPerDay < 1) score += 20;
-      else if (answers.dataDemand === 'none' && dataPerDay === 0) score += 20;
+  deleteHistory: async () => {
+    const currentUser = useAuthStore.getState().currentUser;
+    if (!currentUser) return;
 
-      // 3. Voice Demand Score
-      const voiceInternal = pkg.free_noi_mang && pkg.free_noi_mang !== '0' ? (parseInt(pkg.free_noi_mang.replace(/\D/g, '')) || 1000) : 0;
-      if (answers.voiceDemand === 'high' && voiceInternal > 0) score += 30;
-      else if (answers.voiceDemand === 'low' && voiceInternal > 0 && pkg.gia <= 90000) score += 20;
-      else if (answers.voiceDemand === 'none' && voiceInternal === 0) score += 15;
-
-      // 4. Social Apps Match Score
-      const pkgSocialApps = pkg.noi_dung_ngoai && pkg.noi_dung_ngoai !== '0'
-        ? pkg.noi_dung_ngoai.split(',').map(s => s.trim().toLowerCase())
-        : [];
-      if (answers.socialApps.length > 0 && pkgSocialApps.length > 0) {
-        const matches = answers.socialApps.filter(app => pkgSocialApps.includes(app.toLowerCase()));
-        score += matches.length * 15;
-      }
-
-      return { pkg, score };
-    });
-
-    // Sort by score descending and take top 3
-    scoredPackages.sort((a, b) => b.score - a.score);
-    const recommendations = scoredPackages.slice(0, 3).map(sp => sp.pkg);
-
-    set({ recommendedPackages: recommendations });
+    set({ loading: true });
+    try {
+      await surveyApi.deleteHistory();
+      set({
+        answers: INITIAL_ANSWERS,
+        recommendedPackages: [],
+        currentStep: 0,
+        hasHistory: false,
+        loading: false
+      });
+    } catch (err) {
+      console.error("Error deleting survey history:", err);
+      set({ loading: false });
+    }
   }
 }));
+

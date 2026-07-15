@@ -11,6 +11,7 @@ const faqRoutes = require('./routes/faqRoutes');
 const chatbotRoutes = require('./routes/chatbotRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const surveyRoutes = require('./routes/surveyRoutes');
 
 // Global Error Handler Import
 const globalErrorHandler = require('./middlewares/errorMiddleware');
@@ -18,6 +19,7 @@ const globalErrorHandler = require('./middlewares/errorMiddleware');
 // Seed Services
 const faqService = require('./services/faqService');
 const chatbotService = require('./services/chatbotService');
+const surveyService = require('./services/surveyService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +84,7 @@ mongoose.connect(mongoUri, { dbName: 'goicuocviettel' })
     // Auto-seed FAQs and Chatbot Configuration on server startup if collections are empty
     faqService.checkAndSeedFAQs().catch(err => console.error("FAQ seed failed:", err));
     chatbotService.checkAndSeedChatbot().catch(err => console.error("Chatbot seed failed:", err));
+    surveyService.checkAndSeedSurveyConfigs().catch(err => console.error("Survey config seed failed:", err));
   })
   .catch((err) => {
     console.error("Database connection failure:", err);
@@ -101,6 +104,7 @@ app.use('/api/faqs', faqRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/survey', surveyRoutes);
 
 // Base route
 app.get('/', (req, res) => {

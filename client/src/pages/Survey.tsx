@@ -1,5 +1,5 @@
-import { Sparkles, Compass, ArrowLeft, ArrowRight, RefreshCw, Check } from 'lucide-react';
-import { useSurveyStore, usePackageStore, useAuthStore } from '../store';
+import { Sparkles, Compass, ArrowLeft, ArrowRight, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { useSurveyStore, useAuthStore } from '../store';
 import PackageCard from '../components/PackageCard';
 import RegisterModal from '../components/RegisterModal';
 import { useState, useEffect } from 'react';
@@ -8,15 +8,20 @@ import SEO from '../components/SEO';
 import type { Package } from '../types';
 
 export default function Survey() {
-  const { packages, fetchPackages } = usePackageStore();
   const {
+    questions,
     answers,
     currentStep,
     recommendedPackages,
+    loading,
+    hasHistory,
     setAnswer,
     setStep,
     resetSurvey,
-    calculateRecommendations
+    fetchConfig,
+    submitAnswers,
+    fetchHistory,
+    deleteHistory
   } = useSurveyStore();
 
   const { currentUser } = useAuthStore();
@@ -24,11 +29,17 @@ export default function Survey() {
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Khởi tạo và đồng bộ hóa trạng thái lịch sử khảo sát của user
   useEffect(() => {
-    if (packages.length === 0) {
-      fetchPackages();
-    }
-  }, [packages.length, fetchPackages]);
+    const initSurvey = async () => {
+      // Luôn tải cấu hình câu hỏi từ database trước để đảm bảo có đầy đủ dữ liệu questions
+      await fetchConfig();
+      if (currentUser) {
+        await fetchHistory();
+      }
+    };
+    initSurvey();
+  }, [currentUser, fetchHistory, fetchConfig]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMsg({ type, text });
@@ -49,19 +60,16 @@ export default function Survey() {
     setIsModalOpen(false);
   };
 
-  const steps = [
-    { title: 'Ngân sách cước phí', desc: 'Mức chi phí tối đa bạn muốn bỏ ra hàng tháng' },
-    { title: 'Dung lượng Data', desc: 'Nhu cầu truy cập Internet, lướt web hàng ngày của bạn' },
-    { title: 'Gọi thoại miễn phí', desc: 'Nhu cầu đàm thoại, gọi điện nội/ngoại mạng của bạn' },
-    { title: 'Mạng xã hội giải trí', desc: 'Các ứng dụng mạng xã hội bạn dùng thường xuyên nhất' }
-  ];
-
-  const handleNext = () => {
-    if (currentStep < 3) {
+  const handleNext = async () => {
+    if (currentStep < questions.length - 1) {
       setStep(currentStep + 1);
     } else {
-      calculateRecommendations(packages);
-      setStep(4); // Display results step
+      if (!currentUser) {
+        showToast('error', 'Vui lòng đăng nhập để gửi câu trả lời và xem kết quả.');
+        return;
+      }
+      await submitAnswers();
+      setStep(questions.length); // Màn hình kết quả
     }
   };
 
@@ -71,17 +79,21 @@ export default function Survey() {
     }
   };
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
     resetSurvey();
+    if (questions.length === 0) {
+      await fetchConfig();
+    }
+    setStep(0);
   };
 
-  const toggleSocialApp = (app: string) => {
-    const currentList = answers.socialApps;
-    if (currentList.includes(app)) {
-      setAnswer('socialApps', currentList.filter(a => a !== app));
-    } else {
-      setAnswer('socialApps', [...currentList, app]);
+  const handleDeleteHistory = async () => {
+    if (!currentUser) return;
+    await deleteHistory();
+    if (questions.length === 0) {
+      await fetchConfig();
     }
+    showToast('success', 'Đã xóa lịch sử khảo sát thành công.');
   };
 
   // Structured breadcrumbs schema for Survey Page
@@ -104,12 +116,23 @@ export default function Survey() {
     ]
   };
 
+  if (loading && questions.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto py-24 text-center space-y-4">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto" />
+        <p className="text-slate-500 font-bold text-xs">Đang tải câu hỏi khảo sát từ hệ thống...</p>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentStep];
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-16 relative animate-fade-in text-xs font-semibold">
       {/* SEO configuration */}
       <SEO
         title="Khảo Sát AI Chọn Gói Cước Viettel - Gợi Ý Gói Cước Tối Ưu"
-        description="Trả lời nhanh 4 câu hỏi khảo sát thói quen sử dụng điện thoại để nhận ngay đề xuất 3 gói cước di động Viettel tiết kiệm chi phí nhất từ thuật toán AI."
+        description="Trả lời nhanh khảo sát thói quen sử dụng điện thoại để nhận ngay đề xuất gói cước di động Viettel tiết kiệm chi phí nhất từ thuật toán AI."
         schema={surveyBreadcrumbsSchema}
       />
 
@@ -123,33 +146,33 @@ export default function Survey() {
 
       {/* Header Info */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-amber-700 mx-auto">
-          <Compass className="w-3.5 h-3.5 text-amber-600" />
-          <span>HỆ THỐNG GỢI Ý GÓI CƯỚC THỬ NGHIỆM (DEMO SPRINT 8.1)</span>
+        <div className="inline-flex items-center space-x-2 bg-red-50 border border-red-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-primary mx-auto">
+          <Compass className="w-3.5 h-3.5 text-primary" />
+          <span>HỆ THỐNG GỢI Ý GÓI CƯỚC THÔNG MINH VIETTEL AI</span>
         </div>
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Khảo sát chọn gói cước</h1>
         <p className="text-slate-500 text-xs max-w-md mx-auto font-medium">
-          Khảo sát thói quen sử dụng. Kết quả hiển thị dưới đây là gợi ý giả định (thuật toán mẫu) phục vụ thử nghiệm giao diện.
+          Khảo sát thói quen sử dụng và nhu cầu thực tế của bạn để tìm ra gói cước di động tối ưu nhất từ hệ thống Viettel AI.
         </p>
       </div>
 
       {/* Wizard Card Panel */}
       <div className="bg-white border border-slate-100 rounded-2xl p-6 md:p-8 shadow-sm relative overflow-hidden">
         {/* Step Progress Indicators */}
-        {currentStep < 4 && (
+        {currentStep < questions.length && currentQuestion && (
           <div className="flex items-center justify-between mb-8 border-b border-slate-50 pb-5">
             <div className="flex items-center space-x-3 text-left">
               <span className="w-7 h-7 rounded-xl bg-red-50 border border-red-100 text-primary flex items-center justify-center text-xs font-bold shrink-0">
                 {currentStep + 1}
               </span>
               <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{steps[currentStep].title}</h3>
-                <p className="text-[10px] text-slate-400 font-medium">{steps[currentStep].desc}</p>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{currentQuestion.title}</h3>
+                <p className="text-[10px] text-slate-400 font-medium">{currentQuestion.description}</p>
               </div>
             </div>
 
             <div className="text-xs font-bold text-slate-400">
-              Bước <span className="text-primary">{currentStep + 1}</span> / 4
+              Bước <span className="text-primary">{currentStep + 1}</span> / {questions.length}
             </div>
           </div>
         )}
@@ -163,102 +186,77 @@ export default function Survey() {
             exit={{ opacity: 0, x: -15 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
-            {currentStep === 0 && (
+            {/* Render single-choice component dynamically */}
+            {currentStep < questions.length && currentQuestion && currentQuestion.component === 'single-choice' && (
               <div className="space-y-4 py-2 text-left">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    { id: 'under_50', label: 'Dưới 50.000đ / tháng', detail: 'Nhu cầu nghe gọi hoặc data cơ bản' },
-                    { id: '50_100', label: 'Từ 50.000đ - 100.000đ / tháng', detail: 'Tiết kiệm, có lướt web & mạng xã hội' },
-                    { id: '100_200', label: 'Từ 100.000đ - 200.000đ / tháng', detail: 'Combo thoại thoải mái và dung lượng lớn' },
-                    { id: 'above_200', label: 'Trên 200.000đ / tháng', detail: 'Nhu cầu đàm thoại VIP và không giới hạn' },
-                    { id: 'any', label: 'Mức ngân sách nào cũng được', detail: 'Đặt hiệu năng và dung lượng lên hàng đầu' }
-                  ].map(opt => (
-                    <div
-                      key={opt.id}
-                      onClick={() => setAnswer('budget', opt.id as typeof answers.budget)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer ${answers.budget === opt.id
-                          ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm'
-                          : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700'
+                  {currentQuestion.options.map((opt: any) => {
+                    const isDisabled = !!opt.disabled;
+                    return (
+                      <div
+                        key={opt.value}
+                        onClick={() => {
+                          if (!isDisabled) {
+                            setAnswer(currentQuestion.field, opt.value);
+                          }
+                        }}
+                        className={`p-4 rounded-xl border transition-all ${
+                          isDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400 pointer-events-none'
+                            : answers[currentQuestion.field] === opt.value
+                              ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm cursor-pointer'
+                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer'
                         }`}
-                    >
-                      <p className="text-xs font-bold">{opt.label}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-medium">{opt.detail}</p>
-                    </div>
-                  ))}
+                      >
+                        <p className="text-xs font-bold">{opt.label}</p>
+                        {opt.detail && <p className="text-[10px] text-slate-400 mt-1 font-medium">{opt.detail}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {currentStep === 1 && (
-              <div className="space-y-4 py-2 text-left">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    { id: 'none', label: 'Không dùng Data di động', detail: 'Chỉ dùng Wi-Fi ở nhà hoặc nơi làm việc' },
-                    { id: 'low', label: 'Dùng ít (Dưới 1 GB/ngày)', detail: 'Chỉ đọc tin nhắn, tin tức cơ bản khi ra ngoài' },
-                    { id: 'medium', label: 'Trung bình (1 - 3 GB/ngày)', detail: 'Lướt web, nghe nhạc, mạng xã hội liên tục' },
-                    { id: 'high', label: 'Nhiều (Từ 3 - 5 GB/ngày)', detail: 'Xem video HD, livestream, làm việc di động nhiều' },
-                    { id: 'unlimited', label: 'Không giới hạn dung lượng', detail: 'Tốc độ cao nhất để chơi game, download lớn' }
-                  ].map(opt => (
-                    <div
-                      key={opt.id}
-                      onClick={() => setAnswer('dataDemand', opt.id as typeof answers.dataDemand)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer ${answers.dataDemand === opt.id
-                          ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm'
-                          : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700'
-                        }`}
-                    >
-                      <p className="text-xs font-bold">{opt.label}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-medium">{opt.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div className="space-y-4 py-2 text-left">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {[
-                    { id: 'none', label: 'Không gọi nhiều', detail: 'Chủ yếu liên lạc online qua MXH' },
-                    { id: 'low', label: 'Gọi ít (Dưới 500 phút)', detail: 'Liên hệ ngắn công việc hoặc gia đình' },
-                    { id: 'high', label: 'Gọi nhiều (Trên 1000 phút)', detail: 'Tần suất gọi cao, bán hàng, CSKH' }
-                  ].map(opt => (
-                    <div
-                      key={opt.id}
-                      onClick={() => setAnswer('voiceDemand', opt.id as typeof answers.voiceDemand)}
-                      className={`p-5 rounded-xl border transition-all cursor-pointer text-center flex flex-col justify-between h-32 ${answers.voiceDemand === opt.id
-                          ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm'
-                          : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700'
-                        }`}
-                    >
-                      <p className="text-xs font-bold">{opt.label}</p>
-                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed mt-2">{opt.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {currentStep === 3 && (
+            {/* Render multi-choice component dynamically */}
+            {currentStep < questions.length && currentQuestion && currentQuestion.component === 'multi-choice' && (
               <div className="space-y-4 py-2 text-left">
                 <p className="text-[10px] text-slate-400 mb-3 font-bold uppercase tracking-wider">Tick chọn các ứng dụng bạn muốn được miễn cước data 100%:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {['TikTok', 'YouTube', 'Facebook'].map(app => {
-                    const isChecked = answers.socialApps.includes(app);
+                  {currentQuestion.options.map((opt: any) => {
+                    const currentList = Array.isArray(answers[currentQuestion.field]) ? answers[currentQuestion.field] : [];
+                    const isChecked = currentList.includes(opt.value);
+                    const isDisabled = !!opt.disabled;
+                    const toggleOption = () => {
+                      if (isDisabled) return;
+                      if (isChecked) {
+                        setAnswer(currentQuestion.field, currentList.filter((v: any) => v !== opt.value));
+                      } else {
+                        setAnswer(currentQuestion.field, [...currentList, opt.value]);
+                      }
+                    };
                     return (
                       <div
-                        key={app}
-                        onClick={() => toggleSocialApp(app)}
-                        className={`p-5 rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-center space-y-3.5 text-center ${isChecked
-                            ? 'bg-red-50/55 border-primary text-slate-900 shadow-sm'
-                            : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700'
-                          }`}
+                        key={opt.value}
+                        onClick={toggleOption}
+                        className={`p-5 rounded-xl border transition-all ${
+                          isDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400 pointer-events-none'
+                            : isChecked
+                              ? 'bg-red-50/55 border-primary text-slate-900 shadow-sm cursor-pointer'
+                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer'
+                        } flex flex-col items-center justify-center space-y-3.5 text-center`}
                       >
-                        <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors ${isChecked ? 'bg-primary border-primary text-white' : 'border-slate-350 bg-white'
-                          }`}>
+                        <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors ${
+                          isDisabled
+                            ? 'border-slate-200 bg-slate-100'
+                            : isChecked
+                              ? 'bg-primary border-primary text-white'
+                              : 'border-slate-350 bg-white'
+                        }`}>
                           {isChecked && <Check className="w-3.5 h-3.5" />}
                         </div>
-                        <span className="text-xs font-bold text-slate-800">{app}</span>
+                        <span className="text-xs font-bold text-slate-800">{opt.label}</span>
+                        {opt.detail && <span className="text-[10px] text-slate-400 font-medium leading-relaxed mt-1">{opt.detail}</span>}
                       </div>
                     );
                   })}
@@ -267,37 +265,53 @@ export default function Survey() {
             )}
 
             {/* Results Page */}
-            {currentStep === 4 && (
+            {currentStep === questions.length && (
               <div className="space-y-8 py-2">
                 <div className="text-center space-y-2">
                   <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-650 mx-auto border border-amber-100">
                     <Sparkles className="w-6 h-6 fill-amber-600 text-amber-600" />
                   </div>
-                  <h3 className="text-lg font-black text-slate-900">Đề xuất gợi ý giả định (Mẫu)</h3>
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-center text-[11px] font-semibold max-w-md mx-auto">
-                    ⚠️ Đây là dữ liệu gợi ý mẫu (giả định) cho mục đích thử nghiệm giao diện ở Sprint 8.1. Thuật toán AI thực tế kết nối với dữ liệu thật sẽ được triển khai ở Sprint sau.
+                  <h3 className="text-lg font-black text-slate-900">Gợi ý gói cước tối ưu dành cho bạn</h3>
+                  <div className="bg-red-50 border border-red-100 text-primary p-3.5 rounded-xl text-center text-[11px] font-bold max-w-md mx-auto">
+                    ✨ Các gói cước dưới đây được lựa chọn và sắp xếp dựa trên câu trả lời khảo sát bằng công cụ gợi ý thông minh Viettel AI của bạn.
                   </div>
                 </div>
 
                 {/* Suggested cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {recommendedPackages.map((pkg) => (
-                    <PackageCard
-                      key={pkg.id}
-                      pkg={pkg}
-                      onSubscribe={handleSubscribeOpen}
-                    />
-                  ))}
-                </div>
+                {recommendedPackages.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {recommendedPackages.map((pkg) => (
+                      <PackageCard
+                        key={pkg.id}
+                        pkg={pkg}
+                        onSubscribe={handleSubscribeOpen}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-slate-500 font-medium py-6">
+                    Không tìm thấy gói cước nào phù hợp. Vui lòng thực hiện lại khảo sát với tiêu chí rộng hơn.
+                  </div>
+                )}
 
-                <div className="flex justify-center pt-4">
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-4">
                   <button
                     onClick={handleRestart}
-                    className="inline-flex items-center space-x-1.5 text-xs font-bold text-slate-600 hover:text-slate-950 bg-white border border-slate-200 hover:bg-slate-50 px-5 py-2.5 rounded-xl transition-colors focus:outline-none"
+                    className="w-full sm:w-auto inline-flex items-center justify-center space-x-1.5 text-xs font-bold text-slate-600 hover:text-slate-950 bg-white border border-slate-200 hover:bg-slate-50 px-5 py-2.5 rounded-xl transition-colors focus:outline-none cursor-pointer"
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>Thực hiện lại khảo sát</span>
                   </button>
+
+                  {hasHistory && currentUser && (
+                    <button
+                      onClick={handleDeleteHistory}
+                      className="w-full sm:w-auto inline-flex items-center justify-center space-x-1.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-5 py-2.5 rounded-xl transition-colors focus:outline-none cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Xóa kết quả khảo sát</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -305,7 +319,7 @@ export default function Survey() {
         </AnimatePresence>
 
         {/* Wizard Footer Navigation Controls */}
-        {currentStep < 4 && (
+        {currentStep < questions.length && (
           <div className="flex items-center justify-between mt-8 pt-5 border-t border-slate-100">
             <button
               disabled={currentStep === 0}
@@ -317,10 +331,11 @@ export default function Survey() {
             </button>
 
             <button
+              disabled={questions.length === 0}
               onClick={handleNext}
               className="inline-flex items-center space-x-1.5 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer shadow-sm"
             >
-              <span>{currentStep === 3 ? 'Xem kết quả' : 'Tiếp theo'}</span>
+              <span>{currentStep === questions.length - 1 ? 'Xem kết quả' : 'Tiếp theo'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

@@ -413,3 +413,36 @@ export const userApi = {
     return response.data.success;
   }
 };
+
+// 7. Survey APIs
+export const surveyApi = {
+  fetchConfig: async (answers?: any): Promise<any[]> => {
+    const params = answers ? { answers: JSON.stringify(answers) } : undefined;
+    const response = await axiosInstance.get<{ success: boolean; config: any[] }>('/api/survey/config', { params });
+    return response.data.config;
+  },
+
+  submitAnswers: async (answers: any): Promise<{ answers: any; recommendedPackages: Package[] }> => {
+    const response = await axiosInstance.post<{ success: boolean; answers: any; recommendedPackages: any[] }>('/api/survey', { answers });
+    return {
+      answers: response.data.answers,
+      recommendedPackages: (response.data.recommendedPackages || []).map(toVietnamesePackage)
+    };
+  },
+
+  fetchHistory: async (): Promise<{ hasHistory: boolean; answers?: any; recommendedPackages?: Package[] }> => {
+    const response = await axiosInstance.get<{ success: boolean; hasHistory: boolean; answers?: any; recommendedPackages?: any[] }>('/api/survey/history');
+    return {
+      hasHistory: response.data.hasHistory,
+      answers: response.data.answers,
+      recommendedPackages: response.data.recommendedPackages 
+        ? response.data.recommendedPackages.map(toVietnamesePackage) 
+        : undefined
+    };
+  },
+
+  deleteHistory: async (): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>('/api/survey/history');
+    return response.data.success;
+  }
+};

@@ -732,3 +732,5 @@ exports.deletePackage = async (req, res) => {
     res.status(500).json({ success: false, message: "Lỗi máy chủ khi xóa gói cước." });
   }
 };
+
+exports.mapToEnglish = mapToEnglish;
