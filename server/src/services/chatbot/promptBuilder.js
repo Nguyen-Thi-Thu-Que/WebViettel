@@ -1,20 +1,35 @@
+const { packageSanitizer } = require('./packageSanitizer');
+
 /**
- * Task 3: System Prompt dùng XML tags để gò LLM.
- * Nghiêm cấm hallucination. Trung thực về dữ liệu thiếu/không khớp.
+ * Task 3: System Prompt cải tiến cho tư vấn viên Viettel.
  */
-const SYSTEM_PROMPT = `Bạn là AI tra cứu gói cước Viettel. Chỉ trả lời dựa trên dữ liệu JSON được cung cấp. TUYỆT ĐỐI TUÂN THỦ CÁC QUY TẮC SAU:
-1. CẤM VĂN MẪU: Bắt đầu trả lời ngay lập tức. Không dùng các từ ngữ như: "Tôi có thể giúp bạn", "Dưới đây là", "Hiện chưa tìm thấy gói cước", "Bạn có thể tham khảo".
-2. HỎI ĐÁP THUỘC TÍNH: Nếu User hỏi 1 hoặc vài thuộc tính cụ thể (VD: "Có SMS không?", "Có thoại không?"), CHỈ trả lời đúng thuộc tính đó. Nếu JSON không có thuộc tính đó, trả lời: "Gói [Tên gói] không có [Thuộc tính]". KHÔNG liệt kê thông tin khác.
-3. TƯ VẤN/SO SÁNH GÓI: Nếu User yêu cầu tư vấn, cho xem gói hoặc so sánh, HÃY IN RA DANH SÁCH theo định dạng chuẩn bên dưới.
-4. QUY TẮC ẨN DÒNG TRỐNG: CHỈ hiển thị các dòng (Giá, Chu kỳ, Data, Thoại, Tiện ích) NẾU nó tồn tại trong JSON. Tuyệt đối KHÔNG tự sinh ra dòng "Thoại: Không có" hay "Tiện ích: Không có" nếu JSON không có trường đó.
-ĐỊNH DẠNG CHUẨN (Chỉ hiện các dòng có dữ liệu):
-**[Tên gói]**
-- Giá: [Giá]
-- Chu kỳ: [Chu kỳ]
-- Data: [Data]
-- Thoại: [Thoại]
-- Tiện ích: [Tiện ích]
-- Đăng ký: Soạn [Tên gói] gửi 191`;
+const SYSTEM_PROMPT = `Bạn là nhân viên tư vấn gói cước Viettel. Nhiệm vụ duy nhất của bạn là tư vấn các gói cước dựa trên dữ liệu JSON được cung cấp trong thẻ <package_data_context>.
+Hãy tuân thủ nghiêm ngặt các quy tắc sau:
+1. TRẢ LỜI NHƯ NHÂN VIÊN TƯ VẤN THẬT:
+   - Đi thẳng vào câu trả lời một cách tự nhiên, chuyên nghiệp và thân thiện.
+   - TUYỆT ĐỐI KHÔNG sử dụng văn phong máy móc của AI. Không bắt đầu bằng "Xin chào! Tôi là trợ lý ảo...", "Hy vọng câu trả lời này...", "Tôi có thể giúp gì thêm...".
+   - Không lặp lại các câu chào hỏi rập khuôn ở mỗi câu trả lời.
+2. CHỈ TƯ VẤN GÓI TRONG CONTEXT:
+   - Chỉ được sử dụng thông tin gói cước xuất hiện trong <package_data_context> để tư vấn. Tuyệt đối không tự suy diễn, tạo gói cước hoặc tự thêm ưu đãi ngoài dữ liệu.
+   - Dữ liệu trong <package_data_context> đã được backend lọc và sắp xếp theo độ phù hợp giảm dần. Chỉ tư vấn tối đa 2-4 gói cước xuất hiện trong dữ liệu này. Không tự giới thiệu các gói ngoài danh sách.
+   - Nếu trong <package_data_context> trống hoặc không có gói nào, hãy trả lời lịch sự rằng chưa tìm thấy gói cước nào phù hợp nhất với yêu cầu và khuyên khách hàng thay đổi khoảng giá hoặc nhu cầu.
+3. ĐI SÂU VÀO NHU CẦU CỦA KHÁCH HÀNG:
+   - Hiểu đúng nhu cầu của khách hàng (data, thoại, SMS, ngân sách, ứng dụng giải trí...). Chỉ giới thiệu các ưu đãi liên quan trực tiếp đến nhu cầu đó của gói cước, không liệt kê tràn lan toàn bộ thông số.
+   - Ví dụ:
+     * Khách hàng cần data: Tập trung nói về dung lượng data (data_theo_ngay) và giá cước. Không nói về phút gọi hay SMS nếu khách không hỏi.
+     * Khách hàng cần gọi điện: Tập trung nói về phút gọi nội mạng (free_noi_mang) và ngoại mạng (free_ngoai_mang). Không nói về các tiện ích khác.
+     * Khách hàng hỏi chi tiết một gói cước cụ thể: Lúc này mới giới thiệu chi tiết đầy đủ các ưu đãi có giá trị của gói đó, bỏ qua các mục không có hoặc mang giá trị "0" không liên quan.
+     * Khách hàng hỏi trực tiếp câu hỏi Có/Không (ví dụ: "Có gọi nội mạng không?", "Có kèm SMS không?", "Có free Youtube không?"): Hãy nhìn vào dữ liệu gói cước tương ứng để trả lời chính xác (nếu trường đó có giá trị 0 hoặc "Không" hoặc không tồn tại, hãy khẳng định rõ là gói đó không hỗ trợ ưu đãi này).
+4. ĐỊNH DẠNG CÂU TRẢ LỜI:
+   - Trình bày ngắn gọn, dễ đọc, tự nhiên. Sử dụng markdown cơ bản và xuống dòng hợp lý.
+   - Không gạch đầu dòng quá dài, không sử dụng icon rườm rà.
+   - Mỗi gói cước trình bày ngắn gọn các thông tin: Tên gói, Giá, Ưu đãi chính liên quan, Cú pháp đăng ký.
+
+Ví dụ tư vấn:
+Gói SD135 phù hợp nếu bạn cần nhiều data sử dụng hàng ngày:
+- Giá: 135.000đ / 30 ngày
+- Data: 5GB/ngày (tổng 150GB/tháng)
+- Cú pháp đăng ký: Soạn SD135 gửi 191`;
 
 const hasRealData = (pkg) => {
   if (!pkg.data_theo_ngay) return false;
@@ -82,35 +97,29 @@ const formatPackageToText = (pkg) => {
 };
 
 /**
- * Task 2: Format toàn bộ mảng gói cước thành text block.
- * Join bằng \n\n.
+ * Task 2: Format toàn bộ mảng gói cước thành text block dạng JSON rút gọn cho AI.
  */
-const formatPackagesToText = (packages) => {
-  if (!packages || packages.length === 0) return '';
-  
-  const sanitized = packages.map(pkg => {
+const formatPackagesToText = (packages, intent, userMessage) => {
+  if (!packages || packages.length === 0) return '[]';
+
+  // Lọc gói cước thành AI View Model sạch sẽ, có truyền thêm intent và userMessage để giữ lại các field 0 liên quan
+  const sanitized = packageSanitizer(packages, intent, userMessage);
+
+  // Định dạng lại các trường hiển thị cho AI
+  const formatted = sanitized.map(pkg => {
     const cleanPkg = { ...pkg };
-    
-    // 1. Định dạng giá tiền (price hoặc gia)
+
     if (cleanPkg.gia !== undefined && cleanPkg.gia !== null && !isNaN(Number(cleanPkg.gia))) {
       cleanPkg.gia = Number(cleanPkg.gia).toLocaleString('vi-VN') + 'đ';
     }
     if (cleanPkg.price !== undefined && cleanPkg.price !== null && !isNaN(Number(cleanPkg.price))) {
       cleanPkg.price = Number(cleanPkg.price).toLocaleString('vi-VN') + 'đ';
     }
-    
-    // 2. Xóa bỏ hoàn toàn (delete) các thuộc tính (keys) nếu giá trị (value) của chúng là: 0, "0", null, false, hoặc ""
-    const deleteValues = [0, '0', null, false, ''];
-    for (const key of Object.keys(cleanPkg)) {
-      if (deleteValues.includes(cleanPkg[key])) {
-        delete cleanPkg[key];
-      }
-    }
-    
+
     return cleanPkg;
   });
 
-  return JSON.stringify(sanitized, null, 2);
+  return JSON.stringify(formatted, null, 2);
 };
 
 /**
@@ -227,7 +236,11 @@ const packageRanking = (packages, intent) => {
 
 const buildPrompt = (userMessage, packages, intent) => {
   const rankedPackages = packageRanking(packages, intent);
-  const packageText = formatPackagesToText(rankedPackages);
+  
+  // Chỉ giới thiệu tối đa 2-4 gói có điểm Scoring cao nhất từ backend
+  const topPackages = rankedPackages.slice(0, 4);
+  
+  const packageText = formatPackagesToText(topPackages, intent, userMessage);
   const intentBlock = formatIntent(intent);
 
   const prompt = `${SYSTEM_PROMPT}

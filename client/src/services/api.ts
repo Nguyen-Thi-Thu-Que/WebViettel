@@ -21,6 +21,10 @@ export interface FilterOptions {
 export function toVietnamesePackage(apiPkg: any): Package {
   if (!apiPkg) return {} as Package;
 
+  // Nếu đối tượng đã là tiếng Việt (có trường ten và gia), trả về trực tiếp
+  if (apiPkg.ten !== undefined && apiPkg.gia !== undefined) {
+    return apiPkg as Package;
+  }
 
   const price = apiPkg.price || 0;
   const phan_khuc_gia = price < 50000 ? 'Gia_re' : price <= 150000 ? 'Trung_binh' : 'Cao_cap';
@@ -344,16 +348,21 @@ export const faqApi = {
 
 // 5. Chatbot APIs
 export const chatbotApi = {
-  sendMessage: async (message: string): Promise<{ text: string; suggestedAction?: any }> => {
+  sendMessage: async (message: string): Promise<{ text: string; suggestedAction?: any; packages?: Package[]; recommendedPackages?: Package[] }> => {
     const response = await axiosInstance.post<{ success: boolean; message: string; data: any }>('/api/chatbot/message', { message });
 
     const rawData = response.data.data;
-    // Backend trả data là string thô (reply từ Ollama) hoặc object { text, suggestedAction }
+    // Backend trả data là string thô (reply từ Ollama) hoặc object { text, suggestedAction, packages }
     if (typeof rawData === 'string') {
       return { text: rawData };
     }
-    if (rawData && typeof rawData === 'object' && rawData.text) {
-      return { text: rawData.text, suggestedAction: rawData.suggestedAction };
+    if (rawData && typeof rawData === 'object' && (rawData.text || rawData.message)) {
+      return { 
+        text: rawData.text || rawData.message || '', 
+        suggestedAction: rawData.suggestedAction,
+        packages: (rawData.packages || []).map(toVietnamesePackage),
+        recommendedPackages: (rawData.recommendedPackages || rawData.packages || []).map(toVietnamesePackage)
+      };
     }
     // Fallback: thử đọc từ message field nếu data không hợp lệ
     if (response.data.message && response.data.success) {
@@ -373,8 +382,12 @@ export const chatbotApi = {
   },
 
   fetchHistory: async (): Promise<ChatMessage[]> => {
-    const response = await axiosInstance.get<{ success: boolean; data: ChatMessage[] }>('/api/chatbot/history');
-    return response.data.data;
+    const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/chatbot/history');
+    return (response.data.data || []).map(msg => ({
+      ...msg,
+      packages: (msg.packages || []).map(toVietnamesePackage),
+      recommendedPackages: (msg.recommendedPackages || msg.packages || []).map(toVietnamesePackage)
+    }));
   },
 
   clearHistory: async (): Promise<boolean> => {

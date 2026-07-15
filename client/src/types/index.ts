@@ -82,6 +82,8 @@ export interface ChatMessage {
     payload: string; // package ID or redirect link
     label: string;
   };
+  packages?: Package[]; // Hoặc sử dụng Type Package định nghĩa sẵn của dự án
+  recommendedPackages?: Package[];
 }
 
 export interface ChatbotConfig {

@@ -209,17 +209,6 @@ const chatbotService = {
       let suggestedAction = null;
       const lowerReply = replyText.toLowerCase();
 
-      for (const p of topPackages) {
-        if (p.ma_goi && lowerReply.includes(p.ma_goi.toLowerCase())) {
-          suggestedAction = {
-            type: 'view_details',
-            payload: p.ma_goi.toLowerCase(),
-            label: `Xem chi tiết gói ${p.ma_goi.toUpperCase()}`
-          };
-          break;
-        }
-      }
-
       // Fallback: nếu AI đề cập khảo sát
       if (!suggestedAction && (lowerReply.includes('khảo sát') || lowerMessage.includes('khảo sát'))) {
         suggestedAction = {
@@ -230,7 +219,53 @@ const chatbotService = {
       }
 
       console.timeEnd('[Chatbot] Total');
-      return { text: replyText, suggestedAction };
+
+      // Response Formatter: lọc các package thực sự được AI giới thiệu trong text
+      const actualRecommended = (topPackages || []).filter(pkg => {
+        const maGoi = (pkg.ma_goi || '').toLowerCase().trim();
+        const ten = (pkg.ten || '').toLowerCase().trim();
+        return (
+          (maGoi && lowerReply.includes(maGoi)) ||
+          (ten && lowerReply.includes(ten))
+        );
+      });
+
+      // Chuẩn hoá mảng recommendedPackages để đảm bảo đầy đủ các trường cho Client render (tránh card trắng, 0đ, lỗi id so sánh)
+      const recommendedPackages = actualRecommended.map(pkg => {
+        const rawPkg = typeof pkg.toObject === 'function' ? pkg.toObject() : pkg;
+        return {
+          id: rawPkg.package_id ? String(rawPkg.package_id) : (rawPkg.ma_goi || String(rawPkg._id)),
+          numericId: rawPkg.package_id ? Number(rawPkg.package_id) : undefined,
+          ma_goi: rawPkg.ma_goi || '',
+          ten: rawPkg.ten || '',
+          gia: rawPkg.gia != null ? Number(rawPkg.gia) : 0,
+          chu_ky_ngay: rawPkg.chu_ky_ngay != null ? String(rawPkg.chu_ky_ngay) : '30',
+          dohot: rawPkg.dohot || 'normal',
+          phan_loai_goi: rawPkg.phan_loai_goi || 'Data',
+          data_theo_ngay: rawPkg.data_theo_ngay || '',
+          free_noi_mang: rawPkg.free_noi_mang || '',
+          free_ngoai_mang: rawPkg.free_ngoai_mang || '',
+          sms: rawPkg.sms || '',
+          tien_ich_free: rawPkg.tien_ich_free || '',
+          uudaitrong: rawPkg.uudaitrong || '',
+          dieu_kien_dang_ky: rawPkg.dieu_kien_dang_ky || '',
+          dangky: rawPkg.dangky || '',
+          huygiahan: rawPkg.huygiahan || '',
+          huygoicuoc: rawPkg.huygoicuoc || '',
+          diem_noi_bat: rawPkg.diem_noi_bat || '',
+          doi_tuong_ap_dung: rawPkg.doi_tuong_ap_dung || '',
+          loai_mang: rawPkg.loai_mang || '',
+          noi_dung_ngoai: rawPkg.noi_dung_ngoai || ''
+        };
+      });
+
+      return {
+        text: replyText,
+        message: replyText, // Đồng bộ key message cho frontend
+        packages: recommendedPackages, // Đồng bộ key packages cho frontend
+        recommendedPackages, // Key mới theo đúng chuẩn Response Formatter
+        suggestedAction
+      };
 
     } catch (error) {
       console.timeEnd('[Chatbot] Total');

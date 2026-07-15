@@ -35,7 +35,8 @@ router.post('/message', decodeTokenOptional, async (req, res, next) => {
         userId: req.user._id,
         sender: 'bot',
         text: reply.text,
-        suggestedAction: reply.suggestedAction || null
+        suggestedAction: reply.suggestedAction || null,
+        packages: reply.packages || []
       });
     }
 

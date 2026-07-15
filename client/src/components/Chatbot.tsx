@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Trash2, ArrowRight } from 'lucide-react';
-import { useChatbotStore } from '../store';
-import type { ChatMessage } from '../types';
+import { useChatbotStore, useAuthStore } from '../store';
+import type { ChatMessage, Package } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import aiAvatar from '../image/AI.png';
+import PackageCard from './PackageCard';
+import RegisterModal from './RegisterModal';
 
 const Markdown = ReactMarkdown as any;
 
@@ -21,9 +23,97 @@ const getReactNodeText = (node: any): string => {
   return '';
 };
 
+const highlightCurrency = (text: string) => {
+  if (typeof text !== 'string') return text;
+  // Regex matches numbers like 40.000đ, 40.000 đ, 40k, 40.000 VND, 40.000 đồng, etc.
+  const regex = /(\b\d{1,3}(?:\.\d{3})*(?:\s*|)(?:đ|VND|VNĐ|đồng|k\b))/gi;
+  const parts = text.split(regex);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (regex.test(part)) {
+      return <span key={i} className="font-semibold text-red-600 bg-red-50/50 px-1 rounded">{part}</span>;
+    }
+    return part;
+  });
+};
+
+const processNodeWithCurrency = (node: any): any => {
+  if (!node) return null;
+  if (typeof node === 'string') {
+    return highlightCurrency(node);
+  }
+  if (typeof node === 'number') {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map((child, i) => <span key={i}>{processNodeWithCurrency(child)}</span>);
+  }
+  if (typeof node === 'object' && node.props) {
+    const children = node.props.children;
+    if (children) {
+      return {
+        ...node,
+        props: {
+          ...node.props,
+          children: processNodeWithCurrency(children)
+        }
+      };
+    }
+  }
+  return node;
+};
+
+const preprocessBotText = (text: string) => {
+  if (!text) return '';
+  // Chuyển đổi dấu '•' đầu dòng thành '- ' để markdown parse chuẩn thành list
+  let cleanText = text.replace(/^[ \t]*•[ \t]*/gm, '- ');
+  cleanText = cleanText.replace(/\n\s*\n/g, '\n\n');
+  return cleanText;
+};
+
+const typingBubbleVariants = {
+  start: {
+    transition: {
+      staggerChildren: 0.15,
+    },
+  },
+};
+
+const typingDotVariants = {
+  start: {
+    y: '0%',
+  },
+  animate: {
+    y: ['0%', '-60%', '0%'],
+    transition: {
+      duration: 0.8,
+      repeat: Infinity,
+      ease: 'easeInOut' as any,
+    },
+  },
+};
+
 export default function Chatbot() {
   const { messages, isOpen, setIsOpen, sendMessage, clearHistory } = useChatbotStore();
+  const { currentUser } = useAuthStore();
   const [inputText, setInputText] = useState('');
+  const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMsg({ type, text });
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSubscribeOpen = (pkg: Package) => {
+    if (!currentUser) {
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
+      return;
+    }
+    setSelectedPkg(pkg);
+    setIsModalOpen(true);
+  };
   const [isTyping, setIsTyping] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -145,9 +235,10 @@ export default function Chatbot() {
                   )}
                   <div className="max-w-[85%] space-y-2">
                     <div
-                      className={`px-4 py-3 rounded-2xl text-xs leading-7 shadow-sm break-words ${msg.sender === 'user'
+                      aria-label={msg.sender === 'bot' ? 'Tin nhắn từ trợ lý ảo Viettel AI' : undefined}
+                      className={`px-4.5 py-3.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words ${msg.sender === 'user'
                         ? 'bg-primary text-white rounded-tr-none whitespace-pre-wrap'
-                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
+                        : 'bg-white border border-gray-100 text-slate-800 rounded-tl-none'
                         }`}
                     >
                       {msg.sender === 'user' ? (
@@ -159,66 +250,43 @@ export default function Chatbot() {
                           ) : part
                         )
                       ) : (
-                        <div className="bot-msg-markdown space-y-2 text-xs leading-7 text-slate-800">
+                        <div className="bot-msg-markdown space-y-2 text-xs leading-relaxed text-slate-800">
                           <Markdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeSanitize]}
                             components={{
-                              li: ({ children, ...props }: any) => {
-                                const textContent = getReactNodeText(children);
-                                if (textContent.startsWith('Tên gói:')) {
-                                  const rest = textContent.substring('Tên gói:'.length);
-                                  return (
-                                    <li className="list-none mt-0 mb-1" {...props}>
-                                      <span className="font-semibold text-base text-slate-900">Tên gói:</span>
-                                      <span className="font-semibold text-base text-primary ml-1">{rest}</span>
-                                    </li>
-                                  );
-                                }
-                                if (textContent.startsWith('Giá:')) {
-                                  const rest = textContent.substring('Giá:'.length);
-                                  return (
-                                    <li className="list-none mt-0 mb-1" {...props}>
-                                      <span className="font-semibold text-slate-700">Giá:</span>
-                                      <span className="text-red-600 font-semibold ml-1">{rest}</span>
-                                    </li>
-                                  );
-                                }
-                                if (textContent.startsWith('Data:')) {
-                                  const rest = textContent.substring('Data:'.length);
-                                  return (
-                                    <li className="list-none mt-0 mb-1" {...props}>
-                                      <span className="font-semibold text-slate-700">Data:</span>
-                                      <span className="text-blue-600 font-medium ml-1">{rest}</span>
-                                    </li>
-                                  );
-                                }
-                                if (textContent.startsWith('Chu kỳ:')) {
-                                  const rest = textContent.substring('Chu kỳ:'.length);
-                                  return (
-                                    <li className="list-none mt-0 mb-1" {...props}>
-                                      <span className="font-semibold text-slate-700">Chu kỳ:</span>
-                                      <span className="text-gray-500 ml-1">{rest}</span>
-                                    </li>
-                                  );
-                                }
-                                return <li className="ml-4 list-disc mt-0 mb-1" {...props}>{children}</li>;
-                              },
-                              ul: ({ children }: any) => <ul className="mt-0 mb-1.5 pl-4 list-disc">{children}</ul>,
-                              p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+                              li: ({ children, ...props }: any) => (
+                                <li className="ml-5 list-disc mt-1 mb-1 text-slate-700 leading-relaxed text-xs sm:text-[13px]" {...props}>
+                                  {processNodeWithCurrency(children)}
+                                </li>
+                              ),
+                              ul: ({ children }: any) => <ul className="list-disc ml-5 space-y-1 text-slate-700 leading-relaxed mt-1 mb-2">{children}</ul>,
+                              p: ({ children }: any) => <p className="mb-3 last:mb-0 text-slate-800 leading-relaxed text-xs sm:text-[13px]">{processNodeWithCurrency(children)}</p>,
+                              strong: ({ children }: any) => <strong className="font-bold text-slate-900">{children}</strong>,
                               table: ({ children }: any) => <table className="w-full border-collapse border border-slate-200 my-2">{children}</table>,
                               th: ({ children }: any) => <th className="border border-slate-200 px-3 py-1.5 bg-slate-50 font-semibold">{children}</th>,
                               td: ({ children }: any) => <td className="border border-slate-200 px-3 py-1.5">{children}</td>,
-                              h1: ({ children }: any) => <h1 className="text-sm font-bold mt-3 mb-1">{children}</h1>,
-                              h2: ({ children }: any) => <h2 className="text-xs font-bold mt-2.5 mb-1">{children}</h2>,
-                              h3: ({ children }: any) => <h3 className="text-xs font-bold mt-2 mb-1">{children}</h3>,
+                              h1: ({ children }: any) => <h1 className="text-xs font-bold mt-2 mb-1">{children}</h1>,
+                              h2: ({ children }: any) => <h2 className="text-[11px] font-bold mt-2 mb-1">{children}</h2>,
+                              h3: ({ children }: any) => <h3 className="text-[10px] font-bold mt-1.5 mb-1">{children}</h3>,
                             }}
                           >
-                            {msg.text.replace(/\n\s*\n/g, '\n')}
+                            {preprocessBotText(msg.text)}
                           </Markdown>
                         </div>
                       )}
                     </div>
+
+                    {/* 2. Render Cards nếu có dữ liệu gói cước - Tách rõ ra ngoài bong bóng chat */}
+                    {msg.sender === 'bot' && (msg.recommendedPackages || msg.packages) && (msg.recommendedPackages || msg.packages)!.length > 0 && (
+                      <div className="flex overflow-x-auto gap-3 pb-2 mt-2 snap-x scrollbar-hide max-w-full">
+                        {(msg.recommendedPackages || msg.packages)!.map((pkg, index) => (
+                          <div key={index} className="min-w-[220px] max-w-[250px] snap-start text-xs font-semibold">
+                            <PackageCard pkg={pkg} onSubscribe={handleSubscribeOpen} /> 
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Render Suggested Actions */}
                     {msg.suggestedAction && (
@@ -242,17 +310,20 @@ export default function Chatbot() {
                     alt="AI Avatar"
                     className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-100 shadow-sm"
                   />
-                  <div className="bg-white border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none">
-                    <div className="flex space-x-1 py-1">
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
-                    </div>
+                  <div className="bg-white border border-slate-100 px-4 py-3 rounded-2xl rounded-tl-none shadow-sm flex items-center">
+                    <motion.div
+                      variants={typingBubbleVariants}
+                      initial="start"
+                      animate="animate"
+                      className="flex space-x-1.5 py-1"
+                    >
+                      <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary rounded-full" />
+                      <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary/70 rounded-full" />
+                      <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary/40 rounded-full" />
+                    </motion.div>
                   </div>
                 </div>
               )}
-
-              {/* Removed messagesEndRef div to rely solely on messagesContainerRef.scrollTo */}
             </div>
 
 
@@ -284,6 +355,28 @@ export default function Chatbot() {
       >
         {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
       </button>
+
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{ zIndex: 99999 }} className={`fixed top-20 right-6 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
+          }`}>
+          {toastMsg.text}
+        </div>
+      )}
+
+      {/* Subscription Modal overlay */}
+      {selectedPkg && (
+        <RegisterModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setSelectedPkg(null);
+            setIsModalOpen(false);
+          }}
+          pkg={selectedPkg}
+          onSuccess={(msg) => showToast('success', msg)}
+          onError={(msg) => showToast('error', msg)}
+        />
+      )}
     </div>
   );
 }

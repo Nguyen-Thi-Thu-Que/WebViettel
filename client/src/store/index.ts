@@ -645,6 +645,8 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
         sender: 'bot',
         text: botResponse.text,
         suggestedAction: botResponse.suggestedAction,
+        packages: botResponse.packages,
+        recommendedPackages: botResponse.recommendedPackages,
         createdAt: new Date().toISOString()
       };
       set(state => ({ messages: [...state.messages, botMsg] }));

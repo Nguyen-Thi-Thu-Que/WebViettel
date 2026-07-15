@@ -71,10 +71,12 @@ const PackageCard = React.memo(function PackageCard({
         {/* Pricing */}
         <div className="flex items-baseline space-x-1.5">
           <span className="text-xl font-black text-slate-900 tracking-tight">
-            {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
+            {typeof pkg.gia === 'number' && !isNaN(pkg.gia)
+              ? new Intl.NumberFormat('vi-VN').format(pkg.gia)
+              : pkg.gia || 0}đ
           </span>
           <span className="text-[10px] text-slate-500 font-bold">
-            / {pkg.chu_ky_ngay} ngày
+            / {pkg.chu_ky_ngay || '30'} ngày
           </span>
         </div>
 
@@ -136,6 +138,16 @@ const PackageCard = React.memo(function PackageCard({
               <Globe className="w-3.5 h-3.5 text-primary mr-2.5 shrink-0" />
               <span className="font-extrabold text-[12px] text-slate-900 truncate block max-w-full" title={pkg.noi_dung_ngoai}>
                 {pkg.noi_dung_ngoai}
+              </span>
+            </div>
+          )}
+
+          {/* Điểm nổi bật benefit */}
+          {isValid(pkg.diem_noi_bat) && (
+            <div className="flex items-center text-slate-700 py-0">
+              <Sparkles className="w-3.5 h-3.5 text-primary mr-2.5 shrink-0 animate-pulse" />
+              <span className="font-extrabold text-[12px] text-slate-900 truncate block max-w-full" title={pkg.diem_noi_bat}>
+                {pkg.diem_noi_bat}
               </span>
             </div>
           )}

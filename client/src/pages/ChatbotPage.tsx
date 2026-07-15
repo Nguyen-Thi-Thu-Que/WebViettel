@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Trash2, ArrowRight } from 'lucide-react';
-import { useChatbotStore } from '../store';
-import type { ChatMessage } from '../types';
+import { useChatbotStore, useAuthStore } from '../store';
+import type { ChatMessage, Package } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import aiAvatar from '../image/AI.png';
+import PackageCard from '../components/PackageCard';
+import RegisterModal from '../components/RegisterModal';
 
 const Markdown = ReactMarkdown as any;
 
@@ -21,13 +23,99 @@ const getReactNodeText = (node: any): string => {
   return '';
 };
 
+const highlightCurrency = (text: string) => {
+  if (typeof text !== 'string') return text;
+  const regex = /(\b\d{1,3}(?:\.\d{3})*(?:\s*|)(?:đ|VND|VNĐ|đồng|k\b))/gi;
+  const parts = text.split(regex);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (regex.test(part)) {
+      return <span key={i} className="font-semibold text-red-600 bg-red-50/50 px-1 rounded">{part}</span>;
+    }
+    return part;
+  });
+};
+
+const processNodeWithCurrency = (node: any): any => {
+  if (!node) return null;
+  if (typeof node === 'string') {
+    return highlightCurrency(node);
+  }
+  if (typeof node === 'number') {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map((child, i) => <span key={i}>{processNodeWithCurrency(child)}</span>);
+  }
+  if (typeof node === 'object' && node.props) {
+    const children = node.props.children;
+    if (children) {
+      return {
+        ...node,
+        props: {
+          ...node.props,
+          children: processNodeWithCurrency(children)
+        }
+      };
+    }
+  }
+  return node;
+};
+
+const preprocessBotText = (text: string) => {
+  if (!text) return '';
+  let cleanText = text.replace(/^[ \t]*•[ \t]*/gm, '- ');
+  cleanText = cleanText.replace(/\n\s*\n/g, '\n\n');
+  return cleanText;
+};
+
+const typingBubbleVariants = {
+  start: {
+    transition: {
+      staggerChildren: 0.15,
+    },
+  },
+};
+
+const typingDotVariants = {
+  start: {
+    y: '0%',
+  },
+  animate: {
+    y: ['0%', '-60%', '0%'],
+    transition: {
+      duration: 0.8,
+      repeat: Infinity,
+      ease: 'easeInOut' as any,
+    },
+  },
+};
+
 export default function ChatbotPage() {
   const { messages, sendMessage, clearHistory } = useChatbotStore();
+  const { currentUser } = useAuthStore();
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMsg({ type, text });
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSubscribeOpen = (pkg: Package) => {
+    if (!currentUser) {
+      showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
+      return;
+    }
+    setSelectedPkg(pkg);
+    setIsModalOpen(true);
+  };
 
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -157,66 +245,43 @@ export default function ChatbotPage() {
                       ) : part
                     )
                   ) : (
-                    <div className="bot-msg-markdown space-y-1 text-xs leading-7 text-slate-800">
+                    <div className="bot-msg-markdown space-y-2 text-xs leading-relaxed text-slate-800">
                       <Markdown
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeSanitize]}
                         components={{
-                          li: ({ children, ...props }: any) => {
-                            const textContent = getReactNodeText(children);
-                            if (textContent.startsWith('Tên gói:')) {
-                              const rest = textContent.substring('Tên gói:'.length);
-                              return (
-                                <li className="list-none mt-0 mb-0.5" {...props}>
-                                  <span className="font-semibold text-base text-slate-900">Tên gói:</span>
-                                  <span className="font-semibold text-base text-primary ml-1">{rest}</span>
-                                </li>
-                              );
-                            }
-                            if (textContent.startsWith('Giá:')) {
-                              const rest = textContent.substring('Giá:'.length);
-                              return (
-                                <li className="list-none mt-0 mb-0.5" {...props}>
-                                  <span className="font-semibold text-slate-700">Giá:</span>
-                                  <span className="text-red-600 font-semibold ml-1">{rest}</span>
-                                </li>
-                              );
-                            }
-                            if (textContent.startsWith('Data:')) {
-                              const rest = textContent.substring('Data:'.length);
-                              return (
-                                <li className="list-none mt-0 mb-0.5" {...props}>
-                                  <span className="font-semibold text-slate-700">Data:</span>
-                                  <span className="text-blue-600 font-medium ml-1">{rest}</span>
-                                </li>
-                              );
-                            }
-                            if (textContent.startsWith('Chu kỳ:')) {
-                              const rest = textContent.substring('Chu kỳ:'.length);
-                              return (
-                                <li className="list-none mt-0 mb-0.5" {...props}>
-                                  <span className="font-semibold text-slate-700">Chu kỳ:</span>
-                                  <span className="text-gray-500 ml-1">{rest}</span>
-                                </li>
-                              );
-                            }
-                            return <li className="ml-4 list-disc mt-0 mb-0.5" {...props}>{children}</li>;
-                          },
-                          ul: ({ children }: any) => <ul className="mt-0 mb-1 pl-4 list-disc space-y-0.5">{children}</ul>,
-                          p: ({ children }: any) => <p className="mb-1 last:mb-0">{children}</p>,
+                          li: ({ children, ...props }: any) => (
+                            <li className="ml-5 list-disc mt-1 mb-1 text-slate-700 leading-relaxed text-xs sm:text-[13px]" {...props}>
+                              {processNodeWithCurrency(children)}
+                            </li>
+                          ),
+                          ul: ({ children }: any) => <ul className="list-disc ml-5 space-y-1 text-slate-700 leading-relaxed mt-1 mb-2">{children}</ul>,
+                          p: ({ children }: any) => <p className="mb-3 last:mb-0 text-slate-800 leading-relaxed text-xs sm:text-[13px]">{processNodeWithCurrency(children)}</p>,
+                          strong: ({ children }: any) => <strong className="font-bold text-slate-900">{children}</strong>,
                           table: ({ children }: any) => <table className="w-full border-collapse border border-slate-200 my-2">{children}</table>,
                           th: ({ children }: any) => <th className="border border-slate-200 px-3 py-1.5 bg-slate-50 font-semibold">{children}</th>,
                           td: ({ children }: any) => <td className="border border-slate-200 px-3 py-1.5">{children}</td>,
-                          h1: ({ children }: any) => <h1 className="text-sm font-bold mt-2 mb-1">{children}</h1>,
-                          h2: ({ children }: any) => <h2 className="text-xs font-bold mt-2 mb-1">{children}</h2>,
-                          h3: ({ children }: any) => <h3 className="text-xs font-bold mt-1.5 mb-1">{children}</h3>,
+                          h1: ({ children }: any) => <h1 className="text-xs font-bold mt-2 mb-1">{children}</h1>,
+                          h2: ({ children }: any) => <h2 className="text-[11px] font-bold mt-2 mb-1">{children}</h2>,
+                          h3: ({ children }: any) => <h3 className="text-[10px] font-bold mt-1.5 mb-1">{children}</h3>,
                         }}
                       >
-                        {msg.text.replace(/\n\s*\n/g, '\n')}
+                        {preprocessBotText(msg.text)}
                       </Markdown>
                     </div>
                   )}
                 </div>
+
+                {/* 2. Render Cards nếu có dữ liệu gói cước - Tách rõ ra ngoài bong bóng chat */}
+                {msg.sender === 'bot' && (msg.recommendedPackages || msg.packages) && (msg.recommendedPackages || msg.packages)!.length > 0 && (
+                  <div className="flex overflow-x-auto gap-3 pb-2 mt-2 snap-x scrollbar-hide max-w-full">
+                    {(msg.recommendedPackages || msg.packages)!.map((pkg, index) => (
+                      <div key={index} className="min-w-[220px] max-w-[250px] snap-start text-xs font-semibold">
+                        <PackageCard pkg={pkg} onSubscribe={handleSubscribeOpen} /> 
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Render Suggested Actions */}
                 {msg.suggestedAction && (
@@ -242,16 +307,21 @@ export default function ChatbotPage() {
               />
               <div className="flex flex-col space-y-1">
                 <div 
-                  className="ai-message flex items-center space-x-2"
-                  style={{ padding: '10px 15px', borderRadius: '12px 12px 12px 0', backgroundColor: '#f4f4f4', color: '#333' }}
+                  className="ai-message flex items-center shadow-sm border border-slate-100"
+                  style={{ padding: '10px 15px', borderRadius: '12px 12px 12px 0', backgroundColor: '#ffffff', color: '#333' }}
                 >
-                  <div className="flex space-x-1 py-1">
-                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
-                  </div>
+                  <motion.div
+                    variants={typingBubbleVariants}
+                    initial="start"
+                    animate="animate"
+                    className="flex space-x-1.5 py-1"
+                  >
+                    <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary rounded-full" />
+                    <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary/70 rounded-full" />
+                    <motion.div variants={typingDotVariants} className="w-1.5 h-1.5 bg-primary/40 rounded-full" />
+                  </motion.div>
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium animate-pulse ml-1">AI đang suy nghĩ...</span>
+                <span className="text-[9px] text-slate-400 font-bold animate-pulse ml-1">AI đang suy nghĩ...</span>
               </div>
             </div>
           )}
@@ -284,6 +354,28 @@ export default function ChatbotPage() {
           </form>
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div style={{ zIndex: 99999 }} className={`fixed top-20 right-6 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
+          }`}>
+          {toastMsg.text}
+        </div>
+      )}
+
+      {/* Subscription Modal overlay */}
+      {selectedPkg && (
+        <RegisterModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setSelectedPkg(null);
+            setIsModalOpen(false);
+          }}
+          pkg={selectedPkg}
+          onSuccess={(msg) => showToast('success', msg)}
+          onError={(msg) => showToast('error', msg)}
+        />
+      )}
     </div>
   );
 }
