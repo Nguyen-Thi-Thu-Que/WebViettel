@@ -15,6 +15,7 @@ export default function Survey() {
     recommendedPackages,
     loading,
     hasHistory,
+    isEarlyTerminated,
     setAnswer,
     setStep,
     resetSurvey,
@@ -61,13 +62,13 @@ export default function Survey() {
   };
 
   const handleNext = async () => {
-    if (currentStep < questions.length - 1) {
+    const nextStepIdx = currentStep + 1;
+    const nextQuestion = questions[nextStepIdx];
+    const isNextBlocked = nextQuestion && nextQuestion.options.every((opt: any) => opt.disabled);
+
+    if (currentStep < questions.length - 1 && !isNextBlocked) {
       setStep(currentStep + 1);
     } else {
-      if (!currentUser) {
-        showToast('error', 'Vui lòng đăng nhập để gửi câu trả lời và xem kết quả.');
-        return;
-      }
       await submitAnswers();
       setStep(questions.length); // Màn hình kết quả
     }
@@ -203,7 +204,7 @@ export default function Survey() {
                         className={`p-4 rounded-xl border transition-all ${
                           isDisabled
                             ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400 pointer-events-none'
-                            : answers[currentQuestion.field] === opt.value
+                            : (answers as any)[currentQuestion.field] === opt.value
                               ? 'bg-red-50/50 border-primary text-slate-900 shadow-sm cursor-pointer'
                               : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer'
                         }`}
@@ -223,7 +224,7 @@ export default function Survey() {
                 <p className="text-[10px] text-slate-400 mb-3 font-bold uppercase tracking-wider">Tick chọn các ứng dụng bạn muốn được miễn cước data 100%:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {currentQuestion.options.map((opt: any) => {
-                    const currentList = Array.isArray(answers[currentQuestion.field]) ? answers[currentQuestion.field] : [];
+                    const currentList = Array.isArray((answers as any)[currentQuestion.field]) ? (answers as any)[currentQuestion.field] : [];
                     const isChecked = currentList.includes(opt.value);
                     const isDisabled = !!opt.disabled;
                     const toggleOption = () => {
@@ -272,9 +273,15 @@ export default function Survey() {
                     <Sparkles className="w-6 h-6 fill-amber-600 text-amber-600" />
                   </div>
                   <h3 className="text-lg font-black text-slate-900">Gợi ý gói cước tối ưu dành cho bạn</h3>
-                  <div className="bg-red-50 border border-red-100 text-primary p-3.5 rounded-xl text-center text-[11px] font-bold max-w-md mx-auto">
-                    ✨ Các gói cước dưới đây được lựa chọn và sắp xếp dựa trên câu trả lời khảo sát bằng công cụ gợi ý thông minh Viettel AI của bạn.
-                  </div>
+                  {isEarlyTerminated ? (
+                    <div className="bg-amber-50 border border-amber-100 text-amber-800 p-3.5 rounded-xl text-center text-[11px] font-bold max-w-md mx-auto">
+                      ⚠️ Chúng tôi đã xác định được các gói cước phù hợp nhất với nhu cầu của bạn. Những câu hỏi còn lại không giúp phân loại thêm nên hệ thống hiển thị kết quả ngay.
+                    </div>
+                  ) : (
+                    <div className="bg-red-50 border border-red-100 text-primary p-3.5 rounded-xl text-center text-[11px] font-bold max-w-md mx-auto">
+                      ✨ Các gói cước dưới đây được lựa chọn và sắp xếp dựa trên câu trả lời khảo sát bằng công cụ gợi ý thông minh Viettel AI của bạn.
+                    </div>
+                  )}
                 </div>
 
                 {/* Suggested cards */}
@@ -335,7 +342,14 @@ export default function Survey() {
               onClick={handleNext}
               className="inline-flex items-center space-x-1.5 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer shadow-sm"
             >
-              <span>{currentStep === questions.length - 1 ? 'Xem kết quả' : 'Tiếp theo'}</span>
+              {(() => {
+                const nextStepIdx = currentStep + 1;
+                const nextQuestion = questions[nextStepIdx];
+                const isNextBlocked = nextQuestion && nextQuestion.options.every((opt: any) => opt.disabled);
+                return (
+                  <span>{(currentStep === questions.length - 1 || isNextBlocked) ? 'Xem kết quả' : 'Tiếp theo'}</span>
+                );
+              })()}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

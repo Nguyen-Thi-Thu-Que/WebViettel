@@ -23,13 +23,9 @@ module.exports = {
     }
   },
 
-  /**
-   * POST /api/survey
-   * Lưu kết quả khảo sát của User và trả về gợi ý gói cước tối ưu
-   */
   submitAnswers: async (req, res, next) => {
     try {
-      const userId = req.user.user_id;
+      const userId = req.user ? req.user.user_id : null;
       const { answers } = req.body;
 
       if (!answers) {
@@ -46,7 +42,8 @@ module.exports = {
         success: true,
         message: 'Khảo sát hoàn tất thành công!',
         answers: result.surveyHistory.answers,
-        recommendedPackages: result.packages
+        recommendedPackages: result.packages,
+        isEarlyTerminated: result.surveyHistory.isEarlyTerminated || false
       });
     } catch (error) {
       next(error);
@@ -74,7 +71,8 @@ module.exports = {
         success: true,
         hasHistory: true,
         answers: result.history.answers,
-        recommendedPackages: result.packages
+        recommendedPackages: result.packages,
+        isEarlyTerminated: result.history.isEarlyTerminated || false
       });
     } catch (error) {
       next(error);

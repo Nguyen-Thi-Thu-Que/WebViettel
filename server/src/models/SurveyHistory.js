@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 const surveyHistorySchema = new mongoose.Schema({
   userId: {
     type: Number,
-    required: true,
-    unique: true,
+    required: false,
     index: true
   },
   answers: {
@@ -18,6 +17,18 @@ const surveyHistorySchema = new mongoose.Schema({
   recommendedPackages: {
     type: [mongoose.Schema.Types.Mixed],
     required: true
+  },
+  deleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  isEarlyTerminated: {
+    type: Boolean,
+    default: false
   }
 }, {
   collection: 'survey_histories',

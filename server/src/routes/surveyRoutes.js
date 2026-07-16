@@ -6,8 +6,10 @@ const { authenticateToken, decodeTokenOptional } = require('../middlewares/authM
 // GET /api/survey/config (Công khai - lấy danh sách câu hỏi, có nhận diện user)
 router.get('/config', decodeTokenOptional, surveyController.getConfig);
 
+// POST /api/survey (Công khai/Có nhận diện - gửi câu trả lời và lấy kết quả)
+router.post('/', decodeTokenOptional, surveyController.submitAnswers);
+
 // Các endpoint yêu cầu đăng nhập
-router.post('/', authenticateToken, surveyController.submitAnswers);
 router.get('/history', authenticateToken, surveyController.getHistory);
 router.delete('/history', authenticateToken, surveyController.deleteHistory);
 

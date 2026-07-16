@@ -422,22 +422,24 @@ export const surveyApi = {
     return response.data.config;
   },
 
-  submitAnswers: async (answers: any): Promise<{ answers: any; recommendedPackages: Package[] }> => {
-    const response = await axiosInstance.post<{ success: boolean; answers: any; recommendedPackages: any[] }>('/api/survey', { answers });
+  submitAnswers: async (answers: any): Promise<{ answers: any; recommendedPackages: Package[]; isEarlyTerminated?: boolean }> => {
+    const response = await axiosInstance.post<{ success: boolean; answers: any; recommendedPackages: any[]; isEarlyTerminated?: boolean }>('/api/survey', { answers });
     return {
       answers: response.data.answers,
-      recommendedPackages: (response.data.recommendedPackages || []).map(toVietnamesePackage)
+      recommendedPackages: (response.data.recommendedPackages || []).map(toVietnamesePackage),
+      isEarlyTerminated: response.data.isEarlyTerminated
     };
   },
 
-  fetchHistory: async (): Promise<{ hasHistory: boolean; answers?: any; recommendedPackages?: Package[] }> => {
-    const response = await axiosInstance.get<{ success: boolean; hasHistory: boolean; answers?: any; recommendedPackages?: any[] }>('/api/survey/history');
+  fetchHistory: async (): Promise<{ hasHistory: boolean; answers?: any; recommendedPackages?: Package[]; isEarlyTerminated?: boolean }> => {
+    const response = await axiosInstance.get<{ success: boolean; hasHistory: boolean; answers?: any; recommendedPackages?: any[]; isEarlyTerminated?: boolean }>('/api/survey/history');
     return {
       hasHistory: response.data.hasHistory,
       answers: response.data.answers,
       recommendedPackages: response.data.recommendedPackages 
         ? response.data.recommendedPackages.map(toVietnamesePackage) 
-        : undefined
+        : undefined,
+      isEarlyTerminated: response.data.isEarlyTerminated
     };
   },
 

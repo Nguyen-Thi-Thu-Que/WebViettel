@@ -738,6 +738,7 @@ interface SurveyState {
   recommendedPackages: Package[];
   loading: boolean;
   hasHistory: boolean;
+  isEarlyTerminated: boolean;
   setAnswer: <K extends keyof SurveyAnswers>(field: K, value: SurveyAnswers[K]) => void;
   setStep: (step: number) => void;
   resetSurvey: () => void;
@@ -761,6 +762,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   recommendedPackages: [],
   loading: false,
   hasHistory: false,
+  isEarlyTerminated: false,
 
   setAnswer: (field, value) => {
     set(state => {
@@ -776,7 +778,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 
   setStep: (step) => set({ currentStep: step }),
 
-  resetSurvey: () => set({ answers: INITIAL_ANSWERS, currentStep: 0, recommendedPackages: [] }),
+  resetSurvey: () => set({ answers: INITIAL_ANSWERS, currentStep: 0, recommendedPackages: [], isEarlyTerminated: false }),
 
   fetchConfig: async (answersParam) => {
     set({ loading: true });
@@ -798,6 +800,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       set({
         answers: res.answers,
         recommendedPackages: res.recommendedPackages,
+        isEarlyTerminated: res.isEarlyTerminated || false,
         hasHistory: true,
         loading: false
       });
@@ -818,8 +821,9 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
         set({
           answers: res.answers,
           recommendedPackages: res.recommendedPackages,
+          isEarlyTerminated: res.isEarlyTerminated || false,
           hasHistory: true,
-          currentStep: get().questions.length || 8, // Hướng thẳng tới màn hình kết quả
+          currentStep: get().questions.length || 7, // Hướng thẳng tới màn hình kết quả
           loading: false
         });
         // Tải lại cấu hình khả dụng (disabled) dựa trên lịch sử đã tải
@@ -847,6 +851,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
         recommendedPackages: [],
         currentStep: 0,
         hasHistory: false,
+        isEarlyTerminated: false,
         loading: false
       });
     } catch (err) {
