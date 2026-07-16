@@ -28,6 +28,13 @@ export interface Package {
   goi_thay_the?: string;
   doi_tuong_ap_dung?: string;
   loai_mang?: string;
+  has_data?: boolean;
+  has_voice?: boolean;
+  has_sms?: boolean;
+  has_tv360?: boolean;
+  has_youtube?: boolean;
+  has_tiktok?: boolean;
+  has_facebook?: boolean;
 }
 
 export interface User {

@@ -65,18 +65,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ currentUser: data.user, authChecked: true, loading: false });
 
       // Automatically fetch active subscriptions & history into global state
-      await get().fetchActiveSubscriptions().catch(() => {});
-      await get().fetchSubscriptionHistory().catch(() => {});
-      
+      await get().fetchActiveSubscriptions().catch(() => { });
+      await get().fetchSubscriptionHistory().catch(() => { });
+
       // Auto fetch other details
-      get().fetchTransactions().catch(() => {});
-      get().fetchFAQs().catch(() => {});
+      get().fetchTransactions().catch(() => { });
+      get().fetchFAQs().catch(() => { });
       return true;
     } catch (err: any) {
-      set({ 
+      set({
         error: err.response?.data?.message || 'Thông tin đăng nhập không chính xác.',
         authChecked: true,
-        loading: false 
+        loading: false
       });
       return false;
     }
@@ -90,8 +90,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ currentUser: data.user, authChecked: true, loading: false });
 
       // Automatically fetch active subscriptions & history into global state
-      await get().fetchActiveSubscriptions().catch(() => {});
-      await get().fetchSubscriptionHistory().catch(() => {});
+      await get().fetchActiveSubscriptions().catch(() => { });
+      await get().fetchSubscriptionHistory().catch(() => { });
 
       return true;
     } catch (err: any) {
@@ -180,7 +180,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           balance: result.balance
         } : null
       }));
-      get().fetchTransactions().catch(() => {});
+      get().fetchTransactions().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error depositing wallet:", err);
@@ -199,7 +199,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } : null,
         loading: false
       }));
-      get().fetchTransactions().catch(() => {});
+      get().fetchTransactions().catch(() => { });
       return { success: true, message: 'Nạp tiền qua blockchain thành công!', balance: result.balance };
     } catch (err: any) {
       const errMsg = err.response?.data?.message || 'Nạp tiền qua blockchain thất bại.';
@@ -225,9 +225,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Reload entire state from server to synchronize after registration/replacement
       await get().fetchMe();
-      await get().fetchActiveSubscriptions().catch(() => {});
-      await get().fetchSubscriptionHistory().catch(() => {});
-      await get().fetchTransactions().catch(() => {});
+      await get().fetchActiveSubscriptions().catch(() => { });
+      await get().fetchSubscriptionHistory().catch(() => { });
+      await get().fetchTransactions().catch(() => { });
 
       return { success: true, message: result?.message || 'Đăng ký gói cước thành công!' };
     } catch (err: any) {
@@ -276,9 +276,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const success = await authApi.unsubscribePackage(packageId);
       if (success) {
-        await get().fetchActiveSubscriptions().catch(() => {});
-        await get().fetchSubscriptionHistory().catch(() => {});
-        get().fetchTransactions().catch(() => {});
+        await get().fetchActiveSubscriptions().catch(() => { });
+        await get().fetchSubscriptionHistory().catch(() => { });
+        get().fetchTransactions().catch(() => { });
         return true;
       }
       return false;
@@ -291,8 +291,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   toggleAutoRenew: async (subscriptionId, autoRenew) => {
     try {
       await authApi.toggleAutoRenew(subscriptionId, autoRenew);
-      await get().fetchActiveSubscriptions().catch(() => {});
-      await get().fetchSubscriptionHistory().catch(() => {});
+      await get().fetchActiveSubscriptions().catch(() => { });
+      await get().fetchSubscriptionHistory().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error toggling auto renew:", err);
@@ -303,8 +303,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   cancelSubscription: async (subscriptionId) => {
     try {
       await authApi.cancelSubscription(subscriptionId);
-      await get().fetchActiveSubscriptions().catch(() => {});
-      await get().fetchSubscriptionHistory().catch(() => {});
+      await get().fetchActiveSubscriptions().catch(() => { });
+      await get().fetchSubscriptionHistory().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error cancelling subscription:", err);
@@ -315,7 +315,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clearSubscriptionHistory: async () => {
     try {
       await authApi.clearSubscriptionHistory();
-      await get().fetchSubscriptionHistory().catch(() => {});
+      await get().fetchSubscriptionHistory().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error clearing subscription history:", err);
@@ -498,9 +498,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
 
       const data = await packageApi.fetchPackages(mergedParams);
 
-      set({ 
-        packages: data.packages || [], 
-        loading: false 
+      set({
+        packages: data.packages || [],
+        loading: false
       });
     } catch (err: any) {
       console.error("Error fetching packages from API:", err);
@@ -520,9 +520,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       set({ currentPackage: pkg, loading: false });
     } catch (err: any) {
       console.error(`Error fetching package ${id} from API:`, err);
-      set({ 
-        error: err.response?.data?.message || 'Không thể tải chi tiết gói cước.', 
-        loading: false 
+      set({
+        error: err.response?.data?.message || 'Không thể tải chi tiết gói cước.',
+        loading: false
       });
     }
   },
@@ -542,9 +542,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       return false;
     } catch (err: any) {
       console.error("Error creating package:", err);
-      set({ 
+      set({
         error: err.response?.data?.message || 'Không thể tạo gói cước mới.',
-        loading: false 
+        loading: false
       });
       return false;
     }
@@ -566,9 +566,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       return false;
     } catch (err: any) {
       console.error("Error updating package:", err);
-      set({ 
+      set({
         error: err.response?.data?.message || 'Không thể cập nhật gói cước.',
-        loading: false 
+        loading: false
       });
       return false;
     }
@@ -590,9 +590,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
       return false;
     } catch (err: any) {
       console.error("Error deleting package:", err);
-      set({ 
+      set({
         error: err.response?.data?.message || 'Không thể xóa gói cước.',
-        loading: false 
+        loading: false
       });
       return false;
     }

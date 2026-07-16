@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Package = require('../models/Package');
+const PackageFeature = require('../models/PackageFeature');
 const { canViewPackage } = require('../utils/permission');
 
 function normalizeNetwork(loaiMangVal) {
@@ -382,6 +383,27 @@ exports.getPackages = async (req, res) => {
     // Filter packages through the permission service
     let filteredPackages = packagesMapped.filter(pkg => canViewPackage(req.user, pkg));
 
+    // Fetch and merge features from package_features
+    const packageIds = filteredPackages.map(p => p.numericId);
+    const features = await PackageFeature.find({ package_id: { $in: packageIds } });
+    const featuresMap = new Map();
+    features.forEach(f => {
+      featuresMap.set(f.package_id, f);
+    });
+    filteredPackages = filteredPackages.map(pkg => {
+      const feat = featuresMap.get(pkg.numericId) || {};
+      return {
+        ...pkg,
+        has_data: feat.has_data !== undefined ? feat.has_data : false,
+        has_voice: feat.has_voice !== undefined ? feat.has_voice : false,
+        has_sms: feat.has_sms !== undefined ? feat.has_sms : false,
+        has_tv360: feat.has_tv360 !== undefined ? feat.has_tv360 : false,
+        has_youtube: feat.has_youtube !== undefined ? feat.has_youtube : false,
+        has_tiktok: feat.has_tiktok !== undefined ? feat.has_tiktok : false,
+        has_facebook: feat.has_facebook !== undefined ? feat.has_facebook : false
+      };
+    });
+
     // Filter by loai_mang in-memory using normalized values
     const netOpt = req.query.network || req.query.loai_mang;
     if (netOpt && netOpt !== 'all' && netOpt !== '') {
@@ -595,6 +617,17 @@ exports.getPackageById = async (req, res) => {
     const mapped = mapToEnglish(pkg);
     if (!canViewPackage(req.user, mapped)) {
       return res.status(403).json({ success: false, message: "Bạn không có quyền xem gói cước này." });
+    }
+
+    const feat = await PackageFeature.findOne({ package_id: mapped.numericId });
+    if (feat) {
+      mapped.has_data = feat.has_data !== undefined ? feat.has_data : false;
+      mapped.has_voice = feat.has_voice !== undefined ? feat.has_voice : false;
+      mapped.has_sms = feat.has_sms !== undefined ? feat.has_sms : false;
+      mapped.has_tv360 = feat.has_tv360 !== undefined ? feat.has_tv360 : false;
+      mapped.has_youtube = feat.has_youtube !== undefined ? feat.has_youtube : false;
+      mapped.has_tiktok = feat.has_tiktok !== undefined ? feat.has_tiktok : false;
+      mapped.has_facebook = feat.has_facebook !== undefined ? feat.has_facebook : false;
     }
 
     res.json(mapped);

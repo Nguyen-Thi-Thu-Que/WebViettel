@@ -31,7 +31,7 @@ export function toVietnamesePackage(apiPkg: any): Package {
 
   const termsList = apiPkg.terms || [];
   const chinh_sach_ap_dung = termsList[0] || 'Áp dụng cho thuê bao Viettel di động.';
-  
+
   let dangky = apiPkg.dangky || '';
   let huygiahan = apiPkg.huygiahan || '';
   let huygoicuoc = apiPkg.huygoicuoc || '';
@@ -91,7 +91,14 @@ export function toVietnamesePackage(apiPkg: any): Package {
     diem_noi_bat: apiPkg.diem_noi_bat || '',
     goi_thay_the: apiPkg.goi_thay_the || '',
     doi_tuong_ap_dung: apiPkg.conditions || '',
-    loai_mang: apiPkg.loai_mang || ''
+    loai_mang: apiPkg.loai_mang || '',
+    has_data: apiPkg.has_data,
+    has_voice: apiPkg.has_voice,
+    has_sms: apiPkg.has_sms,
+    has_tv360: apiPkg.has_tv360,
+    has_youtube: apiPkg.has_youtube,
+    has_tiktok: apiPkg.has_tiktok,
+    has_facebook: apiPkg.has_facebook
   };
 
 
@@ -357,8 +364,8 @@ export const chatbotApi = {
       return { text: rawData };
     }
     if (rawData && typeof rawData === 'object' && (rawData.text || rawData.message)) {
-      return { 
-        text: rawData.text || rawData.message || '', 
+      return {
+        text: rawData.text || rawData.message || '',
         suggestedAction: rawData.suggestedAction,
         packages: (rawData.packages || []).map(toVietnamesePackage),
         recommendedPackages: (rawData.recommendedPackages || rawData.packages || []).map(toVietnamesePackage)
@@ -436,8 +443,8 @@ export const surveyApi = {
     return {
       hasHistory: response.data.hasHistory,
       answers: response.data.answers,
-      recommendedPackages: response.data.recommendedPackages 
-        ? response.data.recommendedPackages.map(toVietnamesePackage) 
+      recommendedPackages: response.data.recommendedPackages
+        ? response.data.recommendedPackages.map(toVietnamesePackage)
         : undefined,
       isEarlyTerminated: response.data.isEarlyTerminated
     };

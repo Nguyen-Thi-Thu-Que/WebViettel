@@ -1,10 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, X, Bot, Plus, Check, ShieldAlert } from 'lucide-react';
+import { ArrowRightLeft, X, Plus, Check, ShieldAlert } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
 import type { Package } from '../types';
 import SEO from '../components/SEO';
 import RegisterModal from '../components/RegisterModal';
+import { compareAIService } from '../services/compareAIService';
+import CompareAI from '../components/CompareAI';
+
+interface RowSpec {
+  key: string;
+  label: string;
+  getValue: (pkg: Package) => any;
+  renderCell: (pkg: Package) => React.ReactNode;
+}
 
 export default function Compare() {
   const { compareList, packages, removeFromCompare, addToCompare, clearCompare, fetchPackages, loading, error } = usePackageStore();
@@ -14,6 +23,17 @@ export default function Compare() {
   const [selectedPkgIdToAdd, setSelectedPkgIdToAdd] = useState('');
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+
+  const aiAnalysis = useMemo(() => {
+    if (compareList.length < 2) return null;
+    try {
+      return compareAIService.analyzePackages(compareList);
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }, [compareList]);
 
   useEffect(() => {
     if (packages.length === 0) {
@@ -62,6 +82,7 @@ export default function Compare() {
         showToast('success', res.message);
         setSelectedPkgIdToAdd('');
         setShowAddSelector(false);
+        setModalSearchQuery('');
       } else {
         showToast('error', res.message);
       }
@@ -83,64 +104,219 @@ export default function Compare() {
   };
 
   const isValid = (val: any) => {
-    return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '';
+    return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '' && val !== false;
   };
 
-  const parseDataGb = (str: string) => {
-    if (!str) return 0;
-    const match = str.replace(',', '.').match(/(\d+(\.\d+)?)/);
-    return match ? parseFloat(match[1]) : 0;
+
+  // Normalization Helpers
+  const normalizeStringList = (str: string) => {
+    if (!str || str === '0') return '';
+    return str
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => {
+        const lower = s.toLowerCase();
+        if (lower === 'youtube' || lower === 'yt') return 'YouTube';
+        if (lower === 'tiktok') return 'TikTok';
+        if (lower === 'facebook' || lower === 'fb') return 'Facebook';
+        if (lower === 'tv360') return 'TV360';
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      })
+      .join(' • ');
   };
 
-  const generateAIAnalysis = (list: Package[]): string => {
-    if (list.length === 0) return '';
-    if (list.length === 1) {
-      const catLabel = list[0].phan_loai_goi === 'Social' ? 'chuyên dùng cho mạng xã hội (YouTube/TikTok)' :
-        list[0].phan_loai_goi === 'Combo' ? 'combo nghe gọi kèm data tiện lợi' : 'chuyên dụng data tốc độ cao';
-      return `Bạn đang xem xét gói **${list[0].ten}**. Đây là gói cước ${catLabel} với chi phí ${list[0].gia.toLocaleString()}đ/chu kỳ. Gói cước này có mức giá khá hợp lý ở phân khúc ${list[0].phan_khuc_gia}.`;
-    }
-
-    let report = 'Dựa trên phân tích các gói cước đã chọn, **Viettel AI** xin đưa ra nhận xét:\n\n';
-
-    const sortedByPrice = [...list].sort((a, b) => a.gia - b.gia);
-    const cheapest = sortedByPrice[0];
-    report += `• **Tiết kiệm nhất**: Gói **${cheapest.ten}** có chi phí thấp nhất là **${cheapest.gia.toLocaleString()}đ**, thích hợp nếu bạn muốn duy trì liên lạc với ngân sách tối giản.\n`;
-
-    const sortedByData = [...list].sort((a, b) => {
-      const limitA = parseDataGb(a.data_theo_ngay);
-      const limitB = parseDataGb(b.data_theo_ngay);
-      return limitB - limitA;
-    });
-    const maxData = sortedByData[0];
-    if (parseDataGb(maxData.data_theo_ngay) > 0 && maxData.id !== cheapest.id) {
-      report += `• **Dung lượng khủng nhất**: Gói **${maxData.ten}** cung cấp lượng data vượt trội **${maxData.data_theo_ngay}** hỗ trợ lướt web cực nhanh, phù hợp cho nhu cầu làm việc di động nhiều.\n`;
-    }
-
-    const socialPackages = list.filter(p => isValid(p.noi_dung_ngoai));
-    if (socialPackages.length > 0) {
-      report += `• **Ưu đãi Giải trí**: Gói **${socialPackages.map(p => p.ten).join(', ')}** là lựa chọn tốt nếu bạn nghiện lướt mạng xã hội vì được miễn cước data cho các ứng dụng phổ biến.\n`;
-    }
-
-    const voicePackages = list.filter(p => isValid(p.free_noi_mang) && p.free_noi_mang !== '0');
-    if (voicePackages.length > 0) {
-      report += `• **Nghe gọi thoải mái**: Gói **${voicePackages.map(p => p.ten).join(', ')}** tối ưu nhất cho người đàm thoại liên tục nhờ có ưu đãi phút gọi nội/ngoại mạng miễn phí.\n`;
-    }
-
-    report += `\n**Khuyên dùng**: `;
-    if (list.some(p => p.id === 'mxh100')) {
-      report += `Nếu bạn thường xuyên xem video giải trí trên điện thoại, hãy chọn **MXH100**. `;
-    }
-    if (list.some(p => p.id === 'sd135')) {
-      report += `Nếu bạn cần data thông thường ổn định cho làm việc hàng ngày, hãy chốt ngay **SD135** (5GB/ngày). `;
-    }
-    if (list.some(p => p.id === 'v120c')) {
-      report += `Nếu cần trọn gói cả nghe gọi và data cân bằng nhất, gói quốc danh **V120C** là sự lựa chọn tối ưu.`;
-    }
-
-    return report;
+  const normalizeDataLimit = (str: string) => {
+    if (!str || str === '0') return '';
+    return str
+      .replace(/(\d+)\s*(GB|MB|KB)/gi, '$1 $2')
+      .replace(/ngày/gi, 'ngày');
   };
+
+  const formatCycle = (daysStr: string) => {
+    const days = parseInt(daysStr);
+    if (isNaN(days)) return daysStr;
+    if (days === 1) return 'Hàng ngày (1 ngày)';
+    if (days === 7) return 'Tuần (7 ngày)';
+    if (days === 30) return 'Tháng (30 ngày)';
+    if (days === 90) return '3 tháng (90 ngày)';
+    if (days === 180) return '6 tháng (180 ngày)';
+    if (days >= 360) return `Năm (${days} ngày)`;
+    return `${days} ngày`;
+  };
+
+  const getUtilitiesValue = (pkg: Package) => {
+    const parts: string[] = [];
+    if (isValid(pkg.tien_ich_free)) parts.push(pkg.tien_ich_free);
+    if (isValid(pkg.noi_dung_ngoai)) parts.push(pkg.noi_dung_ngoai);
+    if (parts.length === 0) return null;
+    return normalizeStringList(parts.join(','));
+  };
+
+
 
   const availablePackagesToSelect = packages.filter(p => !compareList.some(cp => cp.id === p.id));
+
+  const filteredAvailablePackages = availablePackagesToSelect.filter(p => {
+    const q = modalSearchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (p.ma_goi || '').toLowerCase().includes(q) || p.ten.toLowerCase().includes(q);
+  });
+
+  // Dynamic comparison criteria rows specification
+  const rowSpecs: RowSpec[] = [
+    {
+      key: 'price',
+      label: 'Giá cước',
+      getValue: (pkg) => pkg.gia,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="text-base font-black text-primary">
+            {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
+          </span>
+          {aiAnalysis?.bestTags[pkg.id]?.isCheapest && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'cycle',
+      label: 'Chu kỳ sử dụng',
+      getValue: (pkg) => pkg.chu_ky_ngay,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="font-bold text-slate-800">
+            {formatCycle(pkg.chu_ky_ngay)}
+          </span>
+          {aiAnalysis?.bestTags[pkg.id]?.isLongestCycle && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'data',
+      label: 'Data',
+      getValue: (pkg) => pkg.has_data ? pkg.data_theo_ngay : null,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <p className="font-extrabold text-slate-900 text-[13px]">
+            {normalizeDataLimit(pkg.data_theo_ngay)}
+          </p>
+          {aiAnalysis?.bestTags[pkg.id]?.isMaxData && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'voice_internal',
+      label: 'Gọi nội mạng',
+      getValue: (pkg) => pkg.has_voice && isValid(pkg.free_noi_mang) ? pkg.free_noi_mang : null,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="flex items-center text-emerald-600 font-bold">
+            <Check className="w-3.5 h-3.5 mr-1" />
+            {pkg.free_noi_mang}
+          </span>
+          {aiAnalysis?.bestTags[pkg.id]?.isMaxVoice && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'voice_external',
+      label: 'Gọi ngoại mạng',
+      getValue: (pkg) => pkg.has_voice && isValid(pkg.free_ngoai_mang) ? pkg.free_ngoai_mang : null,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="flex items-center text-emerald-600 font-bold">
+            <Check className="w-3.5 h-3.5 mr-1" />
+            {pkg.free_ngoai_mang}
+          </span>
+          {aiAnalysis?.bestTags[pkg.id]?.isMaxVoice && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'sms',
+      label: 'SMS',
+      getValue: (pkg) => pkg.has_sms && isValid(pkg.sms) ? pkg.sms : null,
+      renderCell: (pkg) => (
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="flex items-center text-emerald-600 font-bold">
+            <Check className="w-3.5 h-3.5 mr-1" />
+            {pkg.sms}
+          </span>
+          {aiAnalysis?.bestTags[pkg.id]?.isMaxSms && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+              Tốt nhất
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'utilities',
+      label: 'Tiện ích miễn phí',
+      getValue: (pkg) => getUtilitiesValue(pkg),
+      renderCell: (pkg) => (
+        <span className="font-bold text-slate-800">
+          {getUtilitiesValue(pkg)}
+        </span>
+      )
+    },
+    {
+      key: 'conditions',
+      label: 'Điều kiện đăng ký',
+      getValue: (pkg) => isValid(pkg.dieu_kien_dang_ky) ? pkg.dieu_kien_dang_ky : null,
+      renderCell: (pkg) => (
+        <span className="text-slate-600 leading-relaxed font-semibold">
+          {pkg.dieu_kien_dang_ky}
+        </span>
+      )
+    },
+    {
+      key: 'dangky',
+      label: 'Cú pháp đăng ký',
+      getValue: (pkg) => isValid(pkg.dangky) ? pkg.dangky : null,
+      renderCell: (pkg) => (
+        <span className="text-primary font-extrabold">{pkg.dangky}</span>
+      )
+    },
+    {
+      key: 'description',
+      label: 'Mô tả ngắn',
+      getValue: (pkg) => isValid(pkg.uudaitrong) ? pkg.uudaitrong : null,
+      renderCell: (pkg) => (
+        <span className="text-slate-500 leading-relaxed font-medium">
+          {pkg.uudaitrong}
+        </span>
+      )
+    }
+  ];
+
+  // A row is visible if at least one selected package has valid data for it
+  const visibleRows = rowSpecs.filter((row) =>
+    compareList.some((pkg) => {
+      const val = row.getValue(pkg);
+      return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '' && val !== false;
+    })
+  );
 
   // Structured breadcrumbs schema for Compare Page
   const compareBreadcrumbsSchema = {
@@ -267,132 +443,21 @@ export default function Compare() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-700">
-                  {/* Row: Price */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Giá cước (VND)</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-base font-black text-primary border-l border-slate-100">
-                        {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Cycle */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Chu kỳ sử dụng</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 font-bold text-slate-800 border-l border-slate-100">
-                        {pkg.chu_ky_ngay} ngày
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Category */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Phân loại gói</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-800 border-l border-slate-100 font-bold">
-                        {pkg.phan_loai_goi}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Data limit */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Ưu đãi DATA</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 border-l border-slate-100">
-                        <p className="font-extrabold text-slate-900 text-[13px]">{isValid(pkg.data_theo_ngay) ? pkg.data_theo_ngay : 'Không có'}</p>
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Internal voice */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Gọi nội mạng</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-800 border-l border-slate-100">
-                        {isValid(pkg.free_noi_mang) ? (
-                          <span className="flex items-center text-emerald-600 font-bold">
-                            <Check className="w-3.5 h-3.5 mr-1" />
-                            {pkg.free_noi_mang}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-medium">Không hỗ trợ</span>
-                        )}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: External voice */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Gọi ngoại mạng</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-800 border-l border-slate-100">
-                        {isValid(pkg.free_ngoai_mang) ? (
-                          <span className="flex items-center text-emerald-600 font-bold">
-                            <Check className="w-3.5 h-3.5 mr-1" />
-                            {pkg.free_ngoai_mang}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-medium">Không hỗ trợ</span>
-                        )}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Free Apps */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Free Data Ứng dụng</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-800 border-l border-slate-100">
-                        {isValid(pkg.noi_dung_ngoai) ? (
-                          <div className="flex flex-wrap gap-1">
-                            {pkg.noi_dung_ngoai.split(',').map((app) => (
-                              <span key={app} className="bg-slate-55 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-lg text-[9px] font-bold">
-                                {app.trim()}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 font-medium">Không hỗ trợ</span>
-                        )}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Free Utilities */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Tiện ích đi kèm</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-800 border-l border-slate-100">
-                        {isValid(pkg.tien_ich_free) ? (
-                          <span className="font-bold text-slate-800">{pkg.tien_ich_free}</span>
-                        ) : (
-                          <span className="text-slate-400 font-medium">Không có</span>
-                        )}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
-
-                  {/* Row: Description */}
-                  <tr className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">Mô tả tóm tắt</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 text-slate-500 border-l border-slate-100 leading-relaxed font-medium">
-                        {pkg.uudaitrong}
-                      </td>
-                    ))}
-                    {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
-                  </tr>
+                  {visibleRows.map((row) => (
+                    <tr key={row.key} className="hover:bg-slate-50/20 transition-colors">
+                      <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">{row.label}</td>
+                      {compareList.map((pkg) => {
+                        const val = row.getValue(pkg);
+                        const hasVal = val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '' && val !== false;
+                        return (
+                          <td key={pkg.id} className="p-4.5 border-l border-slate-100">
+                            {hasVal ? row.renderCell(pkg) : <span className="text-slate-400 font-medium">Không hỗ trợ</span>}
+                          </td>
+                        );
+                      })}
+                      {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
+                    </tr>
+                  ))}
 
                   {/* Row: Quick Subscribe Actions */}
                   <tr className="bg-slate-50/50">
@@ -415,48 +480,7 @@ export default function Compare() {
           </div>
 
           {/* AI Comments Panel */}
-          <div className="bg-white border border-slate-150 shadow-sm rounded-2xl p-6 space-y-4 text-left">
-            <div className="flex items-center space-x-2 pb-3 border-b border-slate-50">
-              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center border border-red-100/60">
-                <Bot className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center">
-                  Nhận xét thông minh từ Viettel AI
-                  <span className="ml-2 bg-emerald-50 text-emerald-700 text-[8px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-100">
-                    Realtime AI
-                  </span>
-                </h3>
-                <p className="text-[10px] text-slate-400">Phân tích đa chiều dựa trên tính năng gói cước</p>
-              </div>
-            </div>
-
-            <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line space-y-2.5 font-medium">
-              {generateAIAnalysis(compareList).split('\n').map((line, i) => {
-                if (line.startsWith('•')) {
-                  const boldPart = line.match(/\*\*(.*?)\*\*/);
-                  return (
-                    <p key={i} className="pl-4 relative">
-                      <span className="absolute left-0 text-primary font-bold">•</span>
-                      {boldPart ? (
-                        <>
-                          <strong>{boldPart[0].replace(/\*\*/g, '')}</strong>
-                          {line.substring(boldPart[0].length + 1)}
-                        </>
-                      ) : line.substring(1)}
-                    </p>
-                  );
-                }
-                return (
-                  <p key={i}>
-                    {line.split('**').map((part, index) =>
-                      index % 2 === 1 ? <strong key={index} className="text-slate-900 font-extrabold">{part}</strong> : part
-                    )}
-                  </p>
-                );
-              })}
-            </div>
-          </div>
+          <CompareAI compareList={compareList} onSubscribe={handleSubscribeOpen} />
         </div>
       )}
 
@@ -473,26 +497,58 @@ export default function Compare() {
             </p>
 
             <div className="space-y-4 text-xs">
-              {availablePackagesToSelect.length > 0 ? (
-                <div className="flex flex-col space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Danh sách gói cước</label>
-                  <select
-                    value={selectedPkgIdToAdd}
-                    onChange={(e) => setSelectedPkgIdToAdd(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:outline-none focus:bg-white transition-colors cursor-pointer"
-                  >
-                    <option value="">Chọn gói cước cần thêm...</option>
-                    {availablePackagesToSelect.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.ten} - {new Intl.NumberFormat('vi-VN').format(p.gia)}đ
-                      </option>
+              {/* Search input in modal */}
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tìm kiếm nhanh</label>
+                <input
+                  type="text"
+                  placeholder="Nhập mã gói hoặc tên gói..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:outline-none focus:bg-white focus:border-primary transition-all"
+                />
+              </div>
+
+              {filteredAvailablePackages.length > 0 ? (
+                <div className="flex flex-col space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kết quả tìm kiếm (tối đa 10)</label>
+                  <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                    {filteredAvailablePackages.slice(0, 10).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSelectedPkgIdToAdd(p.id)}
+                        className={`w-full text-left p-3 transition-colors flex flex-col space-y-1 focus:outline-none ${
+                          selectedPkgIdToAdd === p.id 
+                            ? 'bg-red-50/70 border-l-4 border-primary' 
+                            : 'hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900 text-xs">{p.ma_goi || p.id.toUpperCase()}</span>
+                          {p.dohot === 'Hot' && (
+                            <span className="bg-red-100 text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-red-200">
+                              Hot
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
+                          <span>{new Intl.NumberFormat('vi-VN').format(p.gia)}đ</span>
+                          <span>{p.chu_ky_ngay} ngày</span>
+                          <span>{normalizeDataLimit(p.data_theo_ngay) || 'Không data'}</span>
+                        </div>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center space-x-2 text-xs text-amber-800 bg-amber-50/50 border border-amber-200 p-3 rounded-xl">
+                <div className="flex items-center space-x-2 text-xs text-amber-800 bg-amber-50/50 border border-amber-200 p-3 rounded-xl font-bold">
                   <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
-                  <span>Đã chọn so sánh toàn bộ gói cước khả dụng!</span>
+                  <span>
+                    {availablePackagesToSelect.length === 0 
+                      ? 'Đã chọn so sánh toàn bộ gói cước khả dụng!' 
+                      : 'Không tìm thấy gói cước nào phù hợp!'}
+                  </span>
                 </div>
               )}
 
@@ -501,8 +557,9 @@ export default function Compare() {
                   onClick={() => {
                     setShowAddSelector(false);
                     setSelectedPkgIdToAdd('');
+                    setModalSearchQuery('');
                   }}
-                  className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
+                  className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none"
                 >
                   Hủy
                 </button>
