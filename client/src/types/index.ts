@@ -35,6 +35,9 @@ export interface Package {
   has_youtube?: boolean;
   has_tiktok?: boolean;
   has_facebook?: boolean;
+  is_addon?: boolean;
+  is_long_term?: boolean;
+  requires_base_package?: boolean;
 }
 
 export interface User {

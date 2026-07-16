@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, CreditCard, Users, Wifi, Loader2 } from 'lucide-react';
-import { transactionApi } from '../../services/api';
+import { transactionApi, compareApi } from '../../services/api';
 
 export default function Dashboard() {
   const [statsData, setStatsData] = useState<{
@@ -10,6 +10,7 @@ export default function Dashboard() {
     totalSubscriptionsCount: number;
     recentTransactions: any[];
   } | null>(null);
+  const [compareStats, setCompareStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,6 +18,8 @@ export default function Dashboard() {
       try {
         const data = await transactionApi.fetchAdminStats();
         setStatsData(data);
+        const compData = await compareApi.fetchAnalytics();
+        setCompareStats(compData);
       } catch (err) {
         console.error("Lỗi khi tải dữ liệu thống kê Admin:", err);
       } finally {
@@ -240,6 +243,95 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {/* Compare Analytics Section */}
+      {compareStats && (
+        <section className="bg-white border border-slate-200 shadow-sm rounded-xl p-6 space-y-6">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Báo cáo So sánh gói cước (Compare Analytics)</h3>
+            <p className="text-[10px] text-slate-500 font-semibold">Theo dõi hoạt động đối chiếu, so sánh và chuyển đổi từ tính năng Compare.</p>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1">
+              <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400">Tỷ lệ chuyển đổi</span>
+              <p className="text-lg font-black text-slate-800">{(compareStats.conversionRate || 0).toFixed(1)}%</p>
+              <p className="text-[9px] text-slate-400 font-medium">Tỷ lệ đăng ký gói sau so sánh</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1">
+              <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400">Thời gian trung bình</span>
+              <p className="text-lg font-black text-slate-800">{(compareStats.averageDuration || 0).toFixed(0)} giây</p>
+              <p className="text-[9px] text-slate-400 font-medium">Thời gian tương tác trung bình</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1">
+              <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400">Lượt Reset Compare</span>
+              <p className="text-lg font-black text-slate-800">{compareStats.resetCount || 0} lần</p>
+              <p className="text-[9px] text-slate-400 font-medium">Xóa bảng so sánh và tạo mới</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1">
+              <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400">Phân bố Khách hàng</span>
+              <p className="text-sm font-extrabold text-slate-800">
+                {compareStats.guestUserRatio?.guest || 0} <span className="text-[10px] text-slate-400 font-medium">Guest</span> / {compareStats.guestUserRatio?.user || 0} <span className="text-[10px] text-slate-400 font-medium">User</span>
+              </p>
+              <p className="text-[9px] text-slate-400 font-medium">Khách vãng lai và thành viên</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+            {/* Gói được so sánh nhiều nhất */}
+            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 space-y-3">
+              <h4 className="text-xs font-extrabold text-slate-800">Gói được so sánh nhiều nhất</h4>
+              {compareStats.mostComparedPackages && compareStats.mostComparedPackages.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {compareStats.mostComparedPackages.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between py-2.5 items-center text-xs">
+                      <span className="font-extrabold text-slate-700 bg-white border border-slate-150 px-2 py-0.5 rounded-lg font-mono">{item.packageId}</span>
+                      <span className="text-slate-500 font-semibold">{item.count} lượt</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-4 font-medium">Chưa có dữ liệu</p>
+              )}
+            </div>
+
+            {/* Cặp gói phổ biến nhất */}
+            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 space-y-3">
+              <h4 className="text-xs font-extrabold text-slate-800">Cặp gói đối chiếu phổ biến</h4>
+              {compareStats.mostPopularPairs && compareStats.mostPopularPairs.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {compareStats.mostPopularPairs.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between py-2.5 items-center text-xs">
+                      <span className="font-bold text-slate-600 truncate max-w-[170px]">{item.pair}</span>
+                      <span className="text-slate-500 font-semibold">{item.count} cặp</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-4 font-medium">Chưa có dữ liệu</p>
+              )}
+            </div>
+
+            {/* Gói đăng ký từ bảng so sánh */}
+            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 space-y-3">
+              <h4 className="text-xs font-extrabold text-slate-800">Gói đăng ký cuối cùng (Conversion)</h4>
+              {compareStats.lastSelectedPackages && compareStats.lastSelectedPackages.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {compareStats.lastSelectedPackages.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between py-2.5 items-center text-xs">
+                      <span className="font-extrabold text-slate-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded-lg font-mono">{item.packageId}</span>
+                      <span className="text-emerald-600 font-extrabold">{item.count} đăng ký</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-4 font-medium">Chưa có lượt đăng ký</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

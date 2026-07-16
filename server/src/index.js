@@ -12,6 +12,7 @@ const chatbotRoutes = require('./routes/chatbotRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
+const compareRoutes = require('./routes/compareRoutes');
 
 // Global Error Handler Import
 const globalErrorHandler = require('./middlewares/errorMiddleware');
@@ -105,6 +106,7 @@ app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/survey', surveyRoutes);
+app.use('/api/compare', compareRoutes);
 
 // Base route
 app.get('/', (req, res) => {

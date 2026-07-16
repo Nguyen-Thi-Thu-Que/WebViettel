@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRightLeft, X, Plus, Check, ShieldAlert } from 'lucide-react';
 import { usePackageStore, useAuthStore } from '../store';
@@ -7,6 +7,7 @@ import SEO from '../components/SEO';
 import RegisterModal from '../components/RegisterModal';
 import { compareAIService } from '../services/compareAIService';
 import CompareAI from '../components/CompareAI';
+import { compareApi } from '../services/api';
 
 interface RowSpec {
   key: string;
@@ -34,6 +35,180 @@ export default function Compare() {
       return null;
     }
   }, [compareList]);
+
+  // Helper: Generate unique IDs
+  const generateId = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  };
+
+  // Session tracking refs
+  const sessionIdRef = useRef<string>('');
+  const guestIdRef = useRef<string>('');
+  const packagesComparedRef = useRef<Set<string>>(new Set());
+  const viewedDetailPackagesRef = useRef<Set<string>>(new Set());
+  const startTimeRef = useRef<number>(0);
+  const hasSavedRef = useRef<boolean>(false);
+  const compareListRef = useRef<Package[]>([]);
+
+  // Sync compare list ref
+  useEffect(() => {
+    compareListRef.current = compareList;
+    compareList.forEach(pkg => {
+      packagesComparedRef.current.add(pkg.id);
+    });
+  }, [compareList]);
+
+  // Initialize Session
+  useEffect(() => {
+    sessionIdRef.current = 'sess_' + generateId();
+    startTimeRef.current = Date.now();
+    hasSavedRef.current = false;
+    packagesComparedRef.current = new Set(compareList.map(p => p.id));
+    viewedDetailPackagesRef.current = new Set();
+
+    let gId = localStorage.getItem('guest_compare_id');
+    if (!gId) {
+      gId = 'guest_' + generateId();
+      localStorage.setItem('guest_compare_id', gId);
+    }
+    guestIdRef.current = gId;
+  }, []);
+
+  const saveSessionSync = (finalState: {
+    completed: boolean;
+    status: string;
+    selected_package?: string | null;
+    cleared_by_user?: boolean;
+    cleared_at?: string | null;
+  }) => {
+    if (hasSavedRef.current) return;
+    hasSavedRef.current = true;
+
+    const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
+    const payload = {
+      session_id: sessionIdRef.current,
+      user_id: currentUser ? parseInt(currentUser.id, 10) : null,
+      guest_id: guestIdRef.current,
+      is_guest: !currentUser,
+      packages_compared: Array.from(packagesComparedRef.current),
+      final_packages: compareListRef.current.map(p => p.id),
+      selected_package: finalState.selected_package || null,
+      compare_count: packagesComparedRef.current.size,
+      compare_duration: duration,
+      viewed_detail_packages: Array.from(viewedDetailPackagesRef.current),
+      completed: finalState.completed,
+      cleared_by_user: finalState.cleared_by_user || false,
+      status: finalState.status,
+      cleared_at: finalState.cleared_at || null
+    };
+
+    const token = localStorage.getItem('token');
+    const headers: any = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch('/api/compare/session', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(err => console.error('Error saving compare session keepalive:', err));
+  };
+
+  const saveSessionAsync = async (finalState: {
+    completed: boolean;
+    status: string;
+    selected_package?: string | null;
+    cleared_by_user?: boolean;
+    cleared_at?: string | null;
+  }) => {
+    if (hasSavedRef.current) return;
+    hasSavedRef.current = true;
+
+    const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
+    const payload = {
+      session_id: sessionIdRef.current,
+      user_id: currentUser ? parseInt(currentUser.id, 10) : null,
+      guest_id: guestIdRef.current,
+      is_guest: !currentUser,
+      packages_compared: Array.from(packagesComparedRef.current),
+      final_packages: compareListRef.current.map(p => p.id),
+      selected_package: finalState.selected_package || null,
+      compare_count: packagesComparedRef.current.size,
+      compare_duration: duration,
+      viewed_detail_packages: Array.from(viewedDetailPackagesRef.current),
+      completed: finalState.completed,
+      cleared_by_user: finalState.cleared_by_user || false,
+      status: finalState.status,
+      cleared_at: finalState.cleared_at || null
+    };
+
+    try {
+      await compareApi.saveSession(payload);
+    } catch (err) {
+      console.error('Error saving compare session async:', err);
+    }
+  };
+
+  // Save session on page leave
+  useEffect(() => {
+    return () => {
+      saveSessionSync({ completed: false, status: 'ABANDONED' });
+    };
+  }, []);
+
+  // Save session on browser refresh/close
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveSessionSync({ completed: false, status: 'ABANDONED' });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Inactivity tracking (60 seconds)
+  useEffect(() => {
+    let inactivityTimer: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      if (hasSavedRef.current) return;
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        saveSessionAsync({ completed: false, status: 'ABANDONED' });
+      }, 60000);
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      window.addEventListener(event, resetInactivityTimer);
+    });
+
+    resetInactivityTimer();
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach(event => {
+        window.removeEventListener(event, resetInactivityTimer);
+      });
+    };
+  }, [compareList]);
+
+  const handleClearCompare = () => {
+    saveSessionSync({
+      completed: false,
+      status: 'CLEARED',
+      cleared_by_user: true,
+      cleared_at: new Date().toISOString()
+    });
+
+    clearCompare();
+    sessionIdRef.current = 'sess_' + generateId();
+    startTimeRef.current = Date.now();
+    hasSavedRef.current = false;
+    packagesComparedRef.current = new Set();
+    viewedDetailPackagesRef.current = new Set();
+  };
 
   useEffect(() => {
     if (packages.length === 0) {
@@ -94,6 +269,14 @@ export default function Compare() {
       showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
       return;
     }
+    
+    // Save session as completed
+    saveSessionAsync({
+      completed: true,
+      status: 'COMPLETED',
+      selected_package: pkg.id
+    });
+
     setSelectedPkg(pkg);
     setIsModalOpen(true);
   };
@@ -369,7 +552,7 @@ export default function Compare() {
 
         {compareList.length > 0 && (
           <button
-            onClick={clearCompare}
+            onClick={handleClearCompare}
             className="text-xs text-primary hover:bg-red-50 transition-colors bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl font-bold focus:outline-none cursor-pointer"
           >
             Xóa danh sách so sánh

@@ -98,7 +98,10 @@ export function toVietnamesePackage(apiPkg: any): Package {
     has_tv360: apiPkg.has_tv360,
     has_youtube: apiPkg.has_youtube,
     has_tiktok: apiPkg.has_tiktok,
-    has_facebook: apiPkg.has_facebook
+    has_facebook: apiPkg.has_facebook,
+    is_addon: apiPkg.is_addon,
+    is_long_term: apiPkg.is_long_term,
+    requires_base_package: apiPkg.requires_base_package
   };
 
 
@@ -455,3 +458,16 @@ export const surveyApi = {
     return response.data.success;
   }
 };
+
+// 8. Compare APIs
+export const compareApi = {
+  saveSession: async (payload: any): Promise<any> => {
+    const response = await axiosInstance.post('/api/compare/session', payload);
+    return response.data;
+  },
+  fetchAnalytics: async (): Promise<any> => {
+    const response = await axiosInstance.get('/api/compare/analytics');
+    return response.data.data;
+  }
+};
+
