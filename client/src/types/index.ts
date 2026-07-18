@@ -130,3 +130,18 @@ export interface UserSubscription {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Contact {
+  contact_id: string;
+  user_id: number | null;
+  full_name: string;
+  phone: string;
+  message: string;
+  status: 'NEW' | 'READ' | 'PROCESSING' | 'DONE' | 'CLOSED';
+  source: 'guest' | 'user';
+  created_at?: string;
+  updated_at?: string;
+  handled_by?: number | null;
+  handled_at?: string | null;
+  admin_note?: string;
+}

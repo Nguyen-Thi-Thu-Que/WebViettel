@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage } from '../types';
+import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage, Contact } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -467,6 +467,34 @@ export const compareApi = {
   },
   fetchAnalytics: async (): Promise<any> => {
     const response = await axiosInstance.get('/api/compare/analytics');
+    return response.data.data;
+  }
+};
+
+// 9. Contact APIs
+export const contactApi = {
+  createContact: async (contactData: { full_name: string; phone: string; message: string }): Promise<{ success: boolean; message: string; data: Contact }> => {
+    const response = await axiosInstance.post<{ success: boolean; message: string; data: Contact }>('/api/contact', contactData);
+    return response.data;
+  },
+  
+  fetchContacts: async (): Promise<Contact[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact');
+    return response.data.data;
+  },
+
+  fetchContactById: async (id: string): Promise<Contact> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact }>(`/api/contact/${id}`);
+    return response.data.data;
+  },
+
+  updateContactStatus: async (id: string, status: string): Promise<Contact> => {
+    const response = await axiosInstance.patch<{ success: boolean; data: Contact }>(`/api/contact/${id}/status`, { status });
+    return response.data.data;
+  },
+
+  updateContactNote: async (id: string, note: string): Promise<Contact> => {
+    const response = await axiosInstance.patch<{ success: boolean; data: Contact }>(`/api/contact/${id}/note`, { admin_note: note });
     return response.data.data;
   }
 };
