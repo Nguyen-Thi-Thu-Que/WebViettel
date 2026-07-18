@@ -14,6 +14,7 @@ WebViettel/
 │   │   │   ├── AdvancedFilter.tsx
 │   │   │   ├── Breadcrumb.tsx
 │   │   │   ├── Chatbot.tsx
+│   │   │   ├── CompareAI.tsx
 │   │   │   ├── CompareDrawer.tsx
 │   │   │   ├── EmptyState.tsx
 │   │   │   ├── Footer.tsx
@@ -49,6 +50,7 @@ WebViettel/
 │   │   │   │   └── Register.tsx
 │   │   │   ├── ChatbotPage.tsx
 │   │   │   ├── Compare.tsx
+│   │   │   ├── Contact.tsx
 │   │   │   ├── Home.tsx
 │   │   │   ├── PackageDetail.tsx
 │   │   │   ├── Packages.tsx
@@ -57,6 +59,7 @@ WebViettel/
 │   │   ├── services/
 │   │   │   ├── api.ts
 │   │   │   ├── axiosInstance.ts
+│   │   │   ├── compareAIService.ts
 │   │   │   └── web3Service.ts
 │   │   ├── store/
 │   │   │   └── index.ts
@@ -96,9 +99,12 @@ WebViettel/
 │   │   │   ├── authController.js
 │   │   │   ├── chatHistoryController.js
 │   │   │   ├── chatbotController.js
+│   │   │   ├── compareController.js
+│   │   │   ├── contactController.js
 │   │   │   ├── faqController.js
 │   │   │   ├── packageController.js
 │   │   │   ├── subscriptionController.js
+│   │   │   ├── surveyController.js
 │   │   │   ├── transactionController.js
 │   │   │   └── userController.js
 │   │   ├── middlewares/
@@ -108,16 +114,24 @@ WebViettel/
 │   │   │   ├── Account.js
 │   │   │   ├── ChatHistory.js
 │   │   │   ├── ChatbotConfig.js
+│   │   │   ├── CompareHistory.js
+│   │   │   ├── Contact.js
 │   │   │   ├── Deposit.js
 │   │   │   ├── FAQ.js
 │   │   │   ├── Package.js
+│   │   │   ├── PackageFeature.js
+│   │   │   ├── SurveyConfig.js
+│   │   │   ├── SurveyHistory.js
 │   │   │   └── UserSubscription.js
 │   │   ├── routes/
 │   │   │   ├── authRoutes.js
 │   │   │   ├── chatbotRoutes.js
+│   │   │   ├── compareRoutes.js
+│   │   │   ├── contactRoutes.js
 │   │   │   ├── faqRoutes.js
 │   │   │   ├── packageRoutes.js
 │   │   │   ├── subscriptionRoutes.js
+│   │   │   ├── surveyRoutes.js
 │   │   │   ├── transactionRoutes.js
 │   │   │   └── userRoutes.js
 │   │   ├── services/
@@ -129,12 +143,15 @@ WebViettel/
 │   │   │   │   ├── intentParser.js
 │   │   │   │   ├── packageContext.js
 │   │   │   │   ├── packageMatcher.js
+│   │   │   │   ├── packageSanitizer.js
 │   │   │   │   ├── promptBuilder.js
 │   │   │   │   └── scoring_config.json
 │   │   │   ├── authService.js
 │   │   │   ├── chatbotService.js
+│   │   │   ├── contactService.js
 │   │   │   ├── faqService.js
 │   │   │   ├── subscriptionService.js
+│   │   │   ├── surveyService.js
 │   │   │   ├── transactionService.js
 │   │   │   └── userService.js
 │   │   ├── utils/
@@ -197,8 +214,8 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 - **Trang chủ (Home.tsx)**: Hiển thị banner lớn giới thiệu, danh sách phân loại nhu cầu sử dụng, danh sách thẻ các gói cước nổi bật (hot), và các CTA điều hướng đến Chatbot và Khảo sát.
 - **Trang Danh mục gói cước (Packages.tsx)**: Nơi hiển thị tất cả các gói cước với bộ lọc tìm kiếm nâng cao ở phần đầu trang.
 - **Trang Chi tiết gói cước (PackageDetail.tsx)**: Hiển thị đầy đủ thông số ưu đãi của gói cước, điều kiện đăng ký, cú pháp soạn tin nhắn SMS, các gói cước tương tự và nút Đăng ký gói cước trực tiếp.
-- **Trang So sánh gói cước (Compare.tsx)**: Giao diện so sánh trực quan dưới dạng bảng cho tối đa 3 gói cước di động cùng lúc, kèm bảng phân tích nhận xét tự động từ trợ lý ảo.
-- **Trang Khảo sát chọn gói (Survey.tsx)**: Giao diện khảo sát 4 bước (wizard) giúp thu thập thông tin thói quen tiêu dùng và đề xuất 3 gói cước di động phù hợp nhất.
+- **Trang So sánh gói cước (Compare.tsx)**: Giao diện so sánh trực quan dưới dạng bảng cho tối đa 3 gói cước di động cùng lúc, kèm bảng phân tích nhận xét tự động từ trợ lý ảo. Trang tự động ghi nhận phiên so sánh (session analytics) và gửi lên backend API khi người dùng rời trang hoặc đăng ký gói cước.
+- **Trang Khảo sát chọn gói (Survey.tsx)**: Giao diện khảo sát wizard giúp thu thập thông tin thói quen tiêu dùng và đề xuất gói cước phù hợp nhất. Câu hỏi hiển thị động theo thuật toán Decision Tree từ backend.
 - **Hồ sơ cá nhân & Nạp tiền (Profile.tsx)**: Khu vực quản lý tài khoản của người dùng, chia làm nhiều tab:
   - Hồ sơ cá nhân (thông tin tài khoản di động)
   - Nạp tiền tài khoản (cổng kết nối MetaMask)
@@ -206,6 +223,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - Lịch sử đăng ký gói cước
   - Lịch sử giao dịch (danh sách nạp tiền ví ảo)
   - Đổi mật khẩu
+- **Trang Liên hệ hỗ trợ (Contact.tsx)**: Form liên hệ gửi yêu cầu hỗ trợ (họ tên, số điện thoại, nội dung) kết nối trực tiếp với API Backend. Tự động điền thông tin nếu người dùng đã đăng nhập. Xác thực đầu vào cả phía client và backend trước khi lưu vào CSDL.
 - **Hệ thống xác thực tài khoản (Auth)**:
   - Đăng nhập (Login.tsx)
   - Đăng ký tài khoản (Register.tsx)
@@ -218,11 +236,12 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - Cấu hình Chatbot AI (Chatbot.tsx): Điều chỉnh System Prompt và các từ khóa rule-based cho chatbot.
 
 ### Các thành phần giao diện chính (Components):
-- `Navbar`: Thanh điều hướng đầu trang, hiển thị logo ViettelAI, các liên kết trang chủ, gói cước, so sánh, khảo sát, và góc hiển thị số dư ví ảo kèm nút trang cá nhân hoặc đăng nhập.
+- `Navbar`: Thanh điều hướng đầu trang, hiển thị logo ViettelAI, các liên kết trang chủ, gói cước, so sánh, khảo sát, tư vấn AI, liên hệ, và góc hiển thị số dư ví ảo kèm nút trang cá nhân hoặc đăng nhập.
 - `Footer`: Chứa các thông tin liên hệ, liên kết nhanh bản quyền dự án.
 - `PackageCard`: Thẻ hiển thị tóm tắt thông tin gói cước (tên, giá, dung lượng data, cuộc gọi, nút đăng ký nhanh, nút so sánh).
 - `AdvancedFilter`: Bộ lọc nâng cao trên trang duyệt gói cước (lọc theo loại gói, chu kỳ, giá cước, công nghệ mạng, dịch vụ...).
 - `Chatbot`: Hộp thoại bong bóng chat nhỏ cố định ở góc màn hình phục vụ chat nhanh với trợ lý ảo từ mọi trang.
+- `CompareAI`: Panel hiển thị phân tích nhận xét thông minh (client-side) cho trang so sánh gói cước, gồm tóm tắt sự khác biệt, gợi ý lựa chọn và highlight ưu điểm từng gói (giá rẻ nhất, data nhiều nhất, gọi nhiều nhất...).
 - `RegisterModal`: Modal xác nhận và xử lý đăng ký gói cước cho người dùng di động.
 - `CompareDrawer`: Khay trượt chứa danh sách các gói cước đang chọn so sánh nằm cố định bên dưới màn hình.
 - `SEO`: Thành phần cấu hình thẻ tiêu đề, mô tả và cấu trúc Schema JSON-LD hỗ trợ chuẩn hóa SEO cho từng trang.
@@ -274,7 +293,16 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Tích hợp luồng xử lý RAG kết hợp NLP: Phân tích intent người dùng (trích xuất khoảng giá, nhu cầu data/thoại, ứng dụng), áp dụng bộ lọc cứng (Hard Filters) để lọc bớt gói cước và tính điểm ưu tiên (Scoring), sau đó biên dịch gói cước thành khối XML sạch để nhúng vào Prompt gửi AI sinh phản hồi (giảm ảo giác).
    - Tự động gắn các nút hành động đề xuất (`suggestedAction`) ở cuối câu trả lời chatbot (ví dụ: nút "Xem chi tiết gói..." hoặc nút "Làm khảo sát ngay").
    - Lưu trữ lịch sử trò chuyện vào MongoDB và hỗ trợ xóa lịch sử chat của tài khoản.
-7. **Bảng điều khiển Quản trị (Admin Panel)**:
+7. **Khảo sát chọn gói cước AI (Survey.tsx)**:
+   - Câu hỏi khảo sát hiển thị động theo thuật toán Decision Tree từ backend: hệ thống tự động lựa chọn và sắp xếp câu hỏi tiếp theo dựa trên tập gói cước còn lại sau mỗi lượt lọc (chỉ hỏi câu hỏi có khả năng phân loại được thêm).
+   - Kết quả đề xuất gói cước (tối đa 3) được tính toán và khớp tại Backend thông qua `surveyService` trước khi trả về Frontend.
+   - Hỗ trợ dừng sớm khảo sát (`isEarlyTerminated`) khi số lượng gói cước còn lại đã đủ nhỏ để hiển thị kết quả mà không cần hỏi thêm.
+   - Lưu trữ lịch sử khảo sát và kết quả vào MongoDB (collection `survey_histories`) cho người dùng đã đăng nhập; hỗ trợ xóa lịch sử khảo sát từ giao diện.
+8. **Trang Liên hệ hỗ trợ (Contact.tsx)**:
+   - Form nhập thông tin liên hệ (Họ tên, Số điện thoại, Nội dung) kết nối trực tiếp API Backend `/api/contact`.
+   - Xác thực đầu vào hai lớp (client-side validation + backend validation) trước khi lưu vào collection `contacts` MongoDB.
+   - Tự động điền thông tin họ tên và số điện thoại nếu người dùng đã đăng nhập.
+9. **Bảng điều khiển Quản trị (Admin Panel)**:
    - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
    - Quản lý gói cước: CRUD (Xem, thêm mới, sửa, xóa) gói cước di động trong MongoDB.
    - Quản lý câu hỏi thường gặp: CRUD danh mục câu hỏi FAQ.
@@ -285,20 +313,17 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 1. **Khôi phục mật khẩu qua OTP (ForgotPassword.tsx)**:
    - Giao diện gửi mã OTP và đổi mật khẩu hoạt động giả lập hoàn toàn ở phía client thông qua hàm `setTimeout`.
    - Không kết nối SMS Gateway gửi tin nhắn thực tế đến điện thoại và không gọi API Backend (mã OTP mặc định là `123456`).
-2. **Khảo sát chọn gói cước (Survey.tsx)**:
-   - Quá trình khảo sát gồm 4 bước và nút "Xem kết quả" đề xuất 3 gói cước chạy logic tính toán hoàn toàn ở phía Client thông qua thuật toán chấm điểm đơn giản (`calculateRecommendations` trong store frontend) dựa trên danh sách gói cước được tải về máy.
-   - Chưa tích hợp luồng xử lý AI/LLM ở backend cho tính năng khảo sát này (giao diện hiển thị cảnh báo thông tin thử nghiệm ở Sprint 8.1).
-3. **So sánh gói cước thông minh (Compare.tsx)**:
-   - Khung "Nhận xét thông minh từ Viettel AI" trên trang so sánh thực chất là logic phân tích quy tắc cứng được lập trình trực tiếp bằng mã Javascript ở phía Client (`generateAIAnalysis` trong `Compare.tsx`) để tự động hiển thị nhận xét về chi phí thấp nhất, data khủng nhất, gói nghe gọi nhiều, gói giải trí...
+2. **Phân tích nhận xét trang So sánh (CompareAI)**:
+   - Panel "Gợi Ý Từ Trợ Lý Ảo" trên trang so sánh sử dụng logic phân tích quy tắc cứng được lập trình bằng mã Javascript tại client (`compareAIService.ts`) để hiển thị nhận xét về chi phí thấp nhất, data khủng nhất, gói nghe gọi nhiều, các tiện ích...
    - Chưa có API kết nối gửi thông tin so sánh lên AI ở backend để trả kết quả nhận xét tự nhiên.
-4. **Biểu đồ SVG xu hướng doanh thu Admin (Dashboard.tsx)**:
+3. **Biểu đồ SVG xu hướng doanh thu Admin (Dashboard.tsx)**:
    - Biểu đồ tăng trưởng doanh thu SVG dạng đường vẽ trên Dashboard hoạt động bằng cách lấy tổng doanh số doanh thu tĩnh rồi nhân chia theo tỷ lệ phần trăm tương đối giả định cho các thứ trong tuần (`Math.round(totalRevenueVal * 0.4)`...) để hiển thị đường biểu đồ.
    - Chưa kết nối với nguồn dữ liệu thống kê phân chia doanh thu chính xác theo từng ngày thực tế từ API.
-5. **Nạp tiền ví bằng cổng thanh toán truyền thống khác (fiat)**:
+4. **Nạp tiền ví bằng cổng thanh toán truyền thống khác (fiat)**:
    - Backend hỗ trợ API `depositFiat` nhưng frontend chưa dựng giao diện cho các phương thức thanh toán truyền thống như cổng VietQR (chỉ có duy nhất giao diện nạp tiền qua cổng blockchain MetaMask ở trang cá nhân).
 
 ### CSDL hiện có trong API MongoDB
-Cơ sở dữ liệu gồm 7 collection chính trong MongoDB:
+Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
 1. **`accounts` (Thông tin tài khoản)**:
    - `user_id` (Number, unique): ID định danh người dùng.
    - `fullname` (String): Họ và tên đầy đủ.
@@ -371,3 +396,60 @@ Cơ sở dữ liệu gồm 7 collection chính trong MongoDB:
    - `question` (String): Câu hỏi thường gặp.
    - `answer` (String): Câu trả lời tương ứng.
    - `category` (String): Phân mục chủ đề câu hỏi.
+8. **`compare_histories` (Lịch sử phiên so sánh gói cước)**:
+   - `session_id` (String, unique, index): ID phiên so sánh duy nhất.
+   - `user_id` (Number): ID người dùng đã đăng nhập (null nếu là khách).
+   - `guest_id` (String): ID định danh khách chưa đăng nhập (lưu LocalStorage).
+   - `is_guest` (Boolean): Đánh dấu phiên so sánh của khách.
+   - `packages_compared` ([String]): Danh sách ID các gói đã được xem xét so sánh.
+   - `final_packages` ([String]): Danh sách ID các gói còn lại khi kết thúc phiên.
+   - `selected_package` (String): ID gói cước mà người dùng đã chọn đăng ký (nếu có).
+   - `compare_count` (Number): Số lượng gói cước đã so sánh.
+   - `compare_duration` (Number): Thời gian phiên so sánh tính bằng giây.
+   - `viewed_detail_packages` ([String]): Các gói đã xem chi tiết trong phiên.
+   - `completed` (Boolean): Phiên đã hoàn tất (người dùng đăng ký gói).
+   - `cleared_by_user` (Boolean): Người dùng chủ động xóa danh sách so sánh.
+   - `status` (String): Trạng thái phiên (`ACTIVE`, `COMPLETED`, `ABANDONED`, `CLEARED`).
+   - `source` (String): Nguồn gốc phiên (mặc định `'compare'`).
+   - `created_at`, `updated_at` (Date): Timestamps.
+9. **`contacts` (Yêu cầu liên hệ hỗ trợ)**:
+   - `contact_id` (String, unique, index): ID yêu cầu liên hệ.
+   - `user_id` (Number): ID người dùng gửi (null nếu là khách).
+   - `full_name` (String): Họ và tên người gửi.
+   - `phone` (String): Số điện thoại liên hệ.
+   - `message` (String): Nội dung yêu cầu liên hệ.
+   - `status` (String, enum: `['NEW', 'READ', 'PROCESSING', 'DONE', 'CLOSED']`): Trạng thái xử lý.
+   - `source` (String, enum: `['guest', 'user']`): Nguồn gốc yêu cầu.
+   - `handled_by` (Number): ID admin xử lý.
+   - `handled_at` (Date): Thời gian xử lý.
+   - `admin_note` (String): Ghi chú nội bộ của admin.
+   - `created_at`, `updated_at` (Date): Timestamps.
+10. **`package_features` (Đặc trưng gói cước cho gợi ý khảo sát)**:
+    - `package_id` (Number, unique, index): ID gói cước tương ứng.
+    - `ma_goi` (String, index): Mã gói cước.
+    - Các trường boolean đặc trưng: `has_data`, `has_voice`, `has_sms`, `has_youtube`, `has_tiktok`, `has_facebook`, `has_tv360`, `has_movie`, `has_social`, `has_5g`, `is_combo`, `is_data_only`, `is_social`, `is_addon`.
+    - `cycle_days` (Number): Số ngày chu kỳ.
+    - `price` (Number): Giá gói cước.
+    - `price_level` (String, enum: `['cheap', 'medium', 'expensive']`): Phân khúc giá.
+    - `data_level` (String, enum: `['none', 'low', 'medium', 'high', 'unlimited']`): Mức data.
+    - `voice_level` (String, enum: `['none', 'low', 'high']`): Mức thoại.
+    - `sms_level` (String, enum: `['none', 'low', 'high']`): Mức SMS.
+    - `searchable_tags` ([String]): Thẻ tìm kiếm tổng hợp.
+    - Tự động đồng bộ từ collection `goi_cuoc` khi server khởi động.
+11. **`survey_configs` (Cấu hình câu hỏi khảo sát)**:
+    - `title` (String): Tiêu đề câu hỏi.
+    - `description` (String): Mô tả câu hỏi.
+    - `field` (String, unique, index): Tên trường câu hỏi (VD: `category`, `dataDemand`, `budget`...).
+    - `component` (String): Loại component hiển thị (`'single-choice'` hoặc `'multi-choice'`).
+    - `order` (Number): Thứ tự ưu tiên câu hỏi trong Decision Tree.
+    - `multiple` (Boolean): Cho phép chọn nhiều đáp án.
+    - `options` ([Object]): Danh sách lựa chọn gồm `{ label, value, detail, mapping }`.
+    - Tự động seed dữ liệu mặc định (7 câu hỏi) khi server khởi động lần đầu.
+12. **`survey_histories` (Lịch sử khảo sát người dùng)**:
+    - `userId` (Number, index): ID người dùng đã đăng nhập (tùy chọn).
+    - `answers` (Mixed): Câu trả lời khảo sát của người dùng.
+    - `filters` (Mixed): Bộ lọc tổng hợp từ câu trả lời.
+    - `recommendedPackages` ([Mixed]): Danh sách gói cước được gợi ý.
+    - `isEarlyTerminated` (Boolean): Khảo sát dừng sớm do đã đủ lọc.
+    - `deleted` (Boolean): Đánh dấu đã xóa mềm.
+    - `deletedAt` (Date): Thời điểm xóa.

@@ -24,7 +24,6 @@ Hãy tuân thủ nghiêm ngặt các quy tắc sau:
    - Trình bày ngắn gọn, dễ đọc, tự nhiên. Sử dụng markdown cơ bản và xuống dòng hợp lý.
    - Không gạch đầu dòng quá dài, không sử dụng icon rườm rà.
    - Mỗi gói cước trình bày ngắn gọn các thông tin: Tên gói, Giá, Ưu đãi chính liên quan, Cú pháp đăng ký.
-
 Ví dụ tư vấn:
 Gói SD135 phù hợp nếu bạn cần nhiều data sử dụng hàng ngày:
 - Giá: 135.000đ / 30 ngày
@@ -236,10 +235,10 @@ const packageRanking = (packages, intent) => {
 
 const buildPrompt = (userMessage, packages, intent) => {
   const rankedPackages = packageRanking(packages, intent);
-  
+
   // Chỉ giới thiệu tối đa 2-4 gói có điểm Scoring cao nhất từ backend
   const topPackages = rankedPackages.slice(0, 4);
-  
+
   const packageText = formatPackagesToText(topPackages, intent, userMessage);
   const intentBlock = formatIntent(intent);
 
