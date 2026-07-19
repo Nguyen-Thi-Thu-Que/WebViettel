@@ -5,7 +5,9 @@ const chatHistorySchema = new mongoose.Schema({
   sender: { type: String, enum: ['user', 'bot'], required: true },
   text: { type: String, required: true },
   suggestedAction: { type: mongoose.Schema.Types.Mixed, default: null },
-  packages: { type: Array, default: [] }
+  packages: { type: Array, default: [] },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null }
 }, {
   collection: 'chat_histories',
   timestamps: true

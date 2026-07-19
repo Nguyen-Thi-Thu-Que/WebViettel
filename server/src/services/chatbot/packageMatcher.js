@@ -241,7 +241,7 @@ async function findByIntent(intent, hasPriceBudget) {
   //
   // Kiểu A — Giá đơn (VD: "giá 120k", "gói 120k"):
   //   maxPrice có giá trị, minPrice = null hoặc 0 (không phải khoảng từ-đến).
-  //   → Sử dụng cơ chế TRUY VẤN 2 TẦNG (Two-Pass Query) để cam kết lấy chính xác gói cước.
+  //   → Khớp chính xác 100% mức giá yêu cầu (Exact Match).
   //
   // Kiểu B — Khoảng giá (VD: "100k - 200k", "dưới 150k"):
   //   minPrice và/hoặc maxPrice xác định bởi intentParser — query thông thường.

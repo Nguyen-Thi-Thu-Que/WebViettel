@@ -137,11 +137,11 @@ const chatbotController = {
       await saveChatHistory(userId, 'user', trimmedMessage, null, []);
 
       // ── B1: Phân tích intent ──────────────────────────────────────────────────
-      console.time('[RAG] Total');
-      console.log('[RAG] B1 - Intent parsing:', trimmedMessage);
+      // console.time('[RAG] Total');
+      // console.log('[RAG] B1 - Intent parsing:', trimmedMessage);
 
       const intent = intentParser(trimmedMessage);
-      console.log('[RAG] B1 - Intent result:', JSON.stringify(intent));
+      // console.log('[RAG] B1 - Intent result:', JSON.stringify(intent));
 
       // ── B0: Kiểm tra Lạc ĐỀ — NGUYÊN TẮc: không gọi DB hay AI ────────────────
       // Nếu intent hoàn toàn trống rỗng: không có tiêu chí viễn thông nào
@@ -158,8 +158,8 @@ const chatbotController = {
       );
 
       if (isOffTopic) {
-        console.log('[RAG] B0 - Off-topic detected → returning static refusal');
-        console.timeEnd('[RAG] Total');
+        // console.log('[RAG] B0 - Off-topic detected → returning static refusal');
+        // console.timeEnd('[RAG] Total');
 
         await saveChatHistory(userId, 'bot', OFF_TOPIC_TEXT, null, []);
 
@@ -177,18 +177,18 @@ const chatbotController = {
       }
 
       // ── B2: Truy vấn MongoDB — lấy tối đa 3 gói cước chính xác ───────────
-      console.log('[RAG] B2 - Package matching...');
+      // console.log('[RAG] B2 - Package matching...');
       const matchResult = await matchPackages(intent);
-      console.log(
-        '[RAG] B2 - Match result: noMatch=%s, count=%d',
-        matchResult.noMatchFound,
-        matchResult.packages.length
-      );
+      // console.log(
+      //   '[RAG] B2 - Match result: noMatch=%s, count=%d',
+      //   matchResult.noMatchFound,
+      //   matchResult.packages.length
+      // );
 
       // ── B3: ZERO-MATCH — Trả về văn bản tĩnh, TUYỆT ĐỐI không gọi AI ────
       if (matchResult.noMatchFound) {
-        console.log('[RAG] B3 - Zero match → skipping AI call (returning static text)');
-        console.timeEnd('[RAG] Total');
+        // console.log('[RAG] B3 - Zero match → skipping AI call (returning static text)');
+        // console.timeEnd('[RAG] Total');
 
         // Lưu reply no-match vào lịch sử
         await saveChatHistory(
@@ -215,11 +215,11 @@ const chatbotController = {
       const matchedPackages = matchResult.packages; // Tối đa 3 gói
 
       // ── B4: Dựng prompt XML với System Prompt mệnh lệnh tuyệt đối ─────────
-      console.log('[RAG] B4 - Building XML prompt with', matchedPackages.length, 'packages');
+      // console.log('[RAG] B4 - Building XML prompt with', matchedPackages.length, 'packages');
       const prompt = buildPrompt(trimmedMessage, matchedPackages, intent);
 
       // ── B5: Gọi LLM — Groq (llama-3.1-8b-instant) → Ollama fallback ──────
-      console.log('[RAG] B5 - Calling AI (Groq → Ollama fallback)...');
+      // console.log('[RAG] B5 - Calling AI (Groq → Ollama fallback)...');
       let replyText;
       try {
         replyText = await generateContent(prompt);
@@ -235,7 +235,7 @@ const chatbotController = {
             .join('\n');
       }
 
-      console.timeEnd('[RAG] Total');
+      // console.timeEnd('[RAG] Total');
 
       // Phát hiện suggestedAction — mặc định null nếu không có từ khóa khảo sát
       const suggestedAction = detectSuggestedAction(replyText);

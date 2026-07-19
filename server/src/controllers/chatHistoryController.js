@@ -4,7 +4,7 @@ const chatHistoryController = {
   getHistory: async (req, res, next) => {
     try {
       const userId = req.user._id;
-      const history = await ChatHistory.find({ userId })
+      const history = await ChatHistory.find({ userId, isDeleted: false })
         .sort({ createdAt: 1 })
         .lean();
 
@@ -30,7 +30,10 @@ const chatHistoryController = {
   deleteHistory: async (req, res, next) => {
     try {
       const userId = req.user._id;
-      await ChatHistory.deleteMany({ userId });
+      await ChatHistory.updateMany(
+        { userId, isDeleted: false },
+        { isDeleted: true, deletedAt: new Date() }
+      );
 
       return res.status(200).json({
         success: true,
