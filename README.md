@@ -1,6 +1,7 @@
 # Website cung cấp gói cước di động Viettel tích hợp chatbot
 
 ## 1. Cấu Trúc Cây Thư Mục (Directory Tree)
+
 ```text
 WebViettel/
 ├── client/
@@ -168,9 +169,11 @@ WebViettel/
 ```
 
 ## 2. Cấu Hình Hệ Thống (Configurations)
+
 Hệ thống sử dụng các file cấu hình và các biến môi trường sau đây:
 
 ### Danh sách các file cấu hình hiện có:
+
 - **Thư mục gốc (Root)**:
   - `package.json` và `package-lock.json`: Định nghĩa và quản lý các package phụ thuộc của dự án.
   - `.gitignore`: Cấu hình các tệp tin và thư mục không được Git theo dõi.
@@ -182,21 +185,23 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `.env`: Chứa các biến môi trường cấu hình kết nối API và Blockchain của frontend.
   - `.oxlintrc.json`: Cấu hình linter Oxlint cho kiểm tra mã nguồn nhanh.
 - **Thư mục Backend (`server/`)**:
-  - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express.
+  - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express. Gồm: `express`, `mongoose`, `bcryptjs`, `cors`, `dotenv`, `ethers`, `@google/generative-ai`, `csv-parser`.
   - `.env`: Chứa cấu hình cổng chạy, DB MongoDB, xác thực JWT, và API key của AI chatbot.
   - `src/services/chatbot/scoring_config.json`: Cấu hình hệ số điểm khớp gói cước của chatbot.
 
 ### Chi tiết cấu hình biến môi trường (`.env`):
+
 - **Cấu hình Backend (`server/.env`)**:
   - `MONGODB_URI`: Địa chỉ kết nối đến cơ sở dữ liệu MongoDB.
   - `PORT`: Cổng khởi chạy dịch vụ backend (mặc định `5000`).
-  - `JWT_SECRET`: Chuỗi khóa bảo mật dùng để mã hóa và giải mã JSON Web Token (JWT).
+  - `JWT_SECRET`: Chuỗi khóa bảo mật dùng để ký và xác thực JSON Web Token (JWT). JWT được triển khai thủ công theo chuẩn HMAC-SHA256, không phụ thuộc thư viện bên ngoài.
   - `RECEIVER_WALLET`: Địa chỉ ví MetaMask nhận ETH Sepolia cho giao dịch nạp tiền.
   - `ETH_EXCHANGE_RATE`: Tỷ giá quy đổi giả lập giữa tiền VND và ETH Sepolia (ví dụ: `75000000` VND/ETH).
   - `RPC_URL`: RPC URL kết nối mạng blockchain thử nghiệm Sepolia.
-  - `AI_PROVIDER`: Nhà cung cấp dịch vụ AI (VD: `groq`).
+  - `AI_PROVIDER`: Nhà cung cấp dịch vụ AI (VD: `groq`). Nếu không đặt, mặc định là `groq`.
   - `GROQ_API_KEY`: API Key đăng ký của dịch vụ Groq Cloud.
-  - `GROQ_MODEL`: Mô hình ngôn ngữ lớn sử dụng (mặc định `llama-3.1-8b-instant`).
+  - `GROQ_MODEL`: Mô hình ngôn ngữ lớn Groq sử dụng (mặc định `llama-3.1-8b-instant`).
+  - `OLLAMA_MODEL`: Mô hình ngôn ngữ lớn Ollama dùng khi fallback (mặc định `qwen2.5:3b`).
 - **Cấu hình Frontend (`client/.env`)**:
   - `VITE_API_URL`: URL API Backend (mặc định `http://localhost:5000`).
   - `VITE_NETWORK_NAME`: Tên mạng blockchain thử nghiệm (mặc định `Sepolia`).
@@ -211,6 +216,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 ## 3. Giao Diện & Thành Phần UI (Frontend & Components)
 
 ### Danh sách các trang (Pages/Screens) đã dựng:
+
 - **Trang chủ (Home.tsx)**: Hiển thị banner lớn giới thiệu, danh sách phân loại nhu cầu sử dụng, danh sách thẻ các gói cước nổi bật (hot), và các CTA điều hướng đến Chatbot và Khảo sát.
 - **Trang Danh mục gói cước (Packages.tsx)**: Nơi hiển thị tất cả các gói cước với bộ lọc tìm kiếm nâng cao ở phần đầu trang.
 - **Trang Chi tiết gói cước (PackageDetail.tsx)**: Hiển thị đầy đủ thông số ưu đãi của gói cước, điều kiện đăng ký, cú pháp soạn tin nhắn SMS, các gói cước tương tự và nút Đăng ký gói cước trực tiếp.
@@ -236,6 +242,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - Cấu hình Chatbot AI (Chatbot.tsx): Điều chỉnh System Prompt và các từ khóa rule-based cho chatbot.
 
 ### Các thành phần giao diện chính (Components):
+
 - `Navbar`: Thanh điều hướng đầu trang, hiển thị logo ViettelAI, các liên kết trang chủ, gói cước, so sánh, khảo sát, tư vấn AI, liên hệ, và góc hiển thị số dư ví ảo kèm nút trang cá nhân hoặc đăng nhập.
 - `Footer`: Chứa các thông tin liên hệ, liên kết nhanh bản quyền dự án.
 - `PackageCard`: Thẻ hiển thị tóm tắt thông tin gói cước (tên, giá, dung lượng data, cuộc gọi, nút đăng ký nhanh, nút so sánh).
@@ -249,6 +256,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 - Các thành phần skeleton (`Skeleton`, `LoadingSkeleton`): Hiển thị trạng thái tải dữ liệu giả lập cho các thẻ gói cước và bảng biểu.
 
 ### Trạng thái trực quan (Responsive):
+
 - Giao diện được thiết kế hoàn chỉnh theo cơ chế Responsive trên nền tảng Tailwind CSS.
 - Layout và các cấu trúc lưới (grid) hoạt động ổn định trên cả 3 phân khúc kích thước màn hình phổ biến:
   - **Màn hình lớn (Desktop / Laptop)**: Hiển thị đầy đủ sidebar quản trị, bảng so sánh đa cột, lưới 3-4 gói cước trên một hàng.
@@ -260,6 +268,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 ## 4. Chức Năng Hiện Có (Current Features & Functionalities)
 
 ### 🟢 Các chức năng đã hoạt động ổn định:
+
 1. **Duyệt và Lọc tìm kiếm gói cước di động**:
    - Hiển thị danh sách gói cước động tải trực tiếp từ MongoDB.
    - Tìm kiếm theo từ khóa tên gói/mã gói; lọc phân trang theo danh mục (Data, Combo, Social, Thoại), khoảng giá, chu kỳ sử dụng và công nghệ mạng.
@@ -280,14 +289,14 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Xem lịch sử các lần nạp tiền kèm link dẫn sang trang Etherscan.io để đối chiếu.
 5. **Đăng ký và hủy gói cước di động (Conflict Engine)**:
    - Sử dụng số dư ví ảo VND để đăng ký mua gói cước di động trực tiếp.
-   - Xử lý xung đột gói cước (Conflict Engine) ở backend qua 5 bước nghiêm ngặt:
-     1. *Trùng chính gói*: Reject nếu đăng ký trùng gói dài hạn; tự động cho phép gia hạn sớm (`RENEW_SHORT`) nếu là gói ngắn ngày.
-     2. *Bắt buộc gói nền*: Reject nếu gói yêu cầu nền nhưng thuê bao chưa có gói `DATA_BASE` hoặc `COMBO` hoạt động.
-     3. *Gói Add-on*: Bỏ qua xung đột và cho phép đăng ký song song.
-     4. *Trùng nhóm ưu đãi (benefit_group)*: Reject nếu đăng ký 2 gói cùng nhóm dài hạn (ví dụ: cùng hệ Facebook/TikTok/YouTube/Data). Cho phép nếu có 1 gói ngắn ngày.
-     5. *Registration Policy*: Áp dụng quy tắc cấu hình của gói (REPLACE để tự động chấm dứt và thay thế gói cũ, REJECT để từ chối đăng ký song song, ALLOW để chạy song song).
-   - Cho phép người dùng bật/tắt tính năng Tự động gia hạn gói cước, hoặc bấm Hủy gói cước ngay lập tức trên giao diện.
-   - Cơ chế background cron job tự động chạy mỗi 10 giây quét toàn bộ thuê bao để xử lý tự động gia hạn hoặc chấm dứt gói cước (chuyển trạng thái `EXPIRED`) khi hết hạn.
+   - Xử lý xung đột gói cước (Conflict Engine) ở backend qua 5 bước nghiêm ngặt theo thứ tự:
+     1. *Trùng chính gói*: Reject nếu đăng ký trùng gói dài hạn đang hoạt động; tự động cấp mới ưu đãi (`RENEW_SHORT`) nếu là gói ngắn ngày.
+     2. *Bắt buộc gói nền*: Reject nếu gói yêu cầu nền (`requires_base_package=true`) nhưng thuê bao chưa có gói `DATA_BASE` hoặc `COMBO` đang hoạt động.
+     3. *Gói Add-on*: Nếu gói mới có `is_addon=true` thì ALLOW ngay, bỏ qua toàn bộ kiểm tra xung đột còn lại.
+     4. *Trùng nhóm ưu đãi (benefit_group)*: Reject nếu đăng ký 2 gói cùng `benefit_group` và cả hai đều dài hạn (>= 30 ngày). Cho phép nếu gói mới là ngắn ngày hoặc khác hệ ưu đãi.
+     5. *Registration Policy*: Áp dụng trường `registration_policy` cấu hình trên gói (`REPLACE` để tự động chấm dứt và thay thế gói cũ cùng hệ, `REJECT` để từ chối đăng ký song song, `ALLOW` để chạy song song).
+   - Cho phép người dùng bật/tắt tính năng Tự động gia hạn gói cước, hoặc bấm Hủy gói cước ngay lập tức trên giao diện. Hỗ trợ thêm thao tác **xóa lịch sử đăng ký** (xóa các bản ghi trạng thái `CANCELLED`, `EXPIRED`, `REPLACED`) từ giao diện Profile.
+   - Cơ chế background `setInterval` tự động chạy mỗi 10 giây (tại `subscriptionService.js`) quét toàn bộ thuê bao để xử lý tự động gia hạn hoặc chuyển trạng thái `EXPIRED` khi hết hạn. Đồng thời, quá trình gia hạn cũng được kích hoạt real-time mỗi khi người dùng truy vấn gói đang dùng.
 6. **AI Chatbot tư vấn gói cước thông minh**:
    - Chatbot tự động trả lời câu hỏi của người dùng thời gian thực dựa trên API Backend kết nối Groq Cloud API (mô hình `llama-3.1-8b-instant`) và Ollama API (`qwen2.5:3b`) dự phòng.
    - Tích hợp luồng xử lý RAG kết hợp NLP: Phân tích intent người dùng (trích xuất khoảng giá, nhu cầu data/thoại, ứng dụng), áp dụng bộ lọc cứng (Hard Filters) để lọc bớt gói cước và tính điểm ưu tiên (Scoring), sau đó biên dịch gói cước thành khối XML sạch để nhúng vào Prompt gửi AI sinh phản hồi (giảm ảo giác).
@@ -303,13 +312,14 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Xác thực đầu vào hai lớp (client-side validation + backend validation) trước khi lưu vào collection `contacts` MongoDB.
    - Tự động điền thông tin họ tên và số điện thoại nếu người dùng đã đăng nhập.
 9. **Bảng điều khiển Quản trị (Admin Panel)**:
-   - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
+   - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu. Hiển thị danh sách 10 giao dịch gần nhất (tổng hợp từ cả nạp tiền và đăng ký gói cước).
    - Quản lý gói cước: CRUD (Xem, thêm mới, sửa, xóa) gói cước di động trong MongoDB.
    - Quản lý câu hỏi thường gặp: CRUD danh mục câu hỏi FAQ.
    - Quản lý người dùng di động: Xem danh sách, thay đổi số dư ví, đổi loại thuê bao, bật/tắt KHTT, khóa/mở khóa tài khoản.
    - Cấu hình Chatbot: Chỉnh sửa System Prompt chỉ dẫn AI và cấu hình các từ khóa NLP rule-based.
 
 ### 🟡 Các chức năng đang dùng dữ liệu giả lập (Mock Data) / Chưa kết nối Backend:
+
 1. **Khôi phục mật khẩu qua OTP (ForgotPassword.tsx)**:
    - Giao diện gửi mã OTP và đổi mật khẩu hoạt động giả lập hoàn toàn ở phía client thông qua hàm `setTimeout`.
    - Không kết nối SMS Gateway gửi tin nhắn thực tế đến điện thoại và không gọi API Backend (mã OTP mặc định là `123456`).
@@ -319,11 +329,19 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 3. **Biểu đồ SVG xu hướng doanh thu Admin (Dashboard.tsx)**:
    - Biểu đồ tăng trưởng doanh thu SVG dạng đường vẽ trên Dashboard hoạt động bằng cách lấy tổng doanh số doanh thu tĩnh rồi nhân chia theo tỷ lệ phần trăm tương đối giả định cho các thứ trong tuần (`Math.round(totalRevenueVal * 0.4)`...) để hiển thị đường biểu đồ.
    - Chưa kết nối với nguồn dữ liệu thống kê phân chia doanh thu chính xác theo từng ngày thực tế từ API.
-4. **Nạp tiền ví bằng cổng thanh toán truyền thống khác (fiat)**:
-   - Backend hỗ trợ API `depositFiat` nhưng frontend chưa dựng giao diện cho các phương thức thanh toán truyền thống như cổng VietQR (chỉ có duy nhất giao diện nạp tiền qua cổng blockchain MetaMask ở trang cá nhân).
+4. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
+   - Backend đã có API `depositFiat` (tạo giao dịch ảo ghi nhận nạp tiền loại VietQR) nhưng frontend chưa dựng giao diện tương ứng. Hiện chỉ có duy nhất giao diện nạp tiền qua cổng blockchain MetaMask ở trang cá nhân.
+
+### ⚙️ Cơ chế bảo mật & hiệu năng Backend (`server/src/index.js`)
+- **Security Headers thủ công**: Server tự thiết lập các header bảo mật tiêu chuẩn (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security`) mà không phụ thuộc thư viện Helmet.
+- **Rate Limiter tự viết**: Giới hạn tối đa 120 request/phút cho mỗi địa chỉ IP trên tất cả các route `/api/`. Trả về HTTP 429 kèm thông báo tiếng Việt khi vượt ngưỡng.
+- **JWT tự triển khai**: Ký và xác thực token theo chuẩn HMAC-SHA256 hoàn toàn bằng module `crypto` gốc của Node.js, không dùng thư viện `jsonwebtoken`.
+
 
 ### CSDL hiện có trong API MongoDB
+
 Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
+
 1. **`accounts` (Thông tin tài khoản)**:
    - `user_id` (Number, unique): ID định danh người dùng.
    - `fullname` (String): Họ và tên đầy đủ.
@@ -361,7 +379,9 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
 3. **`user_subscriptions` (Đăng ký gói cước)**:
    - `userId` (Number, index): ID người dùng đăng ký.
    - `packageId` (Number, index): ID gói cước đăng ký.
+   - `registeredAt` (Date): Thời điểm người dùng thực hiện thao tác đăng ký.
    - `activatedAt` (Date): Thời điểm kích hoạt gói cước.
+   - `startedAt` (Date): Thời điểm bắt đầu tính chu kỳ sử dụng.
    - `expiresAt` (Date): Thời điểm hết hạn gói cước.
    - `status` (String, enum: `['ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED', 'REPLACED']`): Trạng thái gói đăng ký.
    - `autoRenew` (Boolean): Trạng thái tự động gia hạn gói cước.
@@ -369,6 +389,7 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
    - `duration` (Number): Số ngày thời gian sử dụng gói cước.
    - `cycleType` (String): Tên định danh chu kỳ chi tiết.
    - `cancelledAt` (Date): Thời điểm hủy gói (nếu có).
+   - `cancelReason` (String): Lý do hủy gói (nếu có).
    - `replacedAt` (Date): Thời điểm bị thay thế bởi gói khác (nếu có).
    - `replacedBySubscriptionId` (ObjectId): ID lượt đăng ký mới thay thế gói này.
 4. **`chat_histories` (Lịch sử hội thoại chatbot)**:
@@ -376,6 +397,7 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
    - `sender` (String, enum: `['user', 'bot']`): Người gửi tin nhắn.
    - `text` (String): Nội dung tin nhắn chat.
    - `suggestedAction` (Mixed): Gợi ý hành động kèm theo tin nhắn bot.
+   - `packages` (Array): Danh sách gói cước mà AI đề xuất kèm theo tin nhắn bot (chuẩn hoá đầy đủ các trường để frontend render thẻ gói).
    - `createdAt`, `updatedAt` (Date): Thời gian gửi tin nhắn.
 5. **`chatbot_configs` (Cấu hình chatbot AI)**:
    - `systemPrompt` (String): Lời nhắc hệ thống chỉ dẫn hành vi cho mô hình LLM.
@@ -409,6 +431,7 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
    - `viewed_detail_packages` ([String]): Các gói đã xem chi tiết trong phiên.
    - `completed` (Boolean): Phiên đã hoàn tất (người dùng đăng ký gói).
    - `cleared_by_user` (Boolean): Người dùng chủ động xóa danh sách so sánh.
+   - `cleared_at` (Date): Thời điểm người dùng xóa danh sách so sánh (nếu có).
    - `status` (String): Trạng thái phiên (`ACTIVE`, `COMPLETED`, `ABANDONED`, `CLEARED`).
    - `source` (String): Nguồn gốc phiên (mặc định `'compare'`).
    - `created_at`, `updated_at` (Date): Timestamps.

@@ -709,7 +709,7 @@ exports.updatePackage = async (req, res) => {
     const vnData = mapToVietnamese(englishData);
 
     // Perform update
-    const updated = await Package.findByIdAndUpdate(pkg._id, vnData, { new: true });
+    const updated = await Package.findByIdAndUpdate(pkg._id, vnData, { returnDocument: 'after' });
     console.log(`[Admin] Updated package: ${updated.ma_goi}`);
 
     res.json({

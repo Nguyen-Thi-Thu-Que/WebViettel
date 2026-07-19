@@ -1,264 +1,247 @@
-const { packageSanitizer } = require('./packageSanitizer');
+/**
+ * promptBuilder.js — Hard-controlled RAG Prompt Builder
+ *
+ * Đóng gói tối đa 3 gói cước đã lọc từ DB thành định dạng XML thuần túy
+ * để nhúng vào prompt gửi LLM, ngăn chặn hoàn toàn hiện tượng ảo giác.
+ *
+ * System Prompt tích hợp chỉ thị cứng: LLM CHỈ ĐƯỢC tư vấn trong danh sách XML.
+ */
+
+// ─── System Prompt mệnh lệnh tuyệt đối (chống ảo giác + lặp từ) ──────────────
+
+const HARD_SYSTEM_PROMPT = `Bạn là Trợ lý ảo tư vấn gói cước di động chuyên nghiệp của Viettel, giao tiếp lịch sự và luôn bắt đầu bằng từ 'Dạ'.
+Nhiệm vụ của bạn là đọc dữ liệu XML được cung cấp để giới thiệu các gói cước cho khách hàng. Hãy tuân thủ nghiêm ngặt quy định định dạng đầu ra sau đây:
+
+QUY TẮC PHÁT NGÔN THEO SỐ LƯỢNG GÓI:
+
+TRƯỜNG HỢP 1: KHI CÓ NHIỀU GÓI CƯỚC CÙNG LÚC (Từ 2 đến 3 gói)
+- Bắt đầu bằng câu dẫn thân thiện: 'Dạ, Viettel xin gửi bạn danh sách các gói cước phù hợp nhất trong phân khúc yêu cầu. Bạn có thể xem nhanh các ưu đãi nổi bật và thực hiện đăng ký nhanh theo cú pháp dưới đây nhé:'
+- Trình bày mỗi gói cước thành một khối danh sách thụt lề rõ ràng (Bullet points), bắt buộc phải ghi rõ Cú pháp đăng ký lấy từ thẻ <dangky> của gói đó. Định dạng chuẩn:
+  * Gói [TÊN MÃ GÓI] (Giá: [GIÁ TIỀN]đ / Chu kỳ: [CHU KỲ]):
+    + Ưu đãi: [Mô tả ngắn gọn, dễ đọc về dung lượng data, thoại]
+    + Cú pháp đăng ký: [In ra chính xác nội dung trong thẻ <dangky> của XML, ví dụ: Soạn MÃGÓI gửi 191]
+
+TRƯỜNG HỢP 2: CHỈ CÓ 1 GÓI CƯỚC DUY NHẤT
+- Trình bày chi tiết cấu trúc:
+  Dạ, Viettel xin gửi bạn thông tin ưu đãi chi tiết của gói [MÃ GÓI]:
+  + Ưu đãi chính: [Mô tả chi tiết ưu đãi]
+  + Chu kỳ sử dụng: [Số ngày]
+  + Cú pháp đăng ký: [In ra chính xác nội dung trong thẻ <dangky>]
+  + Cú pháp hủy: [In ra chính xác nội dung trong thẻ <huygoi>]
+
+KỶ LUẬT AN TOÀN DỮ LIỆU:
+1. TUYỆT ĐỐI NGHIÊM CẤM lặp lại câu hỏi xác nhận của người dùng ở câu mở đầu (Không nói: 'Bạn đang tìm gói..., đúng không?').
+2. Xuất văn bản thuần túy (Plain Text), nghiêm cấm rò rỉ các thẻ code như '<dangky>', '<card-goi-cuoc>'.
+3. Không tự ý viết thêm các câu lưu ý hoặc cảnh báo tự bịa ở cuối văn bản phản hồi.`;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
 
 /**
- * Task 3: System Prompt cải tiến cho tư vấn viên Viettel.
+ * Format số tiền VND thành chuỗi hiển thị.
+ * Ví dụ: 135000 → "135.000đ"
  */
-const SYSTEM_PROMPT = `Bạn là nhân viên tư vấn gói cước Viettel. Nhiệm vụ duy nhất của bạn là tư vấn các gói cước dựa trên dữ liệu JSON được cung cấp trong thẻ <package_data_context>.
-Hãy tuân thủ nghiêm ngặt các quy tắc sau:
-1. TRẢ LỜI NHƯ NHÂN VIÊN TƯ VẤN THẬT:
-   - Đi thẳng vào câu trả lời một cách tự nhiên, chuyên nghiệp và thân thiện.
-   - TUYỆT ĐỐI KHÔNG sử dụng văn phong máy móc của AI. Không bắt đầu bằng "Xin chào! Tôi là trợ lý ảo...", "Hy vọng câu trả lời này...", "Tôi có thể giúp gì thêm...".
-   - Không lặp lại các câu chào hỏi rập khuôn ở mỗi câu trả lời.
-2. CHỈ TƯ VẤN GÓI TRONG CONTEXT:
-   - Chỉ được sử dụng thông tin gói cước xuất hiện trong <package_data_context> để tư vấn. Tuyệt đối không tự suy diễn, tạo gói cước hoặc tự thêm ưu đãi ngoài dữ liệu.
-   - Dữ liệu trong <package_data_context> đã được backend lọc và sắp xếp theo độ phù hợp giảm dần. Chỉ tư vấn tối đa 2-4 gói cước xuất hiện trong dữ liệu này. Không tự giới thiệu các gói ngoài danh sách.
-   - Nếu trong <package_data_context> trống hoặc không có gói nào, hãy trả lời lịch sự rằng chưa tìm thấy gói cước nào phù hợp nhất với yêu cầu và khuyên khách hàng thay đổi khoảng giá hoặc nhu cầu.
-3. ĐI SÂU VÀO NHU CẦU CỦA KHÁCH HÀNG:
-   - Hiểu đúng nhu cầu của khách hàng (data, thoại, SMS, ngân sách, ứng dụng giải trí...). Chỉ giới thiệu các ưu đãi liên quan trực tiếp đến nhu cầu đó của gói cước, không liệt kê tràn lan toàn bộ thông số.
-   - Ví dụ:
-     * Khách hàng cần data: Tập trung nói về dung lượng data (data_theo_ngay) và giá cước. Không nói về phút gọi hay SMS nếu khách không hỏi.
-     * Khách hàng cần gọi điện: Tập trung nói về phút gọi nội mạng (free_noi_mang) và ngoại mạng (free_ngoai_mang). Không nói về các tiện ích khác.
-     * Khách hàng hỏi chi tiết một gói cước cụ thể: Lúc này mới giới thiệu chi tiết đầy đủ các ưu đãi có giá trị của gói đó, bỏ qua các mục không có hoặc mang giá trị "0" không liên quan.
-     * Khách hàng hỏi trực tiếp câu hỏi Có/Không (ví dụ: "Có gọi nội mạng không?", "Có kèm SMS không?", "Có free Youtube không?"): Hãy nhìn vào dữ liệu gói cước tương ứng để trả lời chính xác (nếu trường đó có giá trị 0 hoặc "Không" hoặc không tồn tại, hãy khẳng định rõ là gói đó không hỗ trợ ưu đãi này).
-4. ĐỊNH DẠNG CÂU TRẢ LỜI:
-   - Trình bày ngắn gọn, dễ đọc, tự nhiên. Sử dụng markdown cơ bản và xuống dòng hợp lý.
-   - Không gạch đầu dòng quá dài, không sử dụng icon rườm rà.
-   - Mỗi gói cước trình bày ngắn gọn các thông tin: Tên gói, Giá, Ưu đãi chính liên quan, Cú pháp đăng ký.
-Ví dụ tư vấn:
-Gói SD135 phù hợp nếu bạn cần nhiều data sử dụng hàng ngày:
-- Giá: 135.000đ / 30 ngày
-- Data: 5GB/ngày (tổng 150GB/tháng)
-- Cú pháp đăng ký: Soạn SD135 gửi 191`;
-
-const hasRealData = (pkg) => {
-  if (!pkg.data_theo_ngay) return false;
-  const s = String(pkg.data_theo_ngay).trim().toUpperCase();
-  return s !== '0' && s !== '0GB' && s !== '0 GB' && !s.startsWith('0');
-};
-
-const hasRealVoice = (pkg) => {
-  const check = (val) => {
-    if (!val) return false;
-    const s = String(val).trim().toUpperCase();
-    return s !== '0' && s !== '0 PHÚT' && s !== '0 PHUT' && !s.startsWith('0');
-  };
-  return check(pkg.free_noi_mang) || check(pkg.free_ngoai_mang);
-};
-
-const hasRealSms = (pkg) => {
-  if (!pkg.sms) return false;
-  const s = String(pkg.sms).trim().toUpperCase();
-  return s !== '0' && s !== '0 SMS' && !s.startsWith('0');
-};
+function formatPrice(price) {
+  if (price == null || isNaN(Number(price))) return '0đ';
+  return Number(price).toLocaleString('vi-VN') + 'đ';
+}
 
 /**
- * Task 2: Hàm `formatPackageToText(pkg)` — convert object gói cước thành Text thuần túy.
- * KHÔNG truyền JSON thô vào LLM.
+ * Format chu kỳ ngày thành chuỗi thân thiện.
+ * Ví dụ: "30" → "30 ngày", "360" → "360 ngày (1 năm)"
  */
-const formatPackageToText = (pkg) => {
-  if (!pkg) return '';
-
-  const dataValid = hasRealData(pkg);
-  const voiceValid = hasRealVoice(pkg);
-  const smsValid = hasRealSms(pkg);
-
-  const tienIch = String(pkg.tien_ich_free || '').toUpperCase() + ' ' + String(pkg.uudaitrong || '').toUpperCase();
-  const hasTv360 = tienIch.includes('TV360');
-  const hasFb = tienIch.includes('FACEBOOK') || tienIch.includes('FB');
-  const hasYtb = tienIch.includes('YOUTUBE') || tienIch.includes('YT');
-  const hasTiktok = tienIch.includes('TIKTOK');
-  const hasMovie = tienIch.includes('PHIM') || tienIch.includes('MOVIE') || tienIch.includes('CINEMA') || (pkg.benefit_group && pkg.benefit_group.toUpperCase() === 'MOVIE');
-
-  return `<package>
-  <ma_goi>${pkg.ma_goi || ''}</ma_goi>
-  <ten>${pkg.ten || ''}</ten>
-  <gia>${pkg.gia != null ? pkg.gia : 0}</gia>
-  <chu_ky_ngay>${pkg.chu_ky_ngay || ''}</chu_ky_ngay>
-  <data_theo_ngay>${pkg.data_theo_ngay || ''}</data_theo_ngay>
-  <free_noi_mang>${pkg.free_noi_mang || ''}</free_noi_mang>
-  <free_ngoai_mang>${pkg.free_ngoai_mang || ''}</free_ngoai_mang>
-  <sms>${pkg.sms || ''}</sms>
-  <tien_ich_free>${pkg.tien_ich_free || ''}</tien_ich_free>
-  <uudaitrong>${pkg.uudaitrong || ''}</uudaitrong>
-  <dieu_kien_dang_ky>${pkg.dieu_kien_dang_ky || ''}</dieu_kien_dang_ky>
-  <dangky>${pkg.dangky || ''}</dangky>
-  <huygiahan>${pkg.huygiahan || ''}</huygiahan>
-  <huygoicuoc>${pkg.huygoicuoc || ''}</huygoicuoc>
-  <hasData>${dataValid}</hasData>
-  <hasVoice>${voiceValid}</hasVoice>
-  <hasSms>${smsValid}</hasSms>
-  <hasTV360>${hasTv360}</hasTV360>
-  <hasFacebook>${hasFb}</hasFacebook>
-  <hasYoutube>${hasYtb}</hasYoutube>
-  <hasTiktok>${hasTiktok}</hasTiktok>
-  <hasMovie>${hasMovie}</hasMovie>
-</package>`;
-};
+function formatCycle(chu_ky_ngay) {
+  const days = parseInt(chu_ky_ngay, 10);
+  if (isNaN(days) || days <= 0) return chu_ky_ngay || '';
+  if (days === 360) return '360 ngày (1 năm)';
+  if (days === 180) return '180 ngày (6 tháng)';
+  if (days === 90) return '90 ngày (3 tháng)';
+  if (days === 30) return '30 ngày (1 tháng)';
+  if (days === 15) return '15 ngày (nửa tháng)';
+  if (days === 7) return '7 ngày (1 tuần)';
+  return `${days} ngày`;
+}
 
 /**
- * Task 2: Format toàn bộ mảng gói cước thành text block dạng JSON rút gọn cho AI.
+ * Lấy giá trị field nếu có thực, bỏ qua zero/rỗng/null.
  */
-const formatPackagesToText = (packages, intent, userMessage) => {
-  if (!packages || packages.length === 0) return '[]';
-
-  // Lọc gói cước thành AI View Model sạch sẽ, có truyền thêm intent và userMessage để giữ lại các field 0 liên quan
-  const sanitized = packageSanitizer(packages, intent, userMessage);
-
-  // Định dạng lại các trường hiển thị cho AI
-  const formatted = sanitized.map(pkg => {
-    const cleanPkg = { ...pkg };
-
-    if (cleanPkg.gia !== undefined && cleanPkg.gia !== null && !isNaN(Number(cleanPkg.gia))) {
-      cleanPkg.gia = Number(cleanPkg.gia).toLocaleString('vi-VN') + 'đ';
-    }
-    if (cleanPkg.price !== undefined && cleanPkg.price !== null && !isNaN(Number(cleanPkg.price))) {
-      cleanPkg.price = Number(cleanPkg.price).toLocaleString('vi-VN') + 'đ';
-    }
-
-    return cleanPkg;
-  });
-
-  return JSON.stringify(formatted, null, 2);
-};
+function nonZero(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (
+    s === '0' || s === '' || s === '0GB' || s === '0 GB' ||
+    s.toLowerCase() === 'không' || s.toLowerCase() === 'khong' ||
+    s === '0 phút' || s === '0 Phút' || s === '0 SMS'
+  ) return null;
+  return s;
+}
 
 /**
- * Format khối Intent để AI hiểu ngữ cảnh và không suy diễn thêm.
+ * Tạo thẻ <uu_dai> tổng hợp ưu đãi nổi bật nhất của gói.
+ * Ưu tiên: data_theo_ngay, uudaitrong, tien_ich_free.
  */
-const formatIntent = (intent) => {
+function buildUuDai(pkg) {
+  const parts = [];
+  const data = nonZero(pkg.data_theo_ngay);
+  if (data) parts.push(`${data} tốc độ cao`);
+
+  const them = nonZero(pkg.uudaitrong);
+  if (them) parts.push(them);
+
+  const apps = nonZero(pkg.tien_ich_free);
+  if (apps) parts.push(apps);
+
+  return parts.length > 0 ? parts.join('; ') : '';
+}
+
+/**
+ * Xây dựng cú pháp đăng ký an toàn:
+ * - Nếu field dangky đã bao gồm "Soạn" → dùng nguyên văn
+ * - Nếu chưa có → thêm "Soạn ... gửi 191"
+ * - Nếu là "0" → trả về "0" để hệ thống render My Viettel
+ */
+function buildDangKy(dangky) {
+  if (!dangky) return null;
+  const s = String(dangky).trim();
+  if (s === '0') return '0';
+  // Nếu đã có "Soạn" (case-insensitive) → xuất nguyên văn
+  if (/^soạn\s/i.test(s)) return s;
+  // Nếu chưa có → bọc lại
+  return `Soạn ${s} gửi 191`;
+}
+
+/**
+ * Chuyển một object gói cước thành thẻ XML chuẩn.
+ * Cấu trúc bám sát yêu cầu: ma_goi, gia, chu_ky, uu_dai, dangky.
+ */
+function packageToXml(pkg) {
+  const lines = [];
+  lines.push('  <goi_cuoc>');
+  lines.push(`    <ma_goi>${pkg.ma_goi || ''}</ma_goi>`);
+  lines.push(`    <gia>${pkg.gia != null ? Number(pkg.gia) : 0}</gia>`);
+  lines.push(`    <chu_ky>${formatCycle(pkg.chu_ky_ngay)}</chu_ky>`);
+
+  // Tên gói (tùy chọn, bổ sung ngữ cảnh)
+  const ten = nonZero(pkg.ten);
+  if (ten) lines.push(`    <ten>${ten}</ten>`);
+
+  // Ưu đãi nổi bật
+  const uuDai = buildUuDai(pkg);
+  if (uuDai) lines.push(`    <uu_dai>${uuDai}</uu_dai>`);
+
+  // Gọi thoại
+  const voiceIn = nonZero(pkg.free_noi_mang);
+  const voiceOut = nonZero(pkg.free_ngoai_mang);
+  if (voiceIn) lines.push(`    <goi_noi_mang>${voiceIn}</goi_noi_mang>`);
+  if (voiceOut) lines.push(`    <goi_ngoai_mang>${voiceOut}</goi_ngoai_mang>`);
+
+  // SMS
+  const sms = nonZero(pkg.sms);
+  if (sms) lines.push(`    <sms>${sms}</sms>`);
+
+  // Loại mạng
+  const loaiMang = nonZero(pkg.loai_mang);
+  if (loaiMang) lines.push(`    <loai_mang>${loaiMang}</loai_mang>`);
+
+  // Điều kiện đăng ký
+  const dieuKien = nonZero(pkg.dieu_kien_dang_ky);
+  if (dieuKien) lines.push(`    <dieu_kien>${dieuKien}</dieu_kien>`);
+
+  // Cú pháp đăng ký (an toàn — tránh lặp "Soạn Soạn")
+  const dk = buildDangKy(pkg.dangky);
+  if (dk) lines.push(`    <dangky>${dk}</dangky>`);
+
+  // Cú pháp hủy gia hạn
+  const huyGH = pkg.huygiahan ? buildDangKy(pkg.huygiahan) : null;
+  if (huyGH) lines.push(`    <huy_gia_han>${huyGH}</huy_gia_han>`);
+
+  // Cú pháp hủy gói
+  const huyGC = pkg.huygoicuoc ? buildDangKy(pkg.huygoicuoc) : null;
+  if (huyGC) lines.push(`    <huy_goi>${huyGC}</huy_goi>`);
+
+  lines.push('  </goi_cuoc>');
+  return lines.join('\n');
+}
+
+/**
+ * Chuyển toàn bộ danh sách gói cước (tối đa 3) thành khối XML.
+ */
+function packagesToXml(packages) {
+  if (!packages || packages.length === 0) {
+    return '<danh_sach_goi_cuoc>\n  <!-- Không có gói cước nào phù hợp -->\n</danh_sach_goi_cuoc>';
+  }
+  const items = packages.map(packageToXml).join('\n');
+  return `<danh_sach_goi_cuoc>\n${items}\n</danh_sach_goi_cuoc>`;
+}
+
+/**
+ * Tóm tắt intent của người dùng thành block text ngắn gọn cho AI.
+ */
+function formatIntentSummary(intent) {
   if (!intent) return '';
   const lines = [];
+
   if (intent.packageCodes && intent.packageCodes.length > 0) {
     lines.push(`Mã gói được hỏi: ${intent.packageCodes.join(', ')}`);
   }
-  if (intent.budgetMin !== null && intent.budgetMin !== undefined && intent.budgetMax !== null && intent.budgetMax !== undefined) {
-    lines.push(`Khoảng ngân sách: ${Number(intent.budgetMin).toLocaleString('vi-VN')}đ - ${Number(intent.budgetMax).toLocaleString('vi-VN')}đ`);
-  } else if (intent.budget !== null && intent.budget !== undefined) {
-    lines.push(`Ngân sách: ${Number(intent.budget).toLocaleString('vi-VN')}đ`);
+  if (intent.minPrice != null) {
+    lines.push(`Ngân sách tối thiểu: ${Number(intent.minPrice).toLocaleString('vi-VN')}đ`);
   }
-  if (intent.cheap) lines.push('Phân khúc: Giá rẻ');
-  if (intent.needData) lines.push('Nhu cầu: Data');
-  if (intent.needVoice) lines.push('Nhu cầu: Gọi thoại');
-  if (intent.needCombo) lines.push('Nhu cầu: Combo (data + gọi)');
-  if (intent.needYoutube) lines.push('Nội dung: YouTube');
-  if (intent.needTiktok) lines.push('Nội dung: TikTok');
-  if (intent.needLongTerm) lines.push('Chu kỳ: Dài hạn');
-  if (intent.minDays !== null && intent.minDays !== undefined) {
-    lines.push(`Chu kỳ tối thiểu: ${intent.minDays} ngày`);
+  if (intent.maxPrice != null) {
+    lines.push(`Ngân sách tối đa: ${Number(intent.maxPrice).toLocaleString('vi-VN')}đ`);
   }
-  return lines.length > 0 ? lines.join('\n') : 'Không xác định';
-};
+  if (intent.cycleDays != null) {
+    lines.push(`Chu kỳ yêu cầu: ${formatCycle(String(intent.cycleDays))}`);
+  }
+  if (intent.networkType) {
+    lines.push(`Loại mạng: ${intent.networkType}`);
+  }
+  if (intent.apps && intent.apps.length > 0) {
+    lines.push(`Ứng dụng cần miễn phí: ${intent.apps.join(', ')}`);
+  }
+  if (intent.features) {
+    const needs = [];
+    if (intent.features.data) needs.push('data');
+    if (intent.features.voice) needs.push('gọi thoại');
+    if (intent.features.sms) needs.push('SMS');
+    if (needs.length > 0) lines.push(`Nhu cầu: ${needs.join(', ')}`);
+  }
+
+  return lines.length > 0 ? lines.join('\n') : 'Không xác định cụ thể';
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Task 2 + Task 3: Xây dựng prompt gửi AI.
+ * buildPrompt — Xây dựng prompt hoàn chỉnh gửi LLM.
+ *
+ * Cấu trúc: System Prompt → Nhu cầu khách hàng → XML gói cước → Câu hỏi gốc
+ *
+ * @param {string} userMessage — Câu hỏi gốc của người dùng
+ * @param {Array}  packages    — Danh sách tối đa 3 gói cước đã lọc từ DB
+ * @param {object} intent      — Intent object từ intentParser
+ * @returns {string}           — Chuỗi prompt hoàn chỉnh
  */
-const getDailyGb = (pkg) => {
-  if (!pkg.data_theo_ngay) return 0;
-  const str = String(pkg.data_theo_ngay).trim().toUpperCase();
-  const matchDay = str.match(/([\d.]+)\s*GB\s*\/\s*(NGÀY|NGAY|D|DAY)/i);
-  if (matchDay) return parseFloat(matchDay[1]);
-  const matchMonth = str.match(/([\d.]+)\s*GB\s*\/\s*(THÁNG|THANG|M|MONTH)/i);
-  if (matchMonth) return parseFloat(matchMonth[1]) / 30;
-  const matchRaw = str.match(/([\d.]+)\s*GB/i);
-  if (matchRaw) return parseFloat(matchRaw[1]) / (parseInt(pkg.chu_ky_ngay) || 30);
-  return 0;
-};
-
-const packageRanking = (packages, intent) => {
-  if (!packages || packages.length <= 1 || !intent) return packages;
-
-  const ranked = [...packages];
-
-  ranked.sort((a, b) => {
-    // 1. YouTube/TikTok/Facebook check
-    if (intent.needYoutube || intent.needTiktok || intent.needFacebook) {
-      const matchBenefit = (pkg) => {
-        const bg = pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '';
-        const tienIch = String(pkg.tien_ich_free || '').toUpperCase() + ' ' + String(pkg.uudaitrong || '').toUpperCase();
-        if (intent.needYoutube && (bg === 'YOUTUBE' || tienIch.includes('YOUTUBE') || tienIch.includes('YT'))) return 1;
-        if (intent.needTiktok && (bg === 'TIKTOK' || tienIch.includes('TIKTOK'))) return 1;
-        if (intent.needFacebook && (bg === 'FACEBOOK' || tienIch.includes('FACEBOOK') || tienIch.includes('FB'))) return 1;
-        return 0;
-      };
-      const mbA = matchBenefit(a);
-      const mbB = matchBenefit(b);
-      if (mbB !== mbA) return mbB - mbA;
-    }
-
-    // 2. Combo check
-    if (intent.needCombo) {
-      const dA = hasRealData(a) ? 1 : 0;
-      const dB = hasRealData(b) ? 1 : 0;
-      if (dB !== dA) return dB - dA;
-
-      const vA = hasRealVoice(a) ? 1 : 0;
-      const vB = hasRealVoice(b) ? 1 : 0;
-      if (vB !== vA) return vB - vA;
-
-      const sA = hasRealSms(a) ? 1 : 0;
-      const sB = hasRealSms(b) ? 1 : 0;
-      if (sB !== sA) return sB - sA;
-    }
-
-    // 3. Need Data check
-    if (intent.needData) {
-      const gbA = getDailyGb(a);
-      const gbB = getDailyGb(b);
-      if (gbB !== gbA) return gbB - gbA;
-
-      const rdA = hasRealData(a) ? 1 : 0;
-      const rdB = hasRealData(b) ? 1 : 0;
-      if (rdB !== rdA) return rdB - rdA;
-
-      const cbA = (hasRealData(a) && hasRealVoice(a)) ? 1 : 0;
-      const cbB = (hasRealData(b) && hasRealVoice(b)) ? 1 : 0;
-      if (cbB !== cbA) return cbB - cbA;
-
-      if (a.gia !== b.gia) return a.gia - b.gia;
-    }
-
-    // 4. Need Voice check
-    if (intent.needVoice) {
-      const vA = hasRealVoice(a) ? 1 : 0;
-      const vB = hasRealVoice(b) ? 1 : 0;
-      if (vB !== vA) return vB - vA;
-
-      const cbA = (hasRealData(a) && hasRealVoice(a)) ? 1 : 0;
-      const cbB = (hasRealData(b) && hasRealVoice(b)) ? 1 : 0;
-      if (cbB !== cbA) return cbB - cbA;
-    }
-
-    return 0;
-  });
-
-  return ranked;
-};
-
 const buildPrompt = (userMessage, packages, intent) => {
-  const rankedPackages = packageRanking(packages, intent);
+  const xmlBlock = packagesToXml(packages);
+  const intentSummary = formatIntentSummary(intent);
 
-  // Chỉ giới thiệu tối đa 2-4 gói có điểm Scoring cao nhất từ backend
-  const topPackages = rankedPackages.slice(0, 4);
+  const prompt = `${HARD_SYSTEM_PROMPT}
 
-  const packageText = formatPackagesToText(topPackages, intent, userMessage);
-  const intentBlock = formatIntent(intent);
+<nhu_cau_khach_hang>
+${intentSummary}
+</nhu_cau_khach_hang>
 
-  const prompt = `${SYSTEM_PROMPT}
-
-<intent_context>
-${intentBlock}
-</intent_context>
-
-<package_data_context>
-${packageText}
-</package_data_context>
+${xmlBlock}
 
 Câu hỏi của khách hàng: ${userMessage}`;
 
-  if (prompt.length > 3000) {
-    console.warn('[Chatbot] Prompt dài:', prompt.length, 'ký tự');
+  if (prompt.length > 4000) {
+    console.warn('[PromptBuilder] Prompt dài:', prompt.length, 'ký tự — xem xét giảm số gói.');
   }
 
   return prompt;
 };
 
-module.exports = { buildPrompt, formatPackageToText, formatPackagesToText };
+module.exports = { buildPrompt, packagesToXml, formatIntentSummary, HARD_SYSTEM_PROMPT };

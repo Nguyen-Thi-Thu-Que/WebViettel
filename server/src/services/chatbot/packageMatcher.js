@@ -1,313 +1,336 @@
-const fs = require('fs');
-const path = require('path');
+/**
+ * packageMatcher.js — Hard-controlled RAG Package Matcher
+ *
+ * Truy vấn trực tiếp MongoDB bằng query động được build từ intent.
+ * KHÔNG dùng scoring_config. KHÔNG trả về dữ liệu ngẫu nhiên.
+ *
+ * Chiến lược sắp xếp (Sorting):
+ *   - Có ngân sách (minPrice/maxPrice): sort gia ASC — gói rẻ nhất trong tầm tiền trước
+ *   - Không ngân sách (hỏi app/feature): sort gia ASC — gói dễ tiếp cận trước (TV7K, TV35K...)
+ *   - Có ngân sách + features cụ thể: bỏ bộ lọc cứng data/voice để quét toàn bộ hệ Data/Combo
+ *
+ * Sàng lọc: lấy TỐI ĐA 3 GÓI CƯỚC phù hợp nhất.
+ * Nếu không tìm thấy gói nào: trả về { noMatchFound: true, packages: [] }.
+ */
 
-const configPath = path.join(__dirname, 'scoring_config.json');
-const scoringConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const Package        = require('../../models/Package');
+const PackageFeature = require('../../models/PackageFeature');
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Tiện ích kiểm tra data thực tế của gói cước
+ * Kiểm tra giá trị có phải zero/rỗng/null không.
  */
-function hasRealData(pkg) {
-  if (!pkg.data_theo_ngay) return false;
-  const s = String(pkg.data_theo_ngay).trim().toUpperCase();
-  if (s === '0' || s === '0GB' || s === '0 GB' || s.startsWith('0')) return false;
-  return true;
+function isNonZero(val) {
+  if (!val) return false;
+  const s = String(val).trim().toUpperCase();
+  return (
+    s !== '0'        &&
+    s !== '0GB'      &&
+    s !== '0 GB'     &&
+    s !== '0 PHÚT'   &&
+    s !== '0 PHUT'   &&
+    s !== '0 SMS'    &&
+    s !== 'KHÔNG'    &&
+    s !== 'KHONG'    &&
+    !s.startsWith('0')
+  );
 }
 
-function hasRealVoice(pkg) {
-  const check = (val) => {
-    if (!val) return false;
-    const s = String(val).trim().toUpperCase();
-    return s !== '0' && s !== '0 PHÚT' && s !== '0 PHUT' && !s.startsWith('0');
+/**
+ * Chuẩn hoá một gói cước từ Mongoose document thành plain object
+ * với đầy đủ các trường để Frontend render PackageCard.
+ */
+function normalizePackage(pkg) {
+  const raw = typeof pkg.toObject === 'function' ? pkg.toObject() : pkg;
+  return {
+    id:                    raw.package_id ? String(raw.package_id) : String(raw._id),
+    numericId:             raw.package_id ? Number(raw.package_id) : undefined,
+    ma_goi:                raw.ma_goi              || '',
+    ten:                   raw.ten                 || '',
+    gia:                   raw.gia   != null        ? Number(raw.gia)   : 0,
+    chu_ky_ngay:           raw.chu_ky_ngay != null  ? String(raw.chu_ky_ngay) : '30',
+    dohot:                 raw.dohot               || 'normal',
+    phan_loai_goi:         raw.phan_loai_goi       || 'Data',
+    data_theo_ngay:        raw.data_theo_ngay       || '',
+    free_noi_mang:         raw.free_noi_mang        || '',
+    free_ngoai_mang:       raw.free_ngoai_mang      || '',
+    sms:                   raw.sms                  || '',
+    tien_ich_free:         raw.tien_ich_free         || '',
+    uudaitrong:            raw.uudaitrong            || '',
+    dieu_kien_dang_ky:     raw.dieu_kien_dang_ky    || '',
+    dangky:                raw.dangky               || '',
+    huygiahan:             raw.huygiahan            || '',
+    huygoicuoc:            raw.huygoicuoc           || '',
+    diem_noi_bat:          raw.diem_noi_bat         || '',
+    doi_tuong_ap_dung:     raw.doi_tuong_ap_dung    || '',
+    loai_mang:             raw.loai_mang            || '',
+    system_type:           raw.system_type          || '',
+    benefit_group:         raw.benefit_group        || '',
+    is_addon:              raw.is_addon             || false,
+    is_long_term:          raw.is_long_term         || false,
+    requires_base_package: raw.requires_base_package || false,
+    do_uu_tien:            raw.do_uu_tien           || 0
   };
-  return check(pkg.free_noi_mang) || check(pkg.free_ngoai_mang);
 }
 
-function getDailyGb(pkg) {
-  if (!pkg.data_theo_ngay) return 0;
-  const str = String(pkg.data_theo_ngay).trim().toUpperCase();
-  const matchDay = str.match(/([\d.]+)\s*GB\s*\/\s*(NGÀY|NGAY|D|DAY)/i);
-  if (matchDay) return parseFloat(matchDay[1]);
-  const matchMonth = str.match(/([\d.]+)\s*GB\s*\/\s*(THÁNG|THANG|M|MONTH)/i);
-  if (matchMonth) return parseFloat(matchMonth[1]) / 30;
-  const matchRaw = str.match(/([\d.]+)\s*GB/i);
-  if (matchRaw) return parseFloat(matchRaw[1]) / (parseInt(pkg.chu_ky_ngay) || 30);
-  return 0;
-}
+// ─── Truncation Filter (Bộ lọc giới hạn 3 gói tốt nhất) ─────────────────────
 
 /**
- * Kiểm tra gói có phải tiện ích mạng xã hội (YOUTUBE/TIKTOK/FACEBOOK/MOVIE) không
+ * Sắp xếp và cắt mảng gói cước:
+ *   - Luôn sort GIÁ TIỀN TĂNG DẦN để đề xuất gói dễ tiếp cận trước.
+ *   - Trong cùng mức giá: ưu tiên gói "Hot", rồi do_uu_tien giảm dần.
+ *   - Cắt tối đa 3 gói.
  */
-function isAddonSocialPackage(pkg) {
-  if (!pkg.benefit_group) return false;
-  const bg = pkg.benefit_group.toUpperCase();
-  return ['YOUTUBE', 'TIKTOK', 'FACEBOOK', 'MOVIE', 'SOCIAL'].includes(bg);
-}
+function truncatePackages(packages) {
+  const sorted = [...packages].sort((a, b) => {
+    // Trước tiên: giá tăng dần (gói rẻ / dễ tiếp cận trước)
+    const aGia = Number(a.gia) || 0;
+    const bGia = Number(b.gia) || 0;
+    if (aGia !== bGia) return aGia - bGia;
 
-/**
- * Sprint 6 Hotfix: matchPackages
- * - packageCodes[]: tìm tất cả mã gói được hỏi, KHÔNG return sớm
- * - minDays: bộ lọc CỨNG (loại hoàn toàn, không dùng score âm)
- * - addon/requiresBase: loại hoàn toàn khi người dùng chỉ hỏi data/voice chung
- * - data rẻ: loại mạnh gói 1,3,5,7 ngày
- */
-const matchPackages = (packages, intent) => {
-  const {
-    budget = null,
-    budgetMin = null,
-    budgetMax = null,
-    cheap = false,
-    expensive = false,
-    needData = false,
-    needVoice = false,
-    needSms = false,
-    needYoutube = false,
-    needTiktok = false,
-    needFacebook = false,
-    needTV360 = false,
-    needMovie = false,
-    needSocial = false,
-    need5G = false,
-    needLongTerm = false,
-    needShortTerm = false,
-    needCombo = false,
-    needAddon = false,
-    needYearly = false,
-    minDays = null,
-    packageCodes = []
-  } = intent || {};
+    // Cùng giá: Hot lên trước
+    const aHot = (a.dohot || '').toLowerCase() === 'hot' ? 1 : 0;
+    const bHot = (b.dohot || '').toLowerCase() === 'hot' ? 1 : 0;
+    if (bHot !== aHot) return bHot - aHot;
 
-  // 1. Exact package code
-  if (packageCodes && packageCodes.length > 0) {
-    return packages.filter(p => 
-      p.ma_goi && packageCodes.some(code => p.ma_goi.toLowerCase() === code.toLowerCase())
-    );
-  }
-
-  // Xác định user đang hỏi nội dung giải trí cụ thể
-  const askedSpecificSocial = needYoutube || needTiktok || needFacebook || needMovie || needSocial;
-  const wantCheapData = cheap && needData && !needCombo;
-  const pureDataVoiceQuery = (needData || needVoice) && !askedSpecificSocial && !needAddon;
-
-  const isBudgetOnlyQuery = (budget !== null || (budgetMin !== null && budgetMax !== null)) &&
-    !needData && !needVoice && !needSms && !needYoutube && !needTiktok && 
-    !needFacebook && !needTV360 && !needMovie && !needSocial && !need5G && 
-    !needLongTerm && !needShortTerm && !needCombo && !needAddon && !needYearly;
-
-  // Lọc bước đầu tiên: các bộ lọc cứng (Hard Filters) KHÔNG bao gồm ngân sách (Budget)
-  const filteredPackages = packages.filter(pkg => {
-    const cycleDay = parseInt(pkg.chu_ky_ngay) || 0;
-    const isAddon = isAddonSocialPackage(pkg);
-    const requiresBase = pkg.requires_base_package === true;
-
-    // 2. Cycle Filter
-    // Nếu minDays có giá trị và packageCodes rỗng: tìm chính xác chu_ky_ngay === minDays
-    if (minDays !== null) {
-      if (cycleDay !== minDays) return false;
-    }
-
-    // 3. Service Filter
-    // Combo: needCombo=true bắt buộc data_theo_ngay != 0 AND (free_noi_mang != 0 OR free_ngoai_mang != 0)
-    // Không lấy MXH addon, APP addon
-    if (needCombo) {
-      if (!hasRealData(pkg) || !hasRealVoice(pkg)) return false;
-      if (isAddon || requiresBase) return false;
-    }
-
-    // Các bộ lọc cứng khác để giữ tính nhất quán
-    if (pureDataVoiceQuery && (isAddon || requiresBase)) return false;
-    if (wantCheapData && (cycleDay === 1 || cycleDay === 3 || cycleDay === 5 || cycleDay === 7)) return false;
-    if ((needVoice) && !hasRealVoice(pkg)) return false;
-
-    const isComboPkg = pkg.phan_loai_goi === 'Combo' || 
-                       (pkg.phan_loai_goi && pkg.phan_loai_goi.toUpperCase() === 'COMBO') ||
-                       pkg.service_group === 'COMBO' ||
-                       (pkg.service_group && pkg.service_group.toUpperCase() === 'COMBO');
-    if (needData && !needVoice && !needCombo && isComboPkg) return false;
-    if (needData && !hasRealData(pkg)) return false;
-    if (needYearly && (cycleDay < 340 || cycleDay > 380)) return false;
-
-    return true;
+    // Cùng giá + Hot: do_uu_tien giảm dần
+    const aP = Number(a.do_uu_tien) || 0;
+    const bP = Number(b.do_uu_tien) || 0;
+    return bP - aP;
   });
 
-  // 4. Budget Filter
-  let finalFilteredPackages = [];
-  if (budgetMin !== null && budgetMax !== null) {
-    // Thử lọc nghiêm ngặt
-    finalFilteredPackages = filteredPackages.filter(pkg => pkg.gia >= budgetMin && pkg.gia <= budgetMax);
-    
-    // Nếu sau filter không còn gói: mới mở rộng khoảng giá. Không được bỏ qua budget
-    if (finalFilteredPackages.length === 0) {
-      const extensionMin = Math.max(50000, budgetMin * 0.3);
-      const extensionMax = Math.max(50000, budgetMax * 0.3);
-      finalFilteredPackages = filteredPackages.filter(pkg => 
-        pkg.gia >= (budgetMin - extensionMin) && pkg.gia <= (budgetMax + extensionMax)
-      );
+  return sorted.slice(0, 3);
+}
+
+// ─── Tìm theo mã gói cụ thể ───────────────────────────────────────────────────
+
+/**
+ * Tìm kiếm gói cước theo mã gói cụ thể (exact match, case-insensitive).
+ */
+async function findByPackageCodes(codes) {
+  if (!codes || codes.length === 0) return [];
+  const packages = await Package.find({
+    ma_goi: { $in: codes.map(c => new RegExp(`^${c}$`, 'i')) }
+  }).lean();
+  return packages.map(normalizePackage);
+}
+
+// ─── Build query động từ intent ───────────────────────────────────────────────
+
+/**
+ * Build và thực thi MongoDB query động từ intent.
+ *
+ * @param {object}  intent         — Intent object từ intentParser
+ * @param {boolean} hasPriceBudget — true nếu người dùng có chỉ định khoảng giá
+ * @returns {Array} mảng gói cước chuẩn hoá (chưa truncate)
+ */
+async function findByIntent(intent, hasPriceBudget) {
+  const { minPrice, maxPrice, cycleDays, networkType, apps, features } = intent;
+
+  // ── 1. Build query cơ bản trên collection goi_cuoc ────────────────────────
+  const buildBaseQuery = (giaFilter) => {
+    const q = {};
+
+    // Bộ lọc giá được truyền vào từ bên ngoài (exact hoặc range)
+    if (giaFilter !== undefined) {
+      if (typeof giaFilter === 'object' && giaFilter !== null) {
+        q.gia = { ...giaFilter };
+      } else {
+        q.gia = { $eq: giaFilter };
+      }
     }
-  } else if (budget !== null) {
-    // Bộ lọc budget đơn lẻ cũ
-    finalFilteredPackages = filteredPackages.filter(pkg => {
-      const diff = Math.abs(pkg.gia - budget);
-      const maxDiff = Math.max(50000, budget * 0.5);
-      return diff <= maxDiff;
-    });
+
+    // Khi có kết quả tìm giá: loại trừ gói giá 0 (đổi điểm Viettel++ như MP100GB, MP30GB)
+    // vì các gói này có gia = 0 và sẽ chiếm hết top 3 nếu không lọc
+    if (hasPriceBudget) {
+      if (q.gia) {
+        q.gia.$gt = 0;
+      } else {
+        q.gia = { $gt: 0 };
+      }
+    }
+
+    // Lọc theo chu kỳ ngày (exact match — DB lưu dạng String)
+    if (cycleDays != null && cycleDays > 0) {
+      q.chu_ky_ngay = String(cycleDays);
+    }
+
+    // Lọc theo loại mạng
+    if (networkType) {
+      q.loai_mang = new RegExp(networkType, 'i');
+    }
+
+    // Bộ lọc data/voice — CHỈ áp dụng khi KHÔNG có khoảng giá để tránh lọc nhầm
+    // gói Data hệ chính (SD120, SD150...) có free_noi_mang = "0"
+    if (!hasPriceBudget) {
+      if (features && features.voice) {
+        q.$or = [
+          { free_noi_mang:   { $nin: ['0', '', '0 phút', '0 Phút', null] } },
+          { free_ngoai_mang: { $nin: ['0', '', '0 phút', '0 Phút', null] } }
+        ];
+      }
+      if (features && features.data) {
+        q.data_theo_ngay = { $nin: ['0', '', '0GB', '0 GB', null] };
+      }
+    }
+
+    return q;
+  };
+
+  // ── 2. Nếu có yêu cầu ứng dụng: join với collection package_features ──────
+  let appPackageIdFilter = null; // null = không lọc theo app
+
+  if (apps && apps.length > 0) {
+    const featureQuery = {};
+    for (const app of apps) {
+      switch (app) {
+        case 'youtube':  featureQuery.has_youtube  = true; break;
+        case 'tiktok':   featureQuery.has_tiktok   = true; break;
+        case 'facebook': featureQuery.has_facebook = true; break;
+        case 'tv360':    featureQuery.has_tv360    = true; break;
+        case 'movie':    featureQuery.has_movie    = true; break;
+        default: break;
+      }
+    }
+
+    if (Object.keys(featureQuery).length > 0) {
+      const featureDocs = await PackageFeature.find(featureQuery, { package_id: 1 }).lean();
+      const ids = featureDocs.map(f => f.package_id);
+
+      if (ids.length > 0) {
+        appPackageIdFilter = { $in: ids };
+      } else {
+        // Fallback: quét tien_ich_free / uudaitrong bằng regex
+        const appPatterns  = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
+        const moviePattern = apps.includes('movie') ? [/phim/i, /movie/i] : [];
+        const allPatterns  = [...appPatterns, ...moviePattern];
+        if (allPatterns.length > 0) {
+          appPackageIdFilter = 'regex_fallback'; // marker
+        }
+      }
+    }
+  }
+
+  // ── Hàm thực thi query với giaFilter cụ thể ──────────────────────────────
+  const executeQuery = async (giaFilter) => {
+    const q = buildBaseQuery(giaFilter);
+
+    // Gán app filter
+    if (appPackageIdFilter && appPackageIdFilter !== 'regex_fallback') {
+      q.package_id = appPackageIdFilter;
+    } else if (appPackageIdFilter === 'regex_fallback') {
+      const appPatterns  = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
+      const moviePattern = apps.includes('movie') ? [/phim/i, /movie/i] : [];
+      const orClauses = [...appPatterns, ...moviePattern].flatMap(p => [
+        { tien_ich_free: p },
+        { uudaitrong:    p }
+      ]);
+      if (orClauses.length > 0) {
+        q.$or = q.$or ? [...q.$or, ...orClauses] : orClauses;
+      }
+    }
+
+    return Package.find(q)
+      .sort({ gia: 1, do_uu_tien: -1 })
+      .limit(10)
+      .lean();
+  };
+
+  // ── 3. Xác định kiểu tìm kiếm giá và thực thi query ──────────────────────────
+  //
+  // Kiểu A — Giá đơn (VD: "giá 120k", "gói 120k"):
+  //   maxPrice có giá trị, minPrice = null hoặc 0 (không phải khoảng từ-đến).
+  //   → Sử dụng cơ chế TRUY VẤN 2 TẦNG (Two-Pass Query) để cam kết lấy chính xác gói cước.
+  //
+  // Kiểu B — Khoảng giá (VD: "100k - 200k", "dưới 150k"):
+  //   minPrice và/hoặc maxPrice xác định bởi intentParser — query thông thường.
+
+  const isSinglePriceSearch = (
+    hasPriceBudget &&
+    maxPrice != null && maxPrice > 0 &&
+    (minPrice === null || minPrice === 0) // chưa có giới hạn dưới rõ ràng
+  );
+
+  let rawPackages = [];
+
+  if (isSinglePriceSearch) {
+    // Khớp chính xác 100% mức giá yêu cầu (Exact Match)
+    rawPackages = await executeQuery(maxPrice);
   } else {
-    finalFilteredPackages = filteredPackages;
+    // Kiểu B: Khoảng giá thông thường (minPrice ↔ maxPrice)
+    let giaFilter;
+    if (minPrice != null || maxPrice != null) {
+      giaFilter = {};
+      if (minPrice != null && minPrice > 0)  giaFilter.$gte = minPrice;
+      if (maxPrice != null && maxPrice > 0)  giaFilter.$lte = maxPrice;
+      if (Object.keys(giaFilter).length === 0) giaFilter = undefined;
+    }
+    rawPackages = await executeQuery(giaFilter);
   }
 
-  // 5. Scoring: Chỉ chạy scoring sau khi đã qua toàn bộ hard filter
-  const scoredPackages = finalFilteredPackages.map(pkg => {
-    let score = 1;
-    if (isBudgetOnlyQuery) {
-      score += 50;
+  return rawPackages.map(normalizePackage);
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+/**
+ * matchPackages — Entry point chính.
+ *
+ * Luồng:
+ *   1. Nếu hỏi mã gói cụ thể → tìm exact match
+ *   2. Nếu không có tiêu chí nào → noMatchFound
+ *   3. Tính flag hasPriceBudget → truyền sang findByIntent để điều chỉnh bộ lọc
+ *   4. Query động theo intent → truncate về tối đa 3 gói (sort giá ASC)
+ *   5. Nếu kết quả rỗng → noMatchFound
+ *
+ * @param   {object} intent — Kết quả từ intentParser
+ * @returns {Promise<{ noMatchFound: boolean, packages: Array }>}
+ */
+const matchPackages = async (intent) => {
+  if (!intent) {
+    return { noMatchFound: true, packages: [] };
+  }
+
+  // ── Nếu người dùng hỏi mã gói cụ thể ─────────────────────────────────────
+  if (intent.packageCodes && intent.packageCodes.length > 0) {
+    const found = await findByPackageCodes(intent.packageCodes);
+    if (found.length === 0) {
+      return { noMatchFound: true, packages: [] };
     }
-    const cycleDay = parseInt(pkg.chu_ky_ngay) || 0;
-    const bg = pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '';
-    const isAddon = isAddonSocialPackage(pkg);
+    return { noMatchFound: false, packages: truncatePackages(found) };
+  }
 
-    // Benefit group
-    if (needYoutube && bg === 'YOUTUBE') score += scoringConfig.benefit_group.youtube;
-    if (needTiktok && bg === 'TIKTOK') score += scoringConfig.benefit_group.tiktok;
-    if (needFacebook && bg === 'FACEBOOK') score += scoringConfig.benefit_group.facebook;
-    if (needMovie && bg === 'MOVIE') score += scoringConfig.benefit_group.movie;
-    if (needSocial && ['YOUTUBE', 'TIKTOK', 'FACEBOOK', 'SOCIAL', 'MOVIE'].includes(bg)) score += scoringConfig.benefit_group.social_any;
+  // ── Kiểm tra: intent có đủ tiêu chí để query không? ──────────────────────
+  const hasAnyFilter = (
+    intent.minPrice    != null  ||
+    intent.maxPrice    != null  ||
+    intent.cycleDays   != null  ||
+    intent.networkType != null  ||
+    (intent.apps     && intent.apps.length > 0) ||
+    (intent.features && (intent.features.data || intent.features.voice || intent.features.sms))
+  );
 
-    // TV360
-    if (needTV360) {
-      const hasTv = (pkg.tien_ich_free && pkg.tien_ich_free.toUpperCase().includes('TV360')) ||
-                    (pkg.uudaitrong && pkg.uudaitrong.toUpperCase().includes('TV360'));
-      if (hasTv) score += scoringConfig.tv360;
-    }
+  if (!hasAnyFilter) {
+    return { noMatchFound: true, packages: [] };
+  }
 
-    // Youtube / Tiktok / Facebook trong tien_ich_free & uudaitrong
-    if (needYoutube) {
-      if ((pkg.tien_ich_free && /youtube/i.test(pkg.tien_ich_free)) ||
-          (pkg.uudaitrong && /youtube/i.test(pkg.uudaitrong))) score += scoringConfig.description_keywords;
-    }
-    if (needTiktok) {
-      if ((pkg.tien_ich_free && /tiktok/i.test(pkg.tien_ich_free)) ||
-          (pkg.uudaitrong && /tiktok/i.test(pkg.uudaitrong))) score += scoringConfig.description_keywords;
-    }
-    if (needFacebook) {
-      if ((pkg.tien_ich_free && /facebook/i.test(pkg.tien_ich_free)) ||
-          (pkg.uudaitrong && /facebook/i.test(pkg.uudaitrong))) score += scoringConfig.description_keywords;
-    }
-    if (needMovie) {
-      if ((pkg.tien_ich_free && /phim|movie|cinema/i.test(pkg.tien_ich_free)) ||
-          (pkg.uudaitrong && /phim|movie|cinema/i.test(pkg.uudaitrong))) score += scoringConfig.description_keywords;
-    }
+  // ── Flag: người dùng có chỉ định ngân sách rõ ràng không? ─────────────────
+  // Khi có ngân sách → bỏ bộ lọc cứng data/voice để quét toàn bộ hệ Data/Combo
+  const hasPriceBudget = (intent.minPrice != null || intent.maxPrice != null);
 
-    // Data
-    if (needData) {
-      if (hasRealData(pkg)) score += scoringConfig.data_features.has_real_data;
-      if (pkg.system_type === 'DATA_BASE') score += scoringConfig.data_features.is_data_base;
-    }
+  // ── Query theo intent ──────────────────────────────────────────────────────
+  const matched = await findByIntent(intent, hasPriceBudget);
 
-    // Voice
-    if (needVoice && hasRealVoice(pkg)) score += scoringConfig.voice_features;
+  // ── ZERO-MATCH ─────────────────────────────────────────────────────────────
+  if (matched.length === 0) {
+    return { noMatchFound: true, packages: [] };
+  }
 
-    // 5G
-    if (need5G && pkg.loai_mang && pkg.loai_mang.toUpperCase().includes('5G')) score += scoringConfig.five_g;
+  // ── Truncation Filter: tối đa 3 gói, sort giá ASC ─────────────────────────
+  const packages = truncatePackages(matched);
 
-    // Combo
-    if (needCombo) {
-      if (pkg.service_group === 'COMBO') score += scoringConfig.combo.is_combo;
-      if (hasRealData(pkg) && hasRealVoice(pkg)) score += scoringConfig.combo.both_data_voice;
-    }
-
-    // Addon
-    if (needAddon && pkg.requires_base_package === true) score += scoringConfig.addon;
-
-    // Data giá rẻ — ưu tiên Gia_re + DATA_BASE + chu_ky >= 30
-    if (wantCheapData) {
-      if (pkg.phan_khuc_gia === 'Gia_re') score += scoringConfig.cheap_data.is_cheap;
-      if (pkg.system_type === 'DATA_BASE') score += scoringConfig.cheap_data.is_base;
-      if (cycleDay >= 30) score += scoringConfig.cheap_data.long_cycle;
-      if (cycleDay < 30) score += scoringConfig.cheap_data.short_cycle_penalty;
-    }
-
-    // Chu kỳ dài hạn
-    if (needLongTerm && cycleDay >= 90) {
-      score += scoringConfig.long_term.base;
-      if (pkg.system_type === 'DATA_BASE' || pkg.service_group === 'COMBO') score += scoringConfig.long_term.data_combo_bonus;
-    }
-
-    // minDays bonus (đã qua bộ lọc cứng ở trên)
-    if (minDays !== null && cycleDay >= minDays) score += scoringConfig.min_days_bonus;
-
-    // Chu kỳ năm
-    if (needYearly && cycleDay >= 360) score += scoringConfig.yearly;
-
-    // Phân khúc giá chung
-    if (!wantCheapData) {
-      if (cheap && pkg.phan_khuc_gia === 'Gia_re') score += scoringConfig.price_segment.cheap;
-      if (expensive && pkg.phan_khuc_gia === 'Cao_cap') score += scoringConfig.price_segment.expensive;
-    }
-
-    // Thưởng dung lượng
-    if (needData || needLongTerm || need5G) {
-      const dailyGb = getDailyGb(pkg);
-      score += dailyGb >= 4 ? 5 : dailyGb * 1.25;
-    }
-
-    // Budget matching (chỉ dùng cho budget đơn lẻ, hoặc chấm điểm bổ sung cho khoảng giá nếu cần, nhưng khoảng giá đã được lọc cứng)
-    if (budget !== null && budgetMin === null) {
-      const diff = Math.abs(pkg.gia - budget);
-      const maxDiff = Math.max(50000, budget * 0.5);
-      score += Math.max(1, Math.round((1 - diff / maxDiff) * 20));
-    }
-
-    // Phạt chu kỳ không phù hợp
-    if (!needShortTerm && cycleDay <= 3) score += scoringConfig.penalties.too_short;
-    if (!needLongTerm && !needYearly && cycleDay >= 90 && cycleDay < 360) score += scoringConfig.penalties.mid_term_unwanted;
-    if (!needYearly && cycleDay >= 360) score += scoringConfig.penalties.yearly_unwanted;
-
-    // Phạt addon sai loại
-    if (askedSpecificSocial && isAddon) {
-      let wrongType = false;
-      if (needYoutube && bg !== 'YOUTUBE') wrongType = true;
-      if (needTiktok && bg !== 'TIKTOK') wrongType = true;
-      if (needFacebook && bg !== 'FACEBOOK') wrongType = true;
-      if (needMovie && bg !== 'MOVIE') wrongType = true;
-      if (wrongType) score += scoringConfig.penalties.wrong_addon;
-    }
-
-    return { pkg, score };
-  });
-
-  // Lọc score > 0
-  const filtered = scoredPackages.filter(item => item.score > 0);
-
-  // Sắp xếp
-  filtered.sort((a, b) => {
-    // Sắp xếp theo budgetMin/budgetMax hoặc budget đơn lẻ
-    if (budgetMin !== null && budgetMax !== null) {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.pkg.gia - b.pkg.gia;
-    }
-
-    if (budget !== null) {
-      const da = Math.abs(a.pkg.gia - budget);
-      const db = Math.abs(b.pkg.gia - budget);
-      if (da !== db) return da - db;
-    }
-    if (needCombo && budget === null && budgetMin === null) {
-      if (a.pkg.gia !== b.pkg.gia) return a.pkg.gia - b.pkg.gia;
-    }
-    if (b.score !== a.score) return b.score - a.score;
-    const ua = parseInt(a.pkg.do_uu_tien) || 1;
-    const ub = parseInt(b.pkg.do_uu_tien) || 1;
-    if (ub !== ua) return ub - ua;
-    if (needLongTerm || minDays !== null) {
-      const ca = parseInt(a.pkg.chu_ky_ngay) || 0;
-      const cb = parseInt(b.pkg.chu_ky_ngay) || 0;
-      if (cb !== ca) return cb - ca;
-    }
-    return a.pkg.gia - b.pkg.gia;
-  });
-
-  // Tối đa 3 gói tư vấn
-  return filtered.slice(0, 3).map(item => item.pkg);
+  return { noMatchFound: false, packages };
 };
 
-module.exports = { matchPackages };
+module.exports = { matchPackages, normalizePackage };

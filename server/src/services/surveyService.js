@@ -158,7 +158,7 @@ async function syncPackageFeatures() {
         sms_level: smsLevel,
         searchable_tags: searchableTags
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
   console.log(`Successfully synced ${packages.length} packages to package_features.`);
@@ -449,7 +449,7 @@ const surveyService = {
           deletedAt: null,
           isEarlyTerminated
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     } else {
       surveyHistory = await SurveyHistory.create({
