@@ -71,133 +71,6 @@ async function runMetadataMigration() {
   }
 }
 
-// ─── Conflict-engine helpers ───────────────────────────────────────────────
-
-// Danh sách chu_ky_ngay được coi là "gói ngắn ngày"
-const SHORT_CYCLES = [1, 3, 5, 7, 14, 15];
-
-/**
- * BƯỚC 1 – Kiểm tra đăng ký trùng chính gói đang dùng.
- * Trả về conflict result hoặc null nếu không trùng.
- */
-const handleDuplicate = (activeSubs, pkg, newMetadata) => {
-  const exactSub = activeSubs.find(sub => sub.packageId === pkg.package_id);
-  if (!exactSub) return null;
-
-  const newDuration = newMetadata.duration;
-  if (SHORT_CYCLES.includes(newDuration)) {
-    return {
-      action: 'RENEW_SHORT',
-      message: 'Đăng ký lại thành công. Ưu đãi và thời gian sử dụng đã được cấp mới.',
-      exactSubId: exactSub._id,
-      hasActive: true
-    };
-  }
-  return {
-    action: 'REJECT',
-    message: 'Bạn đang sử dụng gói này. Vui lòng hủy gói hoặc chờ hết hạn để đăng ký lại.',
-    hasActive: true
-  };
-};
-
-/**
- * BƯỚC 2 – Kiểm tra requires_base_package.
- * Trả về REJECT result nếu không có gói data nền / combo, null nếu OK.
- */
-const validateBasePackage = async (activeSubs) => {
-  const BASE_TYPES = ['DATA_BASE', 'COMBO'];
-  const activePkgIds = activeSubs.map(s => s.packageId);
-  const activePkgs = await Package.find({ package_id: { $in: activePkgIds } });
-  const hasBase = activePkgs.some(p => BASE_TYPES.includes((p.system_type || '').toUpperCase()));
-  if (!hasBase) {
-    return {
-      action: 'REJECT',
-      message: 'Gói này yêu cầu thuê bao đang sử dụng gói data nền hoặc gói combo phù hợp.',
-      hasActive: activeSubs.length > 0
-    };
-  }
-  return null;
-};
-
-/**
- * BƯỚC 4+5 – Kiểm tra xung đột theo benefit_group.
- *
- * Quy tắc:
- *   - Khác benefit_group  → ALLOW ngay (ví dụ: FACEBOOK + GENERAL_DATA)
- *   - Cùng benefit_group  → kiểm tra tiếp:
- *       * Gói mới là ADDON_DATA (is_addon=true hoặc benefit_group=ADDON_DATA) → ALLOW
- *       * Cùng hệ + cả hai dài ngày (duration >= 30) → REJECT
- *       * Ngược lại → tiếp tục xuống bước 6 (registration_policy)
- *
- * Trả về:
- *   { action, message, hasActive, conflictingPackage } | null
- * null = chưa quyết định, cần tiếp tục bước 6.
- */
-const checkBenefitGroupConflict = async (activeSubs, newPkg) => {
-  const newGroup = (newPkg.benefit_group || '').toUpperCase();
-  const newDuration = parseInt(newPkg.chu_ky_ngay || '30', 10);
-  const newIsAddon = newPkg.is_addon === true || newGroup === 'ADDON_DATA';
-
-  const activePkgIds = activeSubs.map(s => s.packageId);
-  const activePkgs = await Package.find({ package_id: { $in: activePkgIds } });
-
-  // Nếu benefit_group chưa được set trên bất kỳ gói nào → bỏ qua bước này
-  const allEmpty = !newGroup && activePkgs.every(p => !(p.benefit_group || '').trim());
-  if (allEmpty) return null;
-
-  // Gói mới là ADDON_DATA → ALLOW ngay mà không cần kiểm tra hệ
-  if (newIsAddon) return null;
-
-  for (const activePkg of activePkgs) {
-    const activeGroup = (activePkg.benefit_group || '').toUpperCase();
-    const activeIsAddon = activePkg.is_addon === true || activeGroup === 'ADDON_DATA';
-
-    // Bỏ qua gói active là addon
-    if (activeIsAddon) continue;
-
-    // Nếu một trong hai chưa có benefit_group → bỏ qua cặp này
-    if (!newGroup || !activeGroup) continue;
-
-    if (newGroup !== activeGroup) {
-      // Khác hệ → tiếp tục vòng lặp, không REJECT vì cặp này OK
-      continue;
-    }
-
-    // Cùng hệ → kiểm tra có phải cả hai dài ngày không
-    const activeDuration = parseInt(activePkg.chu_ky_ngay || '30', 10);
-    const bothLongTerm = newDuration >= 30 && activeDuration >= 30;
-
-    if (bothLongTerm) {
-      const pkgLabel = `${activePkg.ma_goi} ${activeDuration} ngày`;
-      const groupLabel = {
-        FACEBOOK: 'Facebook',
-        YOUTUBE: 'YouTube',
-        TIKTOK: 'TikTok',
-        SPORT: 'thể thao',
-        MOVIE: 'xem phim',
-        GENERAL_DATA: 'Data',
-        VOICE_SMS: 'thoại / SMS',
-        COMBO: 'Combo'
-      }[newGroup] || newGroup;
-      return {
-        action: 'REJECT',
-        reasonCode: 'SAME_BENEFIT_GROUP',
-        message: `Bạn đang sử dụng gói ${pkgLabel}. Theo quy định, không thể đăng ký thêm một gói ${groupLabel} dài hạn khác. Vui lòng hủy gói hiện tại hoặc chờ hết hạn.`,
-        conflictingPackage: {
-          ma_goi: activePkg.ma_goi,
-          ten: activePkg.ten,
-          chu_ky_ngay: activePkg.chu_ky_ngay
-        },
-        hasActive: true
-      };
-    }
-    // Cùng hệ nhưng gói mới ngắn ngày → ALLOW (ví dụ: 3FB30 + FB15K)
-  }
-
-  // Tất cả cặp đều OK hoặc khác hệ → chưa quyết định, sang bước 6
-  return null;
-};
-
 // ─── Utility functions used by conflict helpers and registerSubscription ─────
 
 const calculateExpiryDate = (activatedAt, duration, cycleType, validityMode) => {
@@ -259,110 +132,30 @@ const getPkgMetadata = (pkg) => {
   };
 };
 
-// ─── Cũ – giữ lại để dùng trong applyRegistrationPolicy (BƯỚC 6) ──────────
-
-const isSameSystem = (meta1, meta2, pkg1, pkg2) => {
-  const group1 = (meta1.service_group || '').toUpperCase();
-  const group2 = (meta2.service_group || '').toUpperCase();
-  const cat1 = (pkg1.phan_loai_goi || '').toUpperCase();
-  const cat2 = (pkg2.phan_loai_goi || '').toUpperCase();
-  const nhom1 = (pkg1.Nhom_Goi || '').toUpperCase();
-  const nhom2 = (pkg2.Nhom_Goi || '').toUpperCase();
-  return group1 === group2 || cat1 === cat2 || (nhom1 && nhom2 && nhom1 === nhom2);
-};
-
-const isSameCycle = (meta1, meta2, pkg1, pkg2) => {
-  const dur1 = meta1.duration;
-  const dur2 = meta2.duration;
-  const cyc1 = parseInt(pkg1.chu_ky_ngay || '30', 10);
-  const cyc2 = parseInt(pkg2.chu_ky_ngay || '30', 10);
-  return dur1 === dur2 || cyc1 === cyc2;
-};
-
-/**
- * BƯỚC 6 – Áp dụng registration_policy (REPLACE / REJECT / ALLOW) như cũ.
- */
-const applyRegistrationPolicy = async (activeSubs, pkg, newMetadata) => {
-  let finalAction = 'ALLOW';
-  let finalMessage = 'Gói cước có thể sử dụng song song.';
-  const replaceSubscriptions = [];
-  const conflictSubscriptions = [];
-
-  for (const sub of activeSubs) {
-    const activePkg = await Package.findOne({ package_id: sub.packageId });
-    if (!activePkg) continue;
-    const activeMetadata = getPkgMetadata(activePkg);
-    const sameSystem = isSameSystem(newMetadata, activeMetadata, pkg, activePkg);
-    const sameCycle = isSameCycle(newMetadata, activeMetadata, pkg, activePkg);
-
-    if (sameSystem && sameCycle) {
-      if (newMetadata.registration_policy === 'REJECT') {
-        conflictSubscriptions.push({
-          subscriptionId: sub._id,
-          packageId: activePkg.package_id,
-          packageName: activePkg.ten,
-          packageCode: activePkg.ma_goi
-        });
-        finalAction = 'REJECT';
-      } else if (newMetadata.registration_policy === 'REPLACE') {
-        replaceSubscriptions.push({
-          subscriptionId: sub._id,
-          packageId: activePkg.package_id,
-          packageName: activePkg.ten,
-          packageCode: activePkg.ma_goi
-        });
-        if (finalAction !== 'REJECT') finalAction = 'REPLACE';
-      }
-    }
-  }
-
-  if (finalAction === 'REJECT') {
-    return {
-      action: 'REJECT',
-      message: 'Không thể đăng ký đồng thời với các gói đang sử dụng.',
-      conflictSubscriptions,
-      hasActive: true
-    };
-  }
-  if (finalAction === 'REPLACE') {
-    return {
-      action: 'REPLACE',
-      message: 'Gói mới sẽ thay thế các gói đang sử dụng.',
-      replaceSubscriptions,
-      hasActive: true
-    };
-  }
-  return {
-    action: 'ALLOW',
-    message: finalMessage,
-    hasActive: activeSubs.length > 0
-  };
-};
-
-// ──────────────────────────────────────────────────────────────────────────
-
 const subscriptionService = {
   /**
    * Kiểm tra xung đột trước khi đăng ký gói.
-   * Thứ tự bắt buộc:
-   *   1. Trùng chính gói
-   *   2. requires_base_package
-   *   3. is_addon → ALLOW ngay
-   *   4. Khác benefit_group → ALLOW | Cùng benefit_group + dài ngày → REJECT
-   *   5. registration_policy cũ (REPLACE / REJECT)
    */
-  checkSubscriptionConflict: async (userId, packageId) => {
-    const account = await Account.findOne({ user_id: userId });
+  checkSubscriptionConflict: async (userId, packageId, session = null) => {
+    // 1. KIỂM TRA TRẠNG THÁI THUÊ BAO
+    const account = await Account.findOne({ user_id: userId }).session(session);
     if (!account) {
       throw new Error('Người dùng không tồn tại.');
     }
 
-    let pkg = await Package.findOne({ package_id: Number(packageId) });
+    if (account.status === 'blocked') {
+      return {
+        action: 'REJECT',
+        message: 'Tài khoản của bạn đã bị khóa.'
+      };
+    }
+
+    let pkg = await Package.findOne({ package_id: Number(packageId) }).session(session);
     if (!pkg) {
-      pkg = await Package.findOne({ $or: [{ package_id: Number(packageId) }, { id: Number(packageId) }] });
+      pkg = await Package.findOne({ $or: [{ package_id: Number(packageId) }, { id: Number(packageId) }] }).session(session);
     }
     if (!pkg) {
-      pkg = await Package.findOne({ ma_goi: new RegExp(`^${packageId}$`, 'i') });
+      pkg = await Package.findOne({ ma_goi: new RegExp(`^${packageId}$`, 'i') }).session(session);
     }
     if (!pkg) {
       throw new Error('Gói cước không tồn tại.');
@@ -373,134 +166,335 @@ const subscriptionService = {
       userId: userId,
       status: 'ACTIVE',
       expiresAt: { $gt: now }
-    });
+    }).session(session);
 
-    const newMetadata = getPkgMetadata(pkg);
+    // BƯỚC 1 - TRÙNG GÓI (EXACT DUPLICATE)
+    const exactSub = activeSubs.find(sub => sub.packageId === pkg.package_id);
+    if (exactSub) {
+      const isLongTerm = pkg.is_long_term === true || parseInt(pkg.chu_ky_ngay || '30', 10) >= 30;
+      const isShortTerm = parseInt(pkg.chu_ky_ngay || '30', 10) < 30;
 
-    // ── BƯỚC 1: Trùng chính gói ──────────────────────────────────────────
-    const duplicateResult = handleDuplicate(activeSubs, pkg, newMetadata);
-    if (duplicateResult) return duplicateResult;
-
-    // Không có gói active nào → ALLOW ngay
-    if (activeSubs.length === 0) {
-      return { action: 'ALLOW', message: 'Gói cước có thể sử dụng song song.', hasActive: false };
+      if (isLongTerm) {
+        return {
+          action: 'REJECT',
+          message: 'Bạn đang sử dụng gói cước này, vui lòng hủy gói cũ trước khi đăng ký lại.',
+          hasActive: true
+        };
+      }
+      if (isShortTerm) {
+        return {
+          action: 'RENEW_SHORT',
+          message: 'Đăng ký lại thành công. Ưu đãi và thời gian sử dụng đã được cấp mới.',
+          exactSubId: exactSub._id,
+          hasActive: true
+        };
+      }
     }
 
-    // ── BƯỚC 2: requires_base_package ────────────────────────────────────
+    // Lọc ra các gói đang hoạt động còn lại
+    const filteredActiveSubs = exactSub && (parseInt(pkg.chu_ky_ngay || '30', 10) < 30)
+      ? activeSubs.filter(sub => sub.packageId !== pkg.package_id)
+      : activeSubs;
+
+    // Fetch details of all active packages in a single query
+    const activePkgIds = filteredActiveSubs.map(s => s.packageId);
+    const activePkgs = await Package.find({ package_id: { $in: activePkgIds } }).session(session);
+    const pkgMap = new Map();
+    for (const p of activePkgs) {
+      pkgMap.set(p.package_id, p);
+    }
+
+    if (filteredActiveSubs.length === 0) {
+      if (pkg.requires_base_package === true) {
+        return {
+          action: 'REJECT',
+          message: 'Gói này yêu cầu thuê bao đang sử dụng gói data nền hoặc gói combo phù hợp. Vui lòng đăng ký gói data nền hoặc combo trước.',
+          hasActive: false
+        };
+      }
+      return {
+        action: 'ALLOW',
+        message: 'Gói cước có thể sử dụng song song.',
+        hasActive: false
+      };
+    }
+
+    // BƯỚC 2 - KIỂM TRA RÀNG BUỘC GÓI NỀN (REQUIRES BASE PACKAGE)
     if (pkg.requires_base_package === true) {
-      const baseResult = await validateBasePackage(activeSubs);
-      if (baseResult) return baseResult;
+      const hasBase = filteredActiveSubs.some(sub => {
+        const activePkg = pkgMap.get(sub.packageId);
+        if (!activePkg) return false;
+        return ['DATA_BASE', 'COMBO'].includes((activePkg.system_type || '').toUpperCase().trim());
+      });
+      if (!hasBase) {
+        return {
+          action: 'REJECT',
+          message: 'Gói này yêu cầu thuê bao đang sử dụng gói data nền hoặc gói combo phù hợp. Vui lòng đăng ký gói data nền hoặc combo trước.',
+          hasActive: true
+        };
+      }
     }
 
-    // ── BƯỚC 3: is_addon → ALLOW ngay ────────────────────────────────────
-    if (pkg.is_addon === true) {
-      return { action: 'ALLOW', message: 'Gói tiện ích bổ sung có thể sử dụng song song.', hasActive: true };
+    // BƯỚC 3 - ĐẶC CÁCH GÓI ADD-ON LƯU LƯỢNG TỔNG
+    const isAddonPkg = pkg.is_addon === true || ['ADD_ON', 'ADDON'].includes((pkg.system_type || '').toUpperCase().trim());
+    if (isAddonPkg) {
+      return {
+        action: 'ALLOW',
+        message: 'Gói tiện ích bổ sung có thể sử dụng song song.',
+        hasActive: filteredActiveSubs.length > 0
+      };
     }
 
-    // ── BƯỚC 4: benefit_group conflict check ─────────────────────────────
-    // Khác hệ → ALLOW | Cùng hệ + dài ngày → REJECT | Cùng hệ + ngắn ngày → pass qua
-    const benefitGroupResult = await checkBenefitGroupConflict(activeSubs, pkg);
-    if (benefitGroupResult) return benefitGroupResult;
+    // BƯỚC 4 - XUNG ĐỘT TRÙNG ƯU ĐÃI ỨNG DỤNG (BENEFIT GROUP) & SO SÁNH CHU KỲ ĐỂ NÂNG/HẠ CẤP
+    const newGroup = (pkg.benefit_group || '').toUpperCase().trim();
+    const newDays = parseInt(pkg.chu_ky_ngay || '30', 10);
 
-    // ── BƯỚC 5: registration_policy cũ ───────────────────────────────────
-    return await applyRegistrationPolicy(activeSubs, pkg, newMetadata);
+    let finalAction = 'ALLOW';
+    let finalMessage = 'Gói cước có thể sử dụng song song.';
+    const replaceSubscriptions = [];
+    const processedSubIds = new Set();
+
+    if (newGroup && newGroup !== 'GENERAL_DATA') {
+      for (const sub of filteredActiveSubs) {
+        const activePkg = pkgMap.get(sub.packageId);
+        if (!activePkg) continue;
+        const activeGroup = (activePkg.benefit_group || '').toUpperCase().trim();
+
+        if (activeGroup === newGroup) {
+          const activeDays = parseInt(activePkg.chu_ky_ngay || '30', 10);
+          // Trường hợp 4A - Nâng cấp chu kỳ (Thấp → Cao)
+          if (newDays > activeDays) {
+            replaceSubscriptions.push({
+              subscriptionId: sub._id,
+              packageId: activePkg.package_id,
+              packageName: activePkg.ten,
+              packageCode: activePkg.ma_goi
+            });
+            processedSubIds.add(sub._id.toString());
+            if (finalAction !== 'REJECT') {
+              finalAction = 'REPLACE';
+              finalMessage = 'Gói mới sẽ thay thế các gói đang sử dụng.';
+            }
+          } else {
+            // Trường hợp 4B - Hạ cấp chu kỳ (Cao → Thấp) hoặc Trùng chu kỳ tương đương
+            return {
+              action: 'REJECT',
+              message: 'Không thể đăng ký song song hoặc hạ cấp chu kỳ gói cước ứng dụng. Bạn bắt buộc phải hủy thủ công gói chu kỳ cao hiện tại trước khi đăng ký gói này.',
+              hasActive: true
+            };
+          }
+        }
+      }
+    }
+
+    // BƯỚC 5 - XỬ LÝ CHÍNH SÁCH ĐĂNG KÝ PHÂN HỆ HỆ THỐNG (REGISTRATION POLICY & CHU KỲ ĐỀ)
+    const newSysType = (pkg.system_type || '').toUpperCase().trim();
+    if (newSysType) {
+      for (const sub of filteredActiveSubs) {
+        if (processedSubIds.has(sub._id.toString())) continue;
+
+        const activePkg = pkgMap.get(sub.packageId);
+        if (!activePkg) continue;
+        const activeSysType = (activePkg.system_type || '').toUpperCase().trim();
+
+        if (activeSysType === newSysType) {
+          const activeDays = parseInt(activePkg.chu_ky_ngay || '30', 10);
+          // Trường hợp 5A - Nâng cấp chu kỳ (Thấp → Cao)
+          if (newDays > activeDays) {
+            replaceSubscriptions.push({
+              subscriptionId: sub._id,
+              packageId: activePkg.package_id,
+              packageName: activePkg.ten,
+              packageCode: activePkg.ma_goi
+            });
+            if (finalAction !== 'REJECT') {
+              finalAction = 'REPLACE';
+              finalMessage = 'Gói mới sẽ thay thế các gói đang sử dụng.';
+            }
+          }
+          // Trường hợp 5B - Hạ cấp chu kỳ (Cao → Thấp)
+          else if (newDays < activeDays) {
+            return {
+              action: 'REJECT',
+              message: 'Không thể hạ cấp chu kỳ gói cước cùng phân hệ. Vui lòng hủy gói chu kỳ cao hiện tại trước khi đăng ký.',
+              hasActive: true
+            };
+          }
+          // Trường hợp 5C - Chu kỳ tương đương
+          else {
+            const policy = (pkg.registration_policy || '').toUpperCase().trim();
+            if (policy === 'REPLACE') {
+              replaceSubscriptions.push({
+                subscriptionId: sub._id,
+                packageId: activePkg.package_id,
+                packageName: activePkg.ten,
+                packageCode: activePkg.ma_goi
+              });
+              if (finalAction !== 'REJECT') {
+                finalAction = 'REPLACE';
+                finalMessage = 'Gói mới sẽ thay thế các gói đang sử dụng.';
+              }
+            } else if (policy === 'REJECT') {
+              return {
+                action: 'REJECT',
+                message: 'Không thể đăng ký do xung đột cước hệ thống với gói đang sử dụng.',
+                hasActive: true
+              };
+            } else if (policy === 'ALLOW') {
+              const allowedParallel = (pkg.allow_parallel_with || []).map(s => s.toUpperCase().trim());
+              if (!allowedParallel.includes(activeSysType)) {
+                return {
+                  action: 'REJECT',
+                  message: 'Không thể đăng ký do phân hệ gói cước cũ không được phép chạy song song với gói mới.',
+                  hasActive: true
+                };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (finalAction === 'REPLACE') {
+      return {
+        action: 'REPLACE',
+        message: finalMessage,
+        replaceSubscriptions,
+        hasActive: true
+      };
+    }
+
+    return {
+      action: 'ALLOW',
+      message: finalMessage,
+      hasActive: filteredActiveSubs.length > 0
+    };
   },
 
   registerSubscription: async (userId, packageId, cycle) => {
-    const conflictResult = await subscriptionService.checkSubscriptionConflict(userId, packageId);
-    if (conflictResult.action === 'REJECT') {
-      throw new Error(conflictResult.message);
-    }
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    let pkg = await Package.findOne({ package_id: Number(packageId) });
-    if (!pkg) {
-      pkg = await Package.findOne({ $or: [{ package_id: Number(packageId) }, { id: Number(packageId) }] });
-    }
-    if (!pkg) {
-      pkg = await Package.findOne({ ma_goi: new RegExp(`^${packageId}$`, 'i') });
-    }
-    if (!pkg) {
-      throw new Error('Gói cước không tồn tại.');
-    }
-
-    const account = await Account.findOne({ user_id: userId });
-    if (!account) {
-      throw new Error('Tài khoản không tồn tại.');
-    }
-    if (account.balance < pkg.gia) {
-      throw new Error('Số dư tài khoản không đủ.');
-    }
-
-    const now = new Date();
-    const metadata = getPkgMetadata(pkg);
-    const expiresAt = calculateExpiryDate(
-      now,
-      metadata.duration,
-      metadata.cycle_type,
-      metadata.validity_mode
-    );
-
-    if (conflictResult.action === 'RENEW_SHORT') {
-      // 1. Deduct balance
-      account.balance -= pkg.gia;
-      await account.save();
-
-      // 2. Update existing sub
-      const sub = await UserSubscription.findById(conflictResult.exactSubId);
-      if (!sub) {
-        throw new Error('Không tìm thấy gói cước đang hoạt động để gia hạn.');
+    try {
+      const conflictResult = await subscriptionService.checkSubscriptionConflict(userId, packageId, session);
+      if (conflictResult.action === 'REJECT') {
+        throw new Error(conflictResult.message);
       }
-      sub.activatedAt = now;
-      sub.startedAt = now;
-      sub.expiresAt = expiresAt;
-      sub.status = 'ACTIVE';
-      sub.cycle = metadata.cycle;
-      sub.duration = metadata.duration;
-      sub.cycleType = metadata.cycle_type;
-      await sub.save();
 
-      const subObj = sub.toObject();
-      subObj.message = 'Đăng ký lại thành công. Ưu đãi và thời gian sử dụng đã được cấp mới.';
+      let pkg = await Package.findOne({ package_id: Number(packageId) }).session(session);
+      if (!pkg) {
+        pkg = await Package.findOne({ $or: [{ package_id: Number(packageId) }, { id: Number(packageId) }] }).session(session);
+      }
+      if (!pkg) {
+        pkg = await Package.findOne({ ma_goi: new RegExp(`^${packageId}$`, 'i') }).session(session);
+      }
+      if (!pkg) {
+        throw new Error('Gói cước không tồn tại.');
+      }
+
+      const account = await Account.findOne({ user_id: userId }).session(session);
+      if (!account) {
+        throw new Error('Tài khoản không tồn tại.');
+      }
+      if (account.balance < pkg.gia) {
+        throw new Error('Số dư tài khoản không đủ.');
+      }
+
+      const now = new Date();
+      const metadata = getPkgMetadata(pkg);
+      const expiresAt = calculateExpiryDate(
+        now,
+        metadata.duration,
+        metadata.cycle_type,
+        metadata.validity_mode
+      );
+
+      let returnedSub = null;
+
+      if (conflictResult.action === 'RENEW_SHORT') {
+        // Chuyển gói cũ sang EXPIRED
+        const oldSub = await UserSubscription.findById(conflictResult.exactSubId).session(session);
+        if (!oldSub) {
+          throw new Error('Không tìm thấy gói cước đang hoạt động để gia hạn.');
+        }
+        oldSub.status = 'EXPIRED';
+        await oldSub.save({ session });
+
+        // Trừ tiền tài khoản
+        account.balance -= pkg.gia;
+        await account.save({ session });
+
+        // Tạo gói mới ACTIVE
+        const newSub = new UserSubscription({
+          userId: userId,
+          packageId: pkg.package_id,
+          registeredAt: now,
+          activatedAt: now,
+          startedAt: now,
+          expiresAt: expiresAt,
+          status: 'ACTIVE',
+          autoRenew: pkg.is_auto_renew !== undefined ? pkg.is_auto_renew : true,
+          cycle: metadata.cycle,
+          duration: metadata.duration,
+          cycleType: metadata.cycle_type
+        });
+        await newSub.save({ session });
+
+        returnedSub = newSub;
+      } else {
+        // Trừ tiền tài khoản
+        account.balance -= pkg.gia;
+        await account.save({ session });
+
+        // Tạo gói mới ACTIVE
+        const newSub = new UserSubscription({
+          userId: userId,
+          packageId: pkg.package_id,
+          registeredAt: now,
+          activatedAt: now,
+          startedAt: now,
+          expiresAt: expiresAt,
+          status: 'ACTIVE',
+          autoRenew: pkg.is_auto_renew !== undefined ? pkg.is_auto_renew : true,
+          cycle: metadata.cycle,
+          duration: metadata.duration,
+          cycleType: metadata.cycle_type
+        });
+        await newSub.save({ session });
+
+        if (conflictResult.action === 'REPLACE' && conflictResult.replaceSubscriptions) {
+          const subIdsToReplace = conflictResult.replaceSubscriptions.map(s => s.subscriptionId);
+          await UserSubscription.updateMany(
+            { _id: { $in: subIdsToReplace } },
+            {
+              $set: {
+                status: 'REPLACED',
+                replacedAt: now,
+                replacedBySubscriptionId: newSub._id
+              }
+            },
+            { session }
+          );
+        }
+
+        returnedSub = newSub;
+      }
+
+      await session.commitTransaction();
+
+      const subObj = returnedSub.toObject();
+      if (conflictResult.action === 'RENEW_SHORT') {
+        subObj.message = 'Đăng ký lại thành công. Ưu đãi và thời gian sử dụng đã được cấp mới.';
+      }
 
       return { subscription: subObj, account, pkg };
+
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      await session.endSession();
     }
-
-    // 1. Deduct user balance
-    account.balance -= pkg.gia;
-    await account.save();
-
-    // 2. Create UserSubscription
-    const newSub = new UserSubscription({
-      userId: userId,
-      packageId: pkg.package_id,
-      registeredAt: now,
-      activatedAt: now,
-      startedAt: now,
-      expiresAt: expiresAt,
-      status: 'ACTIVE',
-      autoRenew: metadata.support_auto_renew,
-      cycle: metadata.cycle,
-      duration: metadata.duration,
-      cycleType: metadata.cycle_type
-    });
-    await newSub.save();
-
-    if (conflictResult.action === 'REPLACE' && conflictResult.replaceSubscriptions) {
-      const subIdsToReplace = conflictResult.replaceSubscriptions.map(s => s.subscriptionId);
-
-      await UserSubscription.updateMany(
-        { _id: { $in: subIdsToReplace } },
-        {
-          $set: {
-            status: 'REPLACED',
-            replacedAt: now,
-            replacedBySubscriptionId: newSub._id
-          }
-        }
-      );
-    }
-
-    return { subscription: newSub, account, pkg };
   },
 
   getActiveSubscriptions: async (userId) => {
