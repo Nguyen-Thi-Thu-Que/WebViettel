@@ -465,6 +465,14 @@ export const compareApi = {
     const response = await axiosInstance.post('/api/compare/session', payload);
     return response.data;
   },
+  closeSession: async (payload: any): Promise<any> => {
+    const response = await axiosInstance.post('/api/compare/session/close', payload);
+    return response.data;
+  },
+  analyzeAI: async (maGoiList: string[]): Promise<{ summary: string; best_value: string; recommendation: string }> => {
+    const response = await axiosInstance.post('/api/compare/ai-analyze', { maGoiList });
+    return response.data.data;
+  },
   fetchAnalytics: async (): Promise<any> => {
     const response = await axiosInstance.get('/api/compare/analytics');
     return response.data.data;

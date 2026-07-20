@@ -10,7 +10,6 @@ const compareHistorySchema = new mongoose.Schema({
   selected_package: { type: String, default: null },
   compare_count: { type: Number, default: 0 },
   compare_duration: { type: Number, default: 0 }, // in seconds
-  viewed_detail_packages: { type: [String], default: [] },
   completed: { type: Boolean, default: false },
   cleared_by_user: { type: Boolean, default: false },
   status: { type: String, default: 'ACTIVE' }, // ACTIVE, COMPLETED, ABANDONED, CLEARED

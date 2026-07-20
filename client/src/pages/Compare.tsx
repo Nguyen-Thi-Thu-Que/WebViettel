@@ -5,7 +5,6 @@ import { usePackageStore, useAuthStore } from '../store';
 import type { Package } from '../types';
 import SEO from '../components/SEO';
 import RegisterModal from '../components/RegisterModal';
-import { compareAIService } from '../services/compareAIService';
 import CompareAI from '../components/CompareAI';
 import { compareApi } from '../services/api';
 
@@ -26,188 +25,133 @@ export default function Compare() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalSearchQuery, setModalSearchQuery] = useState('');
 
-  const aiAnalysis = useMemo(() => {
-    if (compareList.length < 2) return null;
-    try {
-      return compareAIService.analyzePackages(compareList);
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
-  }, [compareList]);
-
-  // Helper: Generate unique IDs
-  const generateId = () => {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  };
-
   // Session tracking refs
   const sessionIdRef = useRef<string>('');
   const guestIdRef = useRef<string>('');
-  const packagesComparedRef = useRef<Set<string>>(new Set());
-  const viewedDetailPackagesRef = useRef<Set<string>>(new Set());
   const startTimeRef = useRef<number>(0);
-  const hasSavedRef = useRef<boolean>(false);
-  const compareListRef = useRef<Package[]>([]);
+  const hasClosedRef = useRef<boolean>(false);
 
-  // Sync compare list ref
-  useEffect(() => {
-    compareListRef.current = compareList;
-    compareList.forEach(pkg => {
-      packagesComparedRef.current.add(pkg.id);
-    });
-  }, [compareList]);
-
-  // Initialize Session
-  useEffect(() => {
-    sessionIdRef.current = 'sess_' + generateId();
+  // Helper hàm khởi tạo session_id mới tinh
+  const generateNewSession = () => {
+    const sessId = 'sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
+    sessionIdRef.current = sessId;
     startTimeRef.current = Date.now();
-    hasSavedRef.current = false;
-    packagesComparedRef.current = new Set(compareList.map(p => p.id));
-    viewedDetailPackagesRef.current = new Set();
+    hasClosedRef.current = false;
+    return sessId;
+  };
 
-    let gId = localStorage.getItem('guest_compare_id');
-    if (!gId) {
-      gId = 'guest_' + generateId();
-      localStorage.setItem('guest_compare_id', gId);
-    }
-    guestIdRef.current = gId;
-  }, []);
+  // Show Toast notification
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMsg({ type, text });
+    setTimeout(() => setToastMsg(null), 3500);
+  };
 
-  const saveSessionSync = (finalState: {
-    completed: boolean;
-    status: string;
-    selected_package?: string | null;
-    cleared_by_user?: boolean;
-    cleared_at?: string | null;
-  }) => {
-    if (hasSavedRef.current) return;
-    hasSavedRef.current = true;
+  // Synchronous session close using sendBeacon or keepalive fetch (Safe Exit)
+  const closeSessionSync = (status: string, selectedPkgId?: string | null) => {
+    if (hasClosedRef.current || !sessionIdRef.current) return;
+    hasClosedRef.current = true;
 
-    const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
-    const payload = {
+    const duration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
+    const payload = JSON.stringify({
       session_id: sessionIdRef.current,
-      user_id: currentUser ? parseInt(currentUser.id, 10) : null,
-      guest_id: guestIdRef.current,
-      is_guest: !currentUser,
-      packages_compared: Array.from(packagesComparedRef.current),
-      final_packages: compareListRef.current.map(p => p.id),
-      selected_package: finalState.selected_package || null,
-      compare_count: packagesComparedRef.current.size,
       compare_duration: duration,
-      viewed_detail_packages: Array.from(viewedDetailPackagesRef.current),
-      completed: finalState.completed,
-      cleared_by_user: finalState.cleared_by_user || false,
-      status: finalState.status,
-      cleared_at: finalState.cleared_at || null
-    };
+      status: status,
+      selected_package: selectedPkgId || null
+    });
 
     const token = localStorage.getItem('token');
     const headers: any = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    fetch('/api/compare/session', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      keepalive: true
-    }).catch(err => console.error('Error saving compare session keepalive:', err));
-  };
-
-  const saveSessionAsync = async (finalState: {
-    completed: boolean;
-    status: string;
-    selected_package?: string | null;
-    cleared_by_user?: boolean;
-    cleared_at?: string | null;
-  }) => {
-    if (hasSavedRef.current) return;
-    hasSavedRef.current = true;
-
-    const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
-    const payload = {
-      session_id: sessionIdRef.current,
-      user_id: currentUser ? parseInt(currentUser.id, 10) : null,
-      guest_id: guestIdRef.current,
-      is_guest: !currentUser,
-      packages_compared: Array.from(packagesComparedRef.current),
-      final_packages: compareListRef.current.map(p => p.id),
-      selected_package: finalState.selected_package || null,
-      compare_count: packagesComparedRef.current.size,
-      compare_duration: duration,
-      viewed_detail_packages: Array.from(viewedDetailPackagesRef.current),
-      completed: finalState.completed,
-      cleared_by_user: finalState.cleared_by_user || false,
-      status: finalState.status,
-      cleared_at: finalState.cleared_at || null
-    };
-
-    try {
-      await compareApi.saveSession(payload);
-    } catch (err) {
-      console.error('Error saving compare session async:', err);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon('/api/compare/session/close', blob);
+    } else {
+      fetch('/api/compare/session/close', {
+        method: 'POST',
+        headers,
+        body: payload,
+        keepalive: true
+      }).catch(err => console.error('Error closing session sync:', err));
     }
+    
+    sessionIdRef.current = '';
   };
 
-  // Save session on page leave
+  // Khởi tạo guest_id duy nhất
   useEffect(() => {
-    return () => {
-      saveSessionSync({ completed: false, status: 'ABANDONED' });
-    };
-  }, []);
+    let gId = localStorage.getItem('guest_compare_id');
+    if (!gId) {
+      gId = 'guest_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('guest_compare_id', gId);
+    }
+    guestIdRef.current = gId;
 
-  // Save session on browser refresh/close
-  useEffect(() => {
+    // Trường hợp 1: F5 / Mở tab mới -> Sinh session_id mới tinh
+    generateNewSession();
+
     const handleBeforeUnload = () => {
-      saveSessionSync({ completed: false, status: 'ABANDONED' });
+      closeSessionSync('ABANDONED');
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      closeSessionSync('ABANDONED');
     };
   }, []);
 
-  // Inactivity tracking (60 seconds)
+  // Cập nhật phiên so sánh liên tục (Upsert) khi compareList thay đổi
   useEffect(() => {
-    let inactivityTimer: NodeJS.Timeout;
+    if (compareList.length > 3) {
+      const extraPkgs = compareList.slice(3);
+      extraPkgs.forEach(pkg => removeFromCompare(pkg.ma_goi || pkg.id));
+      showToast('error', 'Chỉ được so sánh tối đa 3 gói cước. Hệ thống đã tự động giới hạn 3 gói.');
+      return;
+    }
 
-    const resetInactivityTimer = () => {
-      if (hasSavedRef.current) return;
-      clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        saveSessionAsync({ completed: false, status: 'ABANDONED' });
-      }, 60000);
-    };
+    if (compareList.length > 0) {
+      // Nếu phiên trước đã đóng (bởi Clear hoặc Completed), tự động renew session_id mới cho lượt so sánh mới
+      if (hasClosedRef.current || !sessionIdRef.current) {
+        generateNewSession();
+      }
 
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    events.forEach(event => {
-      window.addEventListener(event, resetInactivityTimer);
+      const maGoiList = compareList.map(p => (p.ma_goi || p.id).trim());
+      compareApi.saveSession({
+        session_id: sessionIdRef.current,
+        guest_id: guestIdRef.current,
+        is_guest: !currentUser,
+        packages_compared: maGoiList,
+        final_packages: maGoiList,
+        status: 'ACTIVE'
+      }).catch(err => console.error('Error saving compare session:', err));
+    }
+  }, [compareList, currentUser, removeFromCompare]);
+
+  // Highlight tags calculation (cheapest, longest cycle)
+  const bestTags = useMemo(() => {
+    if (compareList.length < 2) return {};
+    const prices = compareList.map(p => p.gia);
+    const minPrice = Math.min(...prices);
+    const cycles = compareList.map(p => parseInt(p.chu_ky_ngay) || 0);
+    const maxCycle = Math.max(...cycles);
+
+    const tags: Record<string, { isCheapest?: boolean; isLongestCycle?: boolean }> = {};
+    compareList.forEach(pkg => {
+      const c = parseInt(pkg.chu_ky_ngay) || 0;
+      const maGoiKey = (pkg.ma_goi || pkg.id).trim();
+      tags[maGoiKey] = {
+        isCheapest: pkg.gia === minPrice && prices.filter(p => p === minPrice).length === 1,
+        isLongestCycle: c === maxCycle && maxCycle > 0 && cycles.filter(cy => cy === maxCycle).length === 1
+      };
     });
-
-    resetInactivityTimer();
-
-    return () => {
-      clearTimeout(inactivityTimer);
-      events.forEach(event => {
-        window.removeEventListener(event, resetInactivityTimer);
-      });
-    };
+    return tags;
   }, [compareList]);
 
+  // Trường hợp 2: Xử lý Bấm nút Xóa danh sách so sánh
   const handleClearCompare = () => {
-    saveSessionSync({
-      completed: false,
-      status: 'CLEARED',
-      cleared_by_user: true,
-      cleared_at: new Date().toISOString()
-    });
-
+    closeSessionSync('CLEARED');
     clearCompare();
-    sessionIdRef.current = 'sess_' + generateId();
-    startTimeRef.current = Date.now();
-    hasSavedRef.current = false;
-    packagesComparedRef.current = new Set();
-    viewedDetailPackagesRef.current = new Set();
   };
 
   useEffect(() => {
@@ -243,14 +187,9 @@ export default function Compare() {
     );
   }
 
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMsg({ type, text });
-    setTimeout(() => setToastMsg(null), 3000);
-  };
-
   const handleAddPackageDirectly = () => {
     if (!selectedPkgIdToAdd) return;
-    const targetPkg = packages.find(p => p.id === selectedPkgIdToAdd);
+    const targetPkg = packages.find(p => (p.ma_goi || p.id).trim() === selectedPkgIdToAdd.trim());
     if (targetPkg) {
       const res = addToCompare(targetPkg);
       if (res.success) {
@@ -269,13 +208,6 @@ export default function Compare() {
       showToast('error', 'Vui lòng đăng nhập để đăng ký gói cước.');
       return;
     }
-    
-    // Save session as completed
-    saveSessionAsync({
-      completed: true,
-      status: 'COMPLETED',
-      selected_package: pkg.id
-    });
 
     setSelectedPkg(pkg);
     setIsModalOpen(true);
@@ -290,8 +222,6 @@ export default function Compare() {
     return val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '' && val !== false;
   };
 
-
-  // Normalization Helpers
   const normalizeStringList = (str: string) => {
     if (!str || str === '0') return '';
     return str
@@ -336,9 +266,7 @@ export default function Compare() {
     return normalizeStringList(parts.join(','));
   };
 
-
-
-  const availablePackagesToSelect = packages.filter(p => !compareList.some(cp => cp.id === p.id));
+  const availablePackagesToSelect = packages.filter(p => !compareList.some(cp => (cp.ma_goi || cp.id).trim() === (p.ma_goi || p.id).trim()));
 
   const filteredAvailablePackages = availablePackagesToSelect.filter(p => {
     const q = modalSearchQuery.toLowerCase().trim();
@@ -346,41 +274,46 @@ export default function Compare() {
     return (p.ma_goi || '').toLowerCase().includes(q) || p.ten.toLowerCase().includes(q);
   });
 
-  // Dynamic comparison criteria rows specification
   const rowSpecs: RowSpec[] = [
     {
       key: 'price',
       label: 'Giá cước',
       getValue: (pkg) => pkg.gia,
-      renderCell: (pkg) => (
-        <div className="flex items-center flex-wrap gap-1.5">
-          <span className="text-base font-black text-primary">
-            {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
-          </span>
-          {aiAnalysis?.bestTags[pkg.id]?.isCheapest && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
+      renderCell: (pkg) => {
+        const maGoiKey = (pkg.ma_goi || pkg.id).trim();
+        return (
+          <div className="flex items-center flex-wrap gap-1.5">
+            <span className="text-base font-black text-primary">
+              {new Intl.NumberFormat('vi-VN').format(pkg.gia)}đ
             </span>
-          )}
-        </div>
-      )
+            {bestTags[maGoiKey]?.isCheapest && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+                Tốt nhất
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: 'cycle',
       label: 'Chu kỳ sử dụng',
       getValue: (pkg) => pkg.chu_ky_ngay,
-      renderCell: (pkg) => (
-        <div className="flex items-center flex-wrap gap-1.5">
-          <span className="font-bold text-slate-800">
-            {formatCycle(pkg.chu_ky_ngay)}
-          </span>
-          {aiAnalysis?.bestTags[pkg.id]?.isLongestCycle && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
+      renderCell: (pkg) => {
+        const maGoiKey = (pkg.ma_goi || pkg.id).trim();
+        return (
+          <div className="flex items-center flex-wrap gap-1.5">
+            <span className="font-bold text-slate-800">
+              {formatCycle(pkg.chu_ky_ngay)}
             </span>
-          )}
-        </div>
-      )
+            {bestTags[maGoiKey]?.isLongestCycle && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
+                Tốt nhất
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: 'data',
@@ -391,11 +324,6 @@ export default function Compare() {
           <p className="font-extrabold text-slate-900 text-[13px]">
             {normalizeDataLimit(pkg.data_theo_ngay)}
           </p>
-          {aiAnalysis?.bestTags[pkg.id]?.isMaxData && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
-            </span>
-          )}
         </div>
       )
     },
@@ -409,11 +337,6 @@ export default function Compare() {
             <Check className="w-3.5 h-3.5 mr-1" />
             {pkg.free_noi_mang}
           </span>
-          {aiAnalysis?.bestTags[pkg.id]?.isMaxVoice && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
-            </span>
-          )}
         </div>
       )
     },
@@ -427,11 +350,6 @@ export default function Compare() {
             <Check className="w-3.5 h-3.5 mr-1" />
             {pkg.free_ngoai_mang}
           </span>
-          {aiAnalysis?.bestTags[pkg.id]?.isMaxVoice && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
-            </span>
-          )}
         </div>
       )
     },
@@ -445,11 +363,6 @@ export default function Compare() {
             <Check className="w-3.5 h-3.5 mr-1" />
             {pkg.sms}
           </span>
-          {aiAnalysis?.bestTags[pkg.id]?.isMaxSms && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 border border-emerald-500/15">
-              Tốt nhất
-            </span>
-          )}
         </div>
       )
     },
@@ -493,7 +406,6 @@ export default function Compare() {
     }
   ];
 
-  // A row is visible if at least one selected package has valid data for it
   const visibleRows = rowSpecs.filter((row) =>
     compareList.some((pkg) => {
       const val = row.getValue(pkg);
@@ -501,7 +413,6 @@ export default function Compare() {
     })
   );
 
-  // Structured breadcrumbs schema for Compare Page
   const compareBreadcrumbsSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -598,20 +509,23 @@ export default function Compare() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
                     <th className="p-4.5 font-bold text-slate-500 uppercase tracking-wider w-1/4">Thông số / Gói</th>
-                    {compareList.map((pkg) => (
-                      <th key={pkg.id} className="p-4.5 w-1/4 relative group min-w-[200px] border-l border-slate-100 bg-white">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-extrabold text-slate-900">{pkg.ten}</span>
-                          <button
-                            onClick={() => removeFromCompare(pkg.id)}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors focus:outline-none cursor-pointer"
-                            title="Xóa"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </th>
-                    ))}
+                    {compareList.map((pkg) => {
+                      const maGoiKey = (pkg.ma_goi || pkg.id).trim();
+                      return (
+                        <th key={maGoiKey} className="p-4.5 w-1/4 relative group min-w-[200px] border-l border-slate-100 bg-white">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-extrabold text-slate-900">{pkg.ten}</span>
+                            <button
+                              onClick={() => removeFromCompare(maGoiKey)}
+                              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors focus:outline-none cursor-pointer"
+                              title="Xóa"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </th>
+                      );
+                    })}
                     {compareList.length < 3 && (
                       <th className="p-4.5 w-1/4 text-center min-w-[200px] border-l border-slate-100 bg-slate-50/20">
                         <button
@@ -630,10 +544,11 @@ export default function Compare() {
                     <tr key={row.key} className="hover:bg-slate-50/20 transition-colors">
                       <td className="p-4.5 font-bold text-slate-500 bg-slate-50/30">{row.label}</td>
                       {compareList.map((pkg) => {
+                        const maGoiKey = (pkg.ma_goi || pkg.id).trim();
                         const val = row.getValue(pkg);
                         const hasVal = val !== 0 && val !== '0' && val !== null && val !== undefined && val !== '' && val !== false;
                         return (
-                          <td key={pkg.id} className="p-4.5 border-l border-slate-100">
+                          <td key={maGoiKey} className="p-4.5 border-l border-slate-100">
                             {hasVal ? row.renderCell(pkg) : <span className="text-slate-400 font-medium">Không hỗ trợ</span>}
                           </td>
                         );
@@ -645,16 +560,19 @@ export default function Compare() {
                   {/* Row: Quick Subscribe Actions */}
                   <tr className="bg-slate-50/50">
                     <td className="p-4.5 font-bold text-slate-500 bg-slate-50/50">Thao tác nhanh</td>
-                    {compareList.map((pkg) => (
-                      <td key={pkg.id} className="p-4.5 border-l border-slate-100 bg-white">
-                        <button
-                          onClick={() => handleSubscribeOpen(pkg)}
-                          className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-xl text-[10px] transition-colors focus:outline-none cursor-pointer"
-                        >
-                          Đăng ký ngay
-                        </button>
-                      </td>
-                    ))}
+                    {compareList.map((pkg) => {
+                      const maGoiKey = (pkg.ma_goi || pkg.id).trim();
+                      return (
+                        <td key={maGoiKey} className="p-4.5 border-l border-slate-100 bg-white">
+                          <button
+                            onClick={() => handleSubscribeOpen(pkg)}
+                            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-2.5 rounded-xl text-[10px] transition-colors focus:outline-none cursor-pointer"
+                          >
+                            Đăng ký ngay
+                          </button>
+                        </td>
+                      );
+                    })}
                     {compareList.length < 3 && <td className="p-4.5 bg-slate-50/10 border-l border-slate-100"></td>}
                   </tr>
                 </tbody>
@@ -696,32 +614,35 @@ export default function Compare() {
                 <div className="flex flex-col space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kết quả tìm kiếm (tối đa 10)</label>
                   <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
-                    {filteredAvailablePackages.slice(0, 10).map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setSelectedPkgIdToAdd(p.id)}
-                        className={`w-full text-left p-3 transition-colors flex flex-col space-y-1 focus:outline-none ${
-                          selectedPkgIdToAdd === p.id 
-                            ? 'bg-red-50/70 border-l-4 border-primary' 
-                            : 'hover:bg-slate-100/70'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-slate-900 text-xs">{p.ma_goi || p.id.toUpperCase()}</span>
-                          {p.dohot === 'Hot' && (
-                            <span className="bg-red-100 text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-red-200">
-                              Hot
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
-                          <span>{new Intl.NumberFormat('vi-VN').format(p.gia)}đ</span>
-                          <span>{p.chu_ky_ngay} ngày</span>
-                          <span>{normalizeDataLimit(p.data_theo_ngay) || 'Không data'}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {filteredAvailablePackages.slice(0, 10).map((p) => {
+                      const maGoiKey = (p.ma_goi || p.id).trim();
+                      return (
+                        <button
+                          key={maGoiKey}
+                          type="button"
+                          onClick={() => setSelectedPkgIdToAdd(maGoiKey)}
+                          className={`w-full text-left p-3 transition-colors flex flex-col space-y-1 focus:outline-none ${
+                            selectedPkgIdToAdd === maGoiKey 
+                              ? 'bg-red-50/70 border-l-4 border-primary' 
+                              : 'hover:bg-slate-100/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-slate-900 text-xs">{p.ma_goi || p.id.toUpperCase()}</span>
+                            {p.dohot === 'Hot' && (
+                              <span className="bg-red-100 text-primary text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-red-200">
+                                Hot
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold">
+                            <span>{new Intl.NumberFormat('vi-VN').format(p.gia)}đ</span>
+                            <span>{p.chu_ky_ngay} ngày</span>
+                            <span>{normalizeDataLimit(p.data_theo_ngay) || 'Không data'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -765,7 +686,11 @@ export default function Compare() {
           isOpen={isModalOpen}
           onClose={handleModalClose}
           pkg={selectedPkg}
-          onSuccess={(msg) => showToast('success', msg)}
+          onSuccess={(msg) => {
+            // Trường hợp 3: Đăng ký mua thành công -> Đóng phiên với status: COMPLETED
+            closeSessionSync('COMPLETED', selectedPkg.ma_goi || selectedPkg.id);
+            showToast('success', msg);
+          }}
           onError={(msg) => showToast('error', msg)}
         />
       )}

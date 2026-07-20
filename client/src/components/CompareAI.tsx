@@ -1,16 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Package } from '../types';
-import { compareAIService, type AIAnalysisResult } from '../services/compareAIService';
+import { compareApi } from '../services/api';
 
 interface CompareAIProps {
   compareList: Package[];
   onSubscribe: (pkg: Package) => void;
 }
 
+interface AIResult {
+  title: string;
+  summary: any;
+  best_value: any;
+  recommendation: any;
+}
+
 export default function CompareAI({ compareList }: CompareAIProps) {
   const [loading, setLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<AIAnalysisResult | null>(null);
+  const [analysis, setAnalysis] = useState<AIResult | null>(null);
 
   useEffect(() => {
     if (compareList.length < 2) {
@@ -18,20 +25,33 @@ export default function CompareAI({ compareList }: CompareAIProps) {
       return;
     }
 
+    let isMounted = true;
     setLoading(true);
 
-    const timer = setTimeout(() => {
-      try {
-        const result = compareAIService.analyzePackages(compareList);
-        setAnalysis(result);
-      } catch (err) {
-        console.error('Error analyzing packages:', err);
-      } finally {
-        setLoading(false);
-      }
-    }, 700);
+    const maGoiList = compareList.map(p => (p.ma_goi || p.id || '').trim()).filter(Boolean);
 
-    return () => clearTimeout(timer);
+    compareApi.analyzeAI(maGoiList)
+      .then((data) => {
+        if (!isMounted) return;
+        setAnalysis({
+          title: 'Gợi Ý Từ Trợ Lý Ảo ViettelAI',
+          summary: data.summary ?? '',
+          best_value: data.best_value ?? '',
+          recommendation: data.recommendation ?? ''
+        });
+      })
+      .catch((err) => {
+        console.error('Error fetching AI compare analysis:', err);
+        if (!isMounted) return;
+        setAnalysis(null);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [compareList]);
 
   if (compareList.length < 2) return null;
@@ -58,22 +78,28 @@ export default function CompareAI({ compareList }: CompareAIProps) {
       </div>
 
       {/* Summary */}
-      <p className="text-xs text-gray-700 font-semibold leading-relaxed">
-        {analysis.summary}
-      </p>
+      <div className="text-xs text-gray-700 font-semibold leading-relaxed">
+        {typeof analysis.summary === 'object' && analysis.summary !== null
+          ? Object.values(analysis.summary).map((val: any, idx: number) => (
+              <p key={idx}>{String(val)}</p>
+            ))
+          : <p>{String(analysis.summary || '')}</p>
+        }
+      </div>
 
-      {/* Differences */}
-      {analysis.differences.length > 0 && (
+      {/* Differences / Best Value */}
+      {analysis.best_value && (
         <div className="space-y-2">
           <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400">
-            Khác biệt nổi bật
+            Khác biệt nổi bật & Tối ưu nhất
           </h4>
           <ul className="space-y-1.5 pl-4 list-disc text-xs text-gray-600 font-semibold leading-relaxed">
-            {analysis.differences.map((diff, idx) => (
-              <li key={idx} className="marker:text-gray-300 pl-0.5">
-                {diff}
-              </li>
-            ))}
+            <li className="marker:text-gray-300 pl-0.5">
+              {typeof analysis.best_value === 'object' && analysis.best_value !== null
+                ? Object.entries(analysis.best_value).map(([k, v]) => `${k}: ${String(v)}`).join('; ')
+                : String(analysis.best_value)
+              }
+            </li>
           </ul>
         </div>
       )}
@@ -83,9 +109,14 @@ export default function CompareAI({ compareList }: CompareAIProps) {
         <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500">
           Gợi ý định hướng
         </h4>
-        <p className="text-xs text-gray-700 leading-relaxed font-semibold">
-          {analysis.suggestion}
-        </p>
+        {typeof analysis.recommendation === 'object' && analysis.recommendation !== null
+          ? Object.entries(analysis.recommendation).map(([key, val]) => (
+              <p key={key} className="text-xs text-gray-700 leading-relaxed font-semibold">
+                <strong>{key}:</strong> {String(val)}
+              </p>
+            ))
+          : <p className="text-xs text-gray-700 leading-relaxed font-semibold">{String(analysis.recommendation || '')}</p>
+        }
       </div>
     </div>
   );

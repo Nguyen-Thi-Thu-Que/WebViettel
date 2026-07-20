@@ -427,7 +427,8 @@ export const usePackageStore = create<PackageState>((set, get) => ({
   addToCompare: (pkg) => {
     let result = { success: true, message: 'Đã thêm vào danh sách so sánh.' };
     set(state => {
-      if (state.compareList.some(p => p.id === pkg.id)) {
+      const targetMaGoi = (pkg.ma_goi || pkg.id || '').trim();
+      if (state.compareList.some(p => (p.ma_goi || p.id || '').trim() === targetMaGoi)) {
         result = { success: false, message: 'Gói cước này đã có trong danh sách so sánh.' };
         return state;
       }
@@ -441,8 +442,9 @@ export const usePackageStore = create<PackageState>((set, get) => ({
   },
 
   removeFromCompare: (packageId) => {
+    const targetKey = String(packageId).trim();
     set(state => ({
-      compareList: state.compareList.filter(p => p.id !== packageId)
+      compareList: state.compareList.filter(p => (p.ma_goi || p.id || '').trim() !== targetKey)
     }));
   },
 
