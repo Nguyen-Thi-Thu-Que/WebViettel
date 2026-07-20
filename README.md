@@ -6,6 +6,8 @@
 WebViettel/
 ├── client/
 │   ├── public/
+│   │   ├── favicon.svg
+│   │   └── icons.svg
 │   ├── src/
 │   │   ├── assets/
 │   │   │   ├── hero.png
@@ -81,6 +83,7 @@ WebViettel/
 │   ├── .oxlintrc.json
 │   ├── index.html
 │   ├── package.json
+│   ├── README.md
 │   ├── tsconfig.app.json
 │   ├── tsconfig.json
 │   ├── tsconfig.node.json
@@ -184,6 +187,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `.gitignore`: Cấu hình Git bỏ qua cho frontend.
   - `.env`: Chứa các biến môi trường cấu hình kết nối API và Blockchain của frontend.
   - `.oxlintrc.json`: Cấu hình linter Oxlint cho kiểm tra mã nguồn nhanh.
+  - `README.md`: Hướng dẫn riêng cho thư mục client.
 - **Thư mục Backend (`server/`)**:
   - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express. Gồm: `express`, `mongoose`, `bcryptjs`, `cors`, `dotenv`, `ethers`, `@google/generative-ai`, `csv-parser`.
   - `.env`: Chứa cấu hình cổng chạy, DB MongoDB, xác thực JWT, và API key của AI chatbot.
@@ -201,7 +205,8 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `AI_PROVIDER`: Nhà cung cấp dịch vụ AI (VD: `groq`). Nếu không đặt, mặc định là `groq`.
   - `GROQ_API_KEY`: API Key đăng ký của dịch vụ Groq Cloud.
   - `GROQ_MODEL`: Mô hình ngôn ngữ lớn Groq sử dụng (mặc định `llama-3.1-8b-instant`).
-  - `OLLAMA_MODEL`: Mô hình ngôn ngữ lớn Ollama dùng khi fallback (mặc định `qwen2.5:3b`).
+  - `OLLAMA_MODEL`: Mô hình ngôn ngữ lớn Ollama dùng khi fallback (mặc định `qwen2.5:3b`, hỗ trợ tùy chỉnh qua biến môi trường).
+  - `OLLAMA_HOST`: URL host của dịch vụ Ollama (mặc định `http://127.0.0.1:11434`, hỗ trợ tùy chỉnh qua biến môi trường).
 - **Cấu hình Frontend (`client/.env`)**:
   - `VITE_API_URL`: URL API Backend (mặc định `http://localhost:5000`).
   - `VITE_NETWORK_NAME`: Tên mạng blockchain thử nghiệm (mặc định `Sepolia`).
@@ -315,7 +320,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu. Hiển thị danh sách 10 giao dịch gần nhất (tổng hợp từ cả nạp tiền và đăng ký gói cước).
    - Quản lý gói cước: CRUD (Xem, thêm mới, sửa, xóa) gói cước di động trong MongoDB.
    - Quản lý câu hỏi thường gặp: CRUD danh mục câu hỏi FAQ.
-   - Quản lý người dùng di động: Xem danh sách, thay đổi số dư ví, đổi loại thuê bao, bật/tắt KHTT, khóa/mở khóa tài khoản.
+   - Quản lý người dùng di động: Xem danh sách, cập nhật số dư, phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản.
    - Cấu hình Chatbot: Chỉnh sửa System Prompt chỉ dẫn AI và cấu hình các từ khóa NLP rule-based.
 
 ### 🟡 Các chức năng đang dùng dữ liệu giả lập (Mock Data) / Chưa kết nối Backend:
