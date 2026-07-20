@@ -12,8 +12,8 @@
  * Sàng lọc: lấy TỐI ĐA 3 GÓI CƯỚC phù hợp nhất.
  * Nếu không tìm thấy gói nào: trả về { noMatchFound: true, packages: [] }.
  */
-
-const Package        = require('../../models/Package');
+console.log("===== PACKAGE MATCHER VERSION 20/07 =====");
+const Package = require('../../models/Package');
 const PackageFeature = require('../../models/PackageFeature');
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -25,14 +25,14 @@ function isNonZero(val) {
   if (!val) return false;
   const s = String(val).trim().toUpperCase();
   return (
-    s !== '0'        &&
-    s !== '0GB'      &&
-    s !== '0 GB'     &&
-    s !== '0 PHÚT'   &&
-    s !== '0 PHUT'   &&
-    s !== '0 SMS'    &&
-    s !== 'KHÔNG'    &&
-    s !== 'KHONG'    &&
+    s !== '0' &&
+    s !== '0GB' &&
+    s !== '0 GB' &&
+    s !== '0 PHÚT' &&
+    s !== '0 PHUT' &&
+    s !== '0 SMS' &&
+    s !== 'KHÔNG' &&
+    s !== 'KHONG' &&
     !s.startsWith('0')
   );
 }
@@ -44,33 +44,33 @@ function isNonZero(val) {
 function normalizePackage(pkg) {
   const raw = typeof pkg.toObject === 'function' ? pkg.toObject() : pkg;
   return {
-    id:                    raw.package_id ? String(raw.package_id) : String(raw._id),
-    numericId:             raw.package_id ? Number(raw.package_id) : undefined,
-    ma_goi:                raw.ma_goi              || '',
-    ten:                   raw.ten                 || '',
-    gia:                   raw.gia   != null        ? Number(raw.gia)   : 0,
-    chu_ky_ngay:           raw.chu_ky_ngay != null  ? String(raw.chu_ky_ngay) : '30',
-    dohot:                 raw.dohot               || 'normal',
-    phan_loai_goi:         raw.phan_loai_goi       || 'Data',
-    data_theo_ngay:        raw.data_theo_ngay       || '',
-    free_noi_mang:         raw.free_noi_mang        || '',
-    free_ngoai_mang:       raw.free_ngoai_mang      || '',
-    sms:                   raw.sms                  || '',
-    tien_ich_free:         raw.tien_ich_free         || '',
-    uudaitrong:            raw.uudaitrong            || '',
-    dieu_kien_dang_ky:     raw.dieu_kien_dang_ky    || '',
-    dangky:                raw.dangky               || '',
-    huygiahan:             raw.huygiahan            || '',
-    huygoicuoc:            raw.huygoicuoc           || '',
-    diem_noi_bat:          raw.diem_noi_bat         || '',
-    doi_tuong_ap_dung:     raw.doi_tuong_ap_dung    || '',
-    loai_mang:             raw.loai_mang            || '',
-    system_type:           raw.system_type          || '',
-    benefit_group:         raw.benefit_group        || '',
-    is_addon:              raw.is_addon             || false,
-    is_long_term:          raw.is_long_term         || false,
+    id: raw.package_id ? String(raw.package_id) : String(raw._id),
+    numericId: raw.package_id ? Number(raw.package_id) : undefined,
+    ma_goi: raw.ma_goi || '',
+    ten: raw.ten || '',
+    gia: raw.gia != null ? Number(raw.gia) : 0,
+    chu_ky_ngay: raw.chu_ky_ngay != null ? String(raw.chu_ky_ngay) : '30',
+    dohot: raw.dohot || 'normal',
+    phan_loai_goi: raw.phan_loai_goi || 'Data',
+    data_theo_ngay: raw.data_theo_ngay || '',
+    free_noi_mang: raw.free_noi_mang || '',
+    free_ngoai_mang: raw.free_ngoai_mang || '',
+    sms: raw.sms || '',
+    tien_ich_free: raw.tien_ich_free || '',
+    uudaitrong: raw.uudaitrong || '',
+    dieu_kien_dang_ky: raw.dieu_kien_dang_ky || '',
+    dangky: raw.dangky || '',
+    huygiahan: raw.huygiahan || '',
+    huygoicuoc: raw.huygoicuoc || '',
+    diem_noi_bat: raw.diem_noi_bat || '',
+    doi_tuong_ap_dung: raw.doi_tuong_ap_dung || '',
+    loai_mang: raw.loai_mang || '',
+    system_type: raw.system_type || '',
+    benefit_group: raw.benefit_group || '',
+    is_addon: raw.is_addon || false,
+    is_long_term: raw.is_long_term || false,
     requires_base_package: raw.requires_base_package || false,
-    do_uu_tien:            raw.do_uu_tien           || 0
+    do_uu_tien: raw.do_uu_tien || 0
   };
 }
 
@@ -151,9 +151,18 @@ async function findByIntent(intent, hasPriceBudget) {
       }
     }
 
-    // Lọc theo chu kỳ ngày (exact match — DB lưu dạng String)
-    if (cycleDays != null && cycleDays > 0) {
-      q.chu_ky_ngay = String(cycleDays);
+    // Single Source of Truth cho bộ lọc chu kỳ: intent.cycleFilter
+    const cycle = intent.cycleFilter || {
+      cycleDays: intent.cycleDays || (intent.filters ? intent.filters.chu_ky_ngay : null),
+      isLongTerm: (intent.filters && intent.filters.is_long_term !== undefined) ? intent.filters.is_long_term : null
+    };
+
+    if (cycle.cycleDays != null && typeof cycle.cycleDays === 'number' && cycle.cycleDays > 0) {
+      // Có cycleDays → query theo chu_ky_ngay
+      q.chu_ky_ngay = { $in: [cycle.cycleDays, String(cycle.cycleDays)] };
+    } else if (cycle.isLongTerm !== null && cycle.isLongTerm !== undefined) {
+      // Chỉ có isLongTerm → query theo is_long_term
+      q.is_long_term = cycle.isLongTerm;
     }
 
     // Lọc theo loại mạng
@@ -166,7 +175,7 @@ async function findByIntent(intent, hasPriceBudget) {
     if (!hasPriceBudget) {
       if (features && features.voice) {
         q.$or = [
-          { free_noi_mang:   { $nin: ['0', '', '0 phút', '0 Phút', null] } },
+          { free_noi_mang: { $nin: ['0', '', '0 phút', '0 Phút', null] } },
           { free_ngoai_mang: { $nin: ['0', '', '0 phút', '0 Phút', null] } }
         ];
       }
@@ -185,11 +194,11 @@ async function findByIntent(intent, hasPriceBudget) {
     const featureQuery = {};
     for (const app of apps) {
       switch (app) {
-        case 'youtube':  featureQuery.has_youtube  = true; break;
-        case 'tiktok':   featureQuery.has_tiktok   = true; break;
+        case 'youtube': featureQuery.has_youtube = true; break;
+        case 'tiktok': featureQuery.has_tiktok = true; break;
         case 'facebook': featureQuery.has_facebook = true; break;
-        case 'tv360':    featureQuery.has_tv360    = true; break;
-        case 'movie':    featureQuery.has_movie    = true; break;
+        case 'tv360': featureQuery.has_tv360 = true; break;
+        case 'movie': featureQuery.has_movie = true; break;
         default: break;
       }
     }
@@ -202,9 +211,9 @@ async function findByIntent(intent, hasPriceBudget) {
         appPackageIdFilter = { $in: ids };
       } else {
         // Fallback: quét tien_ich_free / uudaitrong bằng regex
-        const appPatterns  = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
+        const appPatterns = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
         const moviePattern = apps.includes('movie') ? [/phim/i, /movie/i] : [];
-        const allPatterns  = [...appPatterns, ...moviePattern];
+        const allPatterns = [...appPatterns, ...moviePattern];
         if (allPatterns.length > 0) {
           appPackageIdFilter = 'regex_fallback'; // marker
         }
@@ -220,21 +229,30 @@ async function findByIntent(intent, hasPriceBudget) {
     if (appPackageIdFilter && appPackageIdFilter !== 'regex_fallback') {
       q.package_id = appPackageIdFilter;
     } else if (appPackageIdFilter === 'regex_fallback') {
-      const appPatterns  = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
+      const appPatterns = apps.filter(a => a !== 'movie').map(a => new RegExp(a, 'i'));
       const moviePattern = apps.includes('movie') ? [/phim/i, /movie/i] : [];
       const orClauses = [...appPatterns, ...moviePattern].flatMap(p => [
         { tien_ich_free: p },
-        { uudaitrong:    p }
+        { uudaitrong: p }
       ]);
       if (orClauses.length > 0) {
         q.$or = q.$or ? [...q.$or, ...orClauses] : orClauses;
       }
     }
 
-    return Package.find(q)
+    if (process.env.CHATBOT_DEBUG !== 'false') {
+      console.log('[DEBUG PackageMatcher] Built Mongo Query:', JSON.stringify(q));
+    }
+
+    const docs = await Package.find(q)
       .sort({ gia: 1, do_uu_tien: -1 })
       .limit(10)
       .lean();
+
+    if (process.env.CHATBOT_DEBUG !== 'false') {
+      console.log('[DEBUG PackageMatcher] Found package count:', docs.length, 'codes:', docs.map(p => p.ma_goi));
+    }
+    return docs;
   };
 
   // ── 3. Xác định kiểu tìm kiếm giá và thực thi query ──────────────────────────
@@ -262,8 +280,8 @@ async function findByIntent(intent, hasPriceBudget) {
     let giaFilter;
     if (minPrice != null || maxPrice != null) {
       giaFilter = {};
-      if (minPrice != null && minPrice > 0)  giaFilter.$gte = minPrice;
-      if (maxPrice != null && maxPrice > 0)  giaFilter.$lte = maxPrice;
+      if (minPrice != null && minPrice > 0) giaFilter.$gte = minPrice;
+      if (maxPrice != null && maxPrice > 0) giaFilter.$lte = maxPrice;
       if (Object.keys(giaFilter).length === 0) giaFilter = undefined;
     }
     rawPackages = await executeQuery(giaFilter);
@@ -277,60 +295,81 @@ async function findByIntent(intent, hasPriceBudget) {
 /**
  * matchPackages — Entry point chính.
  *
- * Luồng:
- *   1. Nếu hỏi mã gói cụ thể → tìm exact match
- *   2. Nếu không có tiêu chí nào → noMatchFound
- *   3. Tính flag hasPriceBudget → truyền sang findByIntent để điều chỉnh bộ lọc
- *   4. Query động theo intent → truncate về tối đa 3 gói (sort giá ASC)
- *   5. Nếu kết quả rỗng → noMatchFound
+ * Hỗ trợ cả 2 cú pháp:
+ *   - matchPackages(intent) → trả về { noMatchFound: boolean, packages: Array }
+ *   - matchPackages(allPackages, intent) → trả về Array mảng gói cước
  *
- * @param   {object} intent — Kết quả từ intentParser
- * @returns {Promise<{ noMatchFound: boolean, packages: Array }>}
+ * @param   {object|Array} intentOrPackages
+ * @param   {object}       [optionalIntent]
+ * @returns {Promise<object|Array>}
  */
-const matchPackages = async (intent) => {
+const matchPackages = async (intentOrPackages, optionalIntent) => {
+  const intent = (optionalIntent && typeof optionalIntent === 'object' && !Array.isArray(optionalIntent))
+    ? optionalIntent
+    : (intentOrPackages && typeof intentOrPackages === 'object' && !Array.isArray(intentOrPackages) ? intentOrPackages : null);
+
+  const isLegacyArrayCaller = Array.isArray(intentOrPackages) && optionalIntent;
+
+  if (process.env.CHATBOT_DEBUG !== 'false') {
+    console.log('[DEBUG PackageMatcher] Entry matchPackages with intent:', JSON.stringify(intent));
+  }
+
   if (!intent) {
-    return { noMatchFound: true, packages: [] };
+    if (process.env.CHATBOT_DEBUG !== 'false') console.log('[DEBUG PackageMatcher] Missing intent object');
+    return isLegacyArrayCaller ? [] : { noMatchFound: true, packages: [] };
   }
 
   // ── Nếu người dùng hỏi mã gói cụ thể ─────────────────────────────────────
   if (intent.packageCodes && intent.packageCodes.length > 0) {
     const found = await findByPackageCodes(intent.packageCodes);
-    if (found.length === 0) {
-      return { noMatchFound: true, packages: [] };
+    const resultPkgs = truncatePackages(found);
+    if (process.env.CHATBOT_DEBUG !== 'false') {
+      console.log('[DEBUG PackageMatcher] Specific packageCodes found:', resultPkgs.map(p => p.ma_goi));
     }
-    return { noMatchFound: false, packages: truncatePackages(found) };
+    if (isLegacyArrayCaller) return resultPkgs;
+    return { noMatchFound: resultPkgs.length === 0, packages: resultPkgs };
   }
 
   // ── Kiểm tra: intent có đủ tiêu chí để query không? ──────────────────────
+  const cycle = intent.cycleFilter || {
+    cycleDays: intent.cycleDays || (intent.filters ? intent.filters.chu_ky_ngay : null),
+    isLongTerm: (intent.filters && intent.filters.is_long_term !== undefined) ? intent.filters.is_long_term : null
+  };
+
   const hasAnyFilter = (
-    intent.minPrice    != null  ||
-    intent.maxPrice    != null  ||
-    intent.cycleDays   != null  ||
-    intent.networkType != null  ||
-    (intent.apps     && intent.apps.length > 0) ||
+    intent.minPrice != null ||
+    intent.maxPrice != null ||
+    cycle.cycleDays != null ||
+    cycle.isLongTerm != null ||
+    intent.networkType != null ||
+    (intent.apps && intent.apps.length > 0) ||
     (intent.features && (intent.features.data || intent.features.voice || intent.features.sms))
   );
 
   if (!hasAnyFilter) {
+    if (process.env.CHATBOT_DEBUG !== 'false') console.log('[DEBUG PackageMatcher] No filter in intent → returning empty/noMatchFound');
+    if (isLegacyArrayCaller) return [];
     return { noMatchFound: true, packages: [] };
   }
 
   // ── Flag: người dùng có chỉ định ngân sách rõ ràng không? ─────────────────
-  // Khi có ngân sách → bỏ bộ lọc cứng data/voice để quét toàn bộ hệ Data/Combo
   const hasPriceBudget = (intent.minPrice != null || intent.maxPrice != null);
 
   // ── Query theo intent ──────────────────────────────────────────────────────
   const matched = await findByIntent(intent, hasPriceBudget);
 
-  // ── ZERO-MATCH ─────────────────────────────────────────────────────────────
-  if (matched.length === 0) {
-    return { noMatchFound: true, packages: [] };
-  }
-
   // ── Truncation Filter: tối đa 3 gói, sort giá ASC ─────────────────────────
   const packages = truncatePackages(matched);
 
-  return { noMatchFound: false, packages };
+  if (process.env.CHATBOT_DEBUG !== 'false') {
+    console.log('[DEBUG PackageMatcher] Final top matched packages count:', packages.length, 'codes:', packages.map(p => p.ma_goi));
+  }
+
+  if (isLegacyArrayCaller) {
+    return packages;
+  }
+
+  return { noMatchFound: packages.length === 0, packages };
 };
 
 module.exports = { matchPackages, normalizePackage };

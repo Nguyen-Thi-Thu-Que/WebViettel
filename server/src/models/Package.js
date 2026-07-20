@@ -20,7 +20,7 @@ const packageSchema = new mongoose.Schema({
   noi_dung_ngoai: { type: String, default: '0' },
   tien_ich_free: { type: String, default: '0' },
   uudaitrong: { type: String, default: '' },
-  chu_ky_ngay: { type: String, default: '30' },
+  chu_ky_ngay: { type: mongoose.Schema.Types.Mixed, default: 30 },
   dangky: { type: String, default: '' },
   huygiahan: { type: String, default: '' },
   huygoicuoc: { type: String, default: '' },

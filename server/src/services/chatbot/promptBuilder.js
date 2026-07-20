@@ -191,8 +191,11 @@ function formatIntentSummary(intent) {
   if (intent.maxPrice != null) {
     lines.push(`Ngân sách tối đa: ${Number(intent.maxPrice).toLocaleString('vi-VN')}đ`);
   }
-  if (intent.cycleDays != null) {
-    lines.push(`Chu kỳ yêu cầu: ${formatCycle(String(intent.cycleDays))}`);
+  const cycle = intent.cycleFilter;
+  if (cycle && cycle.cycleDays != null) {
+    lines.push(`Chu kỳ yêu cầu: ${formatCycle(String(cycle.cycleDays))}`);
+  } else if (cycle && cycle.isLongTerm != null) {
+    lines.push(`Chu kỳ yêu cầu: ${cycle.isLongTerm ? 'Dài ngày (>= 30 ngày)' : 'Ngắn ngày (< 30 ngày)'}`);
   }
   if (intent.networkType) {
     lines.push(`Loại mạng: ${intent.networkType}`);

@@ -216,105 +216,133 @@ function extractPriceRange(text) {
 }
 
 /**
- * Trích xuất số ngày chu kỳ từ câu hỏi.
- * Bắt các trường hợp đặc biệt trong database: 1,3,5,7,15,30,90,180,360 ngày.
- * Trả về số nguyên hoặc null.
+ * Single Source of Truth cho trích xuất chu kỳ gói cước.
+ *
+ * Output schema:
+ * {
+ *   cycleDays:  Number | null,   // Số ngày cụ thể (1, 3, 5, 7, 14, 15, 30, 60, 90, 180, 360)
+ *   isLongTerm: Boolean | null   // true (>= 30 ngày hoặc dài hạn), false (< 30 ngày hoặc ngắn hạn), null (không đề cập)
+ * }
  */
-function extractCycleDays(text) {
-  const lower = text.toLowerCase();
-
-  // Năm / 12 tháng / 360 ngày
-  if (
-    /\b1\s*(năm|nam)\b/i.test(lower)    ||
-    /\bmột\s*(năm|nam)\b/i.test(lower)   ||
-    /\bcả\s*(năm|nam)/i.test(lower)      ||
-    /\b12\s*(tháng|thang)\b/i.test(lower)||
-    /\b360\s*(ngày|ngay|n)\b/i.test(lower)
-  ) {
-    return 360;
+function extractCycleFilter(text) {
+  if (!text || typeof text !== 'string') {
+    return { cycleDays: null, isLongTerm: null };
   }
 
-  // 6 tháng / nửa năm / 180 ngày
+  const lower = text.toLowerCase();
+  const norm  = normalize(text);
+
+  // 1. Số ngày cụ thể bằng Regex (gói 3 ngày, 5 ngày, 7 ngày, 14 ngày, 15 ngày, 30 ngày, 360 ngày...)
+  const dayMatch = lower.match(/\b(\d+)\s*(ngày|ngay|n)\b/i);
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1], 10);
+    if (days > 0 && days <= 365) {
+      return {
+        cycleDays: days,
+        isLongTerm: days >= 30
+      };
+    }
+  }
+
+  // 2. Chu kỳ 6 tháng / nửa năm
   if (
     /\b6\s*(tháng|thang)\b/i.test(lower) ||
-    /\bnửa\s*(năm|nam)/i.test(lower)      ||
-    /\b180\s*(ngày|ngay|n)\b/i.test(lower)
+    /nửa\s*năm/i.test(lower)            ||
+    /nua\s*nam/i.test(norm)
   ) {
-    return 180;
+    return { cycleDays: 180, isLongTerm: true };
   }
 
-  // 3 tháng / quý / 90 ngày
+  // 3. Chu kỳ Năm / 12 tháng
+  if (
+    /\b1\s*(năm|nam)\b/i.test(lower)      ||
+    /\bmột\s*(năm|nam)\b/i.test(lower)    ||
+    /\bcả\s*(năm|nam)\b/i.test(lower)     ||
+    /\b12\s*(tháng|thang)\b/i.test(lower) ||
+    /\bgói\s*(năm|nam)\b/i.test(lower)    ||
+    /\bgoi\s*(nam)\b/i.test(norm)         ||
+    /\bnăm\b/i.test(lower)
+  ) {
+    return { cycleDays: 360, isLongTerm: true };
+  }
+
+  // 4. Chu kỳ 3 tháng / quý
   if (
     /\b3\s*(tháng|thang)\b/i.test(lower) ||
     /\bquý\b/i.test(lower)               ||
-    /\b90\s*(ngày|ngay|n)\b/i.test(lower)
+    /\bquy\b/i.test(norm)
   ) {
-    return 90;
+    return { cycleDays: 90, isLongTerm: true };
   }
 
-  // 2 tháng / 60 ngày
+  // 5. Chu kỳ 2 tháng
   if (
-    /\b2\s*(tháng|thang)\b/i.test(lower) ||
-    /\b60\s*(ngày|ngay|n)\b/i.test(lower)
+    /\b2\s*(tháng|thang)\b/i.test(lower)
   ) {
-    return 60;
+    return { cycleDays: 60, isLongTerm: true };
   }
 
-  // 1 tháng / tháng / 30 ngày
+  // 6. Chu kỳ 1 tháng / tháng
   if (
-    /\b1\s*(tháng|thang)\b/i.test(lower) ||
-    /\bmột\s*(tháng|thang)\b/i.test(lower)||
-    /\b30\s*(ngày|ngay|n)\b/i.test(lower)
+    /\b1\s*(tháng|thang)\b/i.test(lower)   ||
+    /\bmột\s*(tháng|thang)\b/i.test(lower) ||
+    /\bgói\s*(tháng|thang)\b/i.test(lower) ||
+    /\bgoi\s*(thang)\b/i.test(norm)        ||
+    /\btháng\b/i.test(lower)
   ) {
-    return 30;
+    return { cycleDays: 30, isLongTerm: true };
   }
 
-  // Nửa tháng / 15 ngày / 2 tuần
+  // 7. Nửa tháng / 2 tuần
   if (
-    /\bnửa\s*(tháng|thang)/i.test(lower) ||
-    /\b15\s*(ngày|ngay|n)\b/i.test(lower)||
+    /\bnửa\s*(tháng|thang)\b/i.test(lower) ||
+    /\bnua\s*(thang)\b/i.test(norm)        ||
     /\b2\s*(tuần|tuan)\b/i.test(lower)
   ) {
-    return 15;
+    return { cycleDays: 15, isLongTerm: false };
   }
 
-  // Tuần (1 tuần) / 7 ngày
+  // 8. Tuần (1 tuần)
   if (
     /\b1\s*(tuần|tuan)\b/i.test(lower) ||
     /\bmột\s*(tuần|tuan)\b/i.test(lower)||
-    /\btuần\b/i.test(lower)            ||   // "tuần" đơn thuần
-    /\b7\s*(ngày|ngay|n)\b/i.test(lower)
+    /\btuần\b/i.test(lower)
   ) {
-    return 7;
+    return { cycleDays: 7, isLongTerm: false };
   }
 
-  // 5 ngày
-  if (/\b5\s*(ngày|ngay|n)\b/i.test(lower)) return 5;
-
-  // 3 ngày
-  if (/\b3\s*(ngày|ngay|n)\b/i.test(lower)) return 3;
-
-  // "ngày" / 1 ngày / theo ngày / gói ngày
+  // 9. Tính chất dài ngày: "dài ngày", "gói dài hạn", "trọn gói nhiều tháng"
   if (
-    /\b1\s*(ngày|ngay|n)\b/i.test(lower)   ||
-    /\btheo\s*(ngày|ngay)\b/i.test(lower)  ||
-    /\bgói\s*(ngày|ngay)\b/i.test(lower)   ||
-    /\bgoi\s*(ngay)\b/i.test(normalize(lower))  ||
-    /\bngày\b/i.test(lower)                       // "ngày" đơn thuần → 1 ngày
+    /dài\s*ngày/i.test(lower)            ||
+    /dai\s*ngay/i.test(norm)             ||
+    /dài\s*hạn/i.test(lower)             ||
+    /dai\s*han/i.test(norm)              ||
+    /nhiều\s*tháng/i.test(lower)         ||
+    /nhieu\s*thang/i.test(norm)
   ) {
-    // Đảm bảo không bị nhầm với các pattern có số trước đó
-    // Nếu text đã match các pattern dài hơn ở trên thì không vào đây
-    return 1;
+    return { cycleDays: null, isLongTerm: true };
   }
 
-  // Các số ngày tự do khác: "X ngày"
-  const dayMatch = lower.match(/\b(\d+)\s*(ngày|ngay)\b/i);
-  if (dayMatch) {
-    const days = parseInt(dayMatch[1], 10);
-    if (days > 0 && days <= 365) return days;
+  // 10. Tính chất ngắn ngày: "ngắn ngày", "dùng vài ngày", "gói cước ngày", "gói ngày"
+  if (
+    /ngắn\s*ngày/i.test(lower)           ||
+    /ngan\s*ngay/i.test(norm)            ||
+    /vài\s*ngày/i.test(lower)            ||
+    /vai\s*ngay/i.test(norm)             ||
+    /gói\s*(cước\s*)?ngày/i.test(lower) ||
+    /goi\s*(cuoc\s*)?ngay/i.test(norm)   ||
+    /theo\s*ngày/i.test(lower)           ||
+    /theo\s*ngay/i.test(norm)
+  ) {
+    const isOneDay = /1\s*ngày/i.test(lower) || /gói\s*(cước\s*)?ngày/i.test(lower) || /goi\s*(cuoc\s*)?ngay/i.test(norm);
+    return {
+      cycleDays: isOneDay ? 1 : null,
+      isLongTerm: false
+    };
   }
 
-  return null;
+  // 11. Mặc định: Không chứa từ khóa liên quan đến chu kỳ
+  return { cycleDays: null, isLongTerm: null };
 }
 
 /**
@@ -458,10 +486,15 @@ function extractFeatures(text) {
  * Trả về object chuẩn để packageMatcher dùng build MongoDB query.
  */
 const intentParser = (userText) => {
+  const cycleFilter = extractCycleFilter(userText);
+
   const result = {
     minPrice:     null,
     maxPrice:     null,
-    cycleDays:    null,
+    // Single Source of Truth cho chu kỳ:
+    cycleFilter:  cycleFilter,
+    // Cầu nối tương thích:
+    cycleDays:    cycleFilter.cycleDays,
     networkType:  null,
     apps:         [],
     features: {
@@ -469,25 +502,31 @@ const intentParser = (userText) => {
       voice: false,
       sms:   false
     },
-    packageCodes: []
+    packageCodes: [],
+    filters: {
+      chu_ky_ngay:  cycleFilter.cycleDays,
+      is_long_term: cycleFilter.isLongTerm
+    }
   };
 
   if (!userText || typeof userText !== 'string') return result;
 
-  // Trích xuất apps TRƯỚC packageCodes để bảo đảm tv360/tiktok/youtube/facebook
-  // không bị nhầm vào mảng packageCodes.
   result.apps         = extractApps(userText);
-
   const priceRange    = extractPriceRange(userText);
   result.minPrice     = priceRange.minPrice;
   result.maxPrice     = priceRange.maxPrice;
-
   result.packageCodes = extractPackageCodes(userText);
-  result.cycleDays    = extractCycleDays(userText);
   result.networkType  = extractNetworkType(userText);
   result.features     = extractFeatures(userText);
+
+  if (process.env.CHATBOT_DEBUG === 'true') {
+    console.log('[DEBUG IntentParser] Input:', userText, '→ CycleFilter:', JSON.stringify(cycleFilter));
+  }
 
   return result;
 };
 
+intentParser.parse = intentParser;
+
 module.exports = intentParser;
+

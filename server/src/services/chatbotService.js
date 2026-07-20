@@ -40,7 +40,7 @@ const chatbotService = {
       const lowerMessage = message.toLowerCase().trim();
 
       // Bypass nhanh — hội thoại không liên quan đến gói cước
-      const isPackageQuery = /gói|cước|data|mạng|internet|gb|gọi|thoại|phút|sms|tin nhắn|đ|đồng|k|tiền|giá/i.test(lowerMessage)
+      const isPackageQuery = /gói|cước|data|mạng|internet|gb|gọi|thoại|phút|sms|tin nhắn|đ|đồng|k|tiền|giá|ngày|ngay|tuần|tuan|tháng|thang|năm|nam|ngắn|ngan|dài|dai|hạn|han/i.test(lowerMessage)
                           || /[a-zA-Z]+\d+/i.test(lowerMessage)
                           || /youtube|tiktok|facebook|fb|yt|movie|phim|tv360|combo|addon|sinh viên|sinh vien|văn phòng|van phong|game|5g/i.test(lowerMessage);
 
@@ -104,14 +104,14 @@ const chatbotService = {
 
       // 1. Phân tích intent
       const intent = intentParser(message);
-      console.log('[Chatbot] Intent:', JSON.stringify(intent));
+      console.log('[DEBUG Service] Intent:', JSON.stringify(intent));
 
       // 2. Lấy toàn bộ gói (có cache)
       const allPackages = await getPackageContext();
 
       // 3. Khớp và xếp hạng — Sprint 6 Hotfix: packageCodes[]
-      const topPackages = matchPackages(allPackages, intent);
-      console.log('[Chatbot] Matched:', topPackages.map(p => p.ma_goi));
+      const topPackages = await matchPackages(allPackages, intent);
+      console.log('[DEBUG Service] Matched:', Array.isArray(topPackages) ? topPackages.map(p => p.ma_goi) : (topPackages.packages ? topPackages.packages.map(p => p.ma_goi) : []));
       if (intent.packageCodes && intent.packageCodes.length > 0) {
         console.log('[Chatbot] PackageCodes hỏi:', intent.packageCodes);
       }

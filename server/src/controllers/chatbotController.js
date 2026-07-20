@@ -141,15 +141,17 @@ const chatbotController = {
       // console.log('[RAG] B1 - Intent parsing:', trimmedMessage);
 
       const intent = intentParser(trimmedMessage);
-      // console.log('[RAG] B1 - Intent result:', JSON.stringify(intent));
 
-      // ── B0: Kiểm tra Lạc ĐỀ — NGUYÊN TẮc: không gọi DB hay AI ────────────────
-      // Nếu intent hoàn toàn trống rỗng: không có tiêu chí viễn thông nào
-      // → người dùng đang hỏi lạc đề (tâm sự, kiến thức xã hội, v.v.)
+      // ── B0: Kiểm tra Lạc ĐỀ — NGUYÊN TẮC: không gọi DB hay AI ────────────────
+      // Nếu intent hoàn toàn trống rỗng (không giá, không chu kỳ, không mạng, không app, không gói, không feature)
+      // → người dùng đang hỏi lạc đề
+      const cycle = intent.cycleFilter || {};
+      const hasCycleFilter = (cycle.cycleDays != null || cycle.isLongTerm != null);
+
       const isOffTopic = (
         intent.minPrice    === null &&
         intent.maxPrice    === null &&
-        intent.cycleDays   === null &&
+        !hasCycleFilter             &&
         intent.networkType === null &&
         (!intent.apps         || intent.apps.length        === 0) &&
         (!intent.packageCodes || intent.packageCodes.length === 0) &&
@@ -157,9 +159,10 @@ const chatbotController = {
           (!intent.features.data && !intent.features.voice && !intent.features.sms))
       );
 
+      console.log('[DEBUG Controller] Intent:', JSON.stringify(intent), '→ isOffTopic:', isOffTopic);
+
       if (isOffTopic) {
-        // console.log('[RAG] B0 - Off-topic detected → returning static refusal');
-        // console.timeEnd('[RAG] Total');
+        console.log('[DEBUG Controller] Off-topic detected → returning static refusal');
 
         await saveChatHistory(userId, 'bot', OFF_TOPIC_TEXT, null, []);
 
@@ -177,13 +180,12 @@ const chatbotController = {
       }
 
       // ── B2: Truy vấn MongoDB — lấy tối đa 3 gói cước chính xác ───────────
-      // console.log('[RAG] B2 - Package matching...');
       const matchResult = await matchPackages(intent);
-      // console.log(
-      //   '[RAG] B2 - Match result: noMatch=%s, count=%d',
-      //   matchResult.noMatchFound,
-      //   matchResult.packages.length
-      // );
+      console.log(
+        '[DEBUG Controller] Match result: noMatch=%s, count=%d',
+        matchResult.noMatchFound,
+        matchResult.packages ? matchResult.packages.length : 0
+      );
 
       // ── B3: ZERO-MATCH — Trả về văn bản tĩnh, TUYỆT ĐỐI không gọi AI ────
       if (matchResult.noMatchFound) {
