@@ -144,6 +144,37 @@ export default function Profile() {
     }
   }, [currentUser, resetProfileForm]);
 
+  // Lớp 1: Khóa hành vi F5 / Tắt Tab / Đóng trình duyệt khi đang nạp tiền
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDepositing) {
+        e.preventDefault();
+        e.returnValue = 'Giao dịch đang được xử lý trên Blockchain. Vui lòng không đóng hoặc tải lại trang để tránh mất tiền tài khoản!';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDepositing]);
+
+  // Lớp 2: Chặn điều hướng nội bộ trong ứng dụng (Click Navbar, Footer, Chuyển trang...) khi đang nạp tiền
+  useEffect(() => {
+    if (!isDepositing) return;
+
+    const handleInternalClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a, button, [role="button"], [href]');
+      if (target) {
+        e.preventDefault();
+        e.stopPropagation();
+        setToastMsg({ type: 'error', text: 'Giao dịch nạp tiền đang được xử lý, bạn không thể rời trang lúc này.' });
+        setTimeout(() => setToastMsg(null), 3000);
+      }
+    };
+
+    window.addEventListener('click', handleInternalClick, true);
+    return () => window.removeEventListener('click', handleInternalClick, true);
+  }, [isDepositing]);
+
   const handleConnectWallet = async () => {
     const res = await connect();
     const config = getBlockchainConfig();
