@@ -189,6 +189,23 @@ module.exports = {
     }
   },
 
+  deleteHistoryItem: async (req, res, next) => {
+    try {
+      const userId = req.user.user_id;
+      const subscriptionId = req.params.id || req.body.subscriptionId;
+      if (!subscriptionId) {
+        return res.status(400).json({ success: false, message: 'Thiếu subscriptionId' });
+      }
+      await subscriptionService.deleteSubscriptionHistoryItem(userId, subscriptionId);
+      res.status(200).json({
+        success: true,
+        message: 'Xóa lịch sử gói cước thành công!'
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
   getVirtualTime: async (req, res, next) => {
     try {
       const { getVirtualDate, isCustomTime } = require('../utils/virtualTime');

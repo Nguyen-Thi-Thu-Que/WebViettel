@@ -67,6 +67,15 @@ const userSubscriptionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'UserSubscription',
     default: null
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   collection: 'user_subscriptions',

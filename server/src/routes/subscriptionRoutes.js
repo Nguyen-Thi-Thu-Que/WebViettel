@@ -8,6 +8,7 @@ router.post('/register', authenticateToken, subscriptionController.register);
 router.get('/active', authenticateToken, subscriptionController.getActive);
 router.get('/history', authenticateToken, subscriptionController.getHistory);
 router.delete('/history', authenticateToken, subscriptionController.clearHistory);
+router.delete('/history/:id', authenticateToken, subscriptionController.deleteHistoryItem);
 router.post('/renew', authenticateToken, subscriptionController.renew);
 router.post('/toggle-auto-renew', authenticateToken, subscriptionController.toggleAutoRenew);
 router.post('/cancel', authenticateToken, subscriptionController.cancel);

@@ -4,19 +4,21 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Shield, Check, Eye, EyeOff, Copy, ExternalLink, Clock, KeyRound } from 'lucide-react';
+import { User, CreditCard, History, Check, Eye, EyeOff, Copy, ExternalLink, Clock, KeyRound, RotateCcw } from 'lucide-react';
 import { useAuthStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
 import { getBlockchainConfig } from '../services/web3Service';
-import type { Transaction } from '../types';
+import type { Transaction, Package } from '../types';
+import RegisterModal from '../components/RegisterModal';
+import { packageApi } from '../services/api';
 
 // Format datetime in Asia/Ho_Chi_Minh timezone
 const formatDateTime = (dateInput: string | Date | number): string => {
   if (!dateInput) return '—';
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return '—';
-  
+
   const options: Intl.DateTimeFormatOptions = {
     timeZone: 'Asia/Ho_Chi_Minh',
     hour: '2-digit',
@@ -26,10 +28,10 @@ const formatDateTime = (dateInput: string | Date | number): string => {
     year: 'numeric',
     hour12: false
   };
-  
+
   const formatter = new Intl.DateTimeFormat('vi-VN', options);
   const parts = formatter.formatToParts(d);
-  
+
   let hour = '00', minute = '00', day = '01', month = '01', year = '2026';
   for (const part of parts) {
     if (part.type === 'hour') hour = part.value;
@@ -38,7 +40,7 @@ const formatDateTime = (dateInput: string | Date | number): string => {
     else if (part.type === 'month') month = part.value;
     else if (part.type === 'year') year = part.value;
   }
-  
+
   return `${hour}:${minute} - ${day}/${month}/${year}`;
 };
 
@@ -65,25 +67,24 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { 
-    currentUser, 
-    authChecked, 
-    transactions, 
-    updateProfile, 
-    changePassword, 
-    depositBlockchain, 
-    activeSubscriptions, 
+  const {
+    currentUser,
+    authChecked,
+    transactions,
+    updateProfile,
+    changePassword,
+    depositBlockchain,
+    activeSubscriptions,
     subscriptionHistory,
     cancelSubscription,
     toggleAutoRenew,
     clearSubscriptionHistory
   } = useAuthStore();
-  
+
   const getActiveTab = () => {
     const path = location.pathname;
     if (path.endsWith('/deposit')) return 'topup';
-    if (path.endsWith('/subscriptions')) return 'subscriptions';
-    if (path.endsWith('/subscription-history')) return 'subscription-history';
+    if (path.endsWith('/subscriptions') || path.endsWith('/subscription-history')) return 'subscriptions';
     if (path.endsWith('/history')) return 'history';
     if (path.endsWith('/change-password')) return 'change-password';
     return 'info';
@@ -99,6 +100,7 @@ export default function Profile() {
   const [isDepositing, setIsDepositing] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
 
   // Subscription cancellation states
   const [cancellingPkgId, setCancellingPkgId] = useState<string | null>(null);
@@ -118,6 +120,39 @@ export default function Profile() {
   const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [selectedTxDetail, setSelectedTxDetail] = useState<Transaction | null>(null);
   const showDetailModal = !!selectedTxDetail;
+
+  // Re-registration & Filter states
+  const [selectedRegisterPkg, setSelectedRegisterPkg] = useState<Package | null>(null);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'ALL' | 'CANCELLED' | 'EXPIRED' | 'REPLACED'>('ALL');
+
+  const handleReRegisterClick = async (sub: any) => {
+    try {
+      const pkgId = sub.packageId || sub.packageCode;
+      if (pkgId) {
+        const fullPkg = await packageApi.fetchPackageById(String(pkgId));
+        if (fullPkg && fullPkg.ten) {
+          setSelectedRegisterPkg(fullPkg);
+          setIsRegisterModalOpen(true);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Fetch package by id failed, using fallback sub details:", err);
+    }
+
+    const fallbackPkg: any = {
+      id: sub.packageId,
+      numericId: Number(sub.packageId) || 0,
+      ten: sub.packageName || String(sub.packageId).toUpperCase(),
+      ma_goi: String(sub.packageId).toUpperCase(),
+      gia: sub.price || 0,
+      chu_ky_ngay: sub.cycle === 'DAY' ? '1' : sub.cycle === 'YEAR' ? '365' : '30',
+      dieu_kien_dang_ky: 'Áp dụng cho thuê bao Viettel di động.'
+    };
+    setSelectedRegisterPkg(fallbackPkg);
+    setIsRegisterModalOpen(true);
+  };
 
   // Web3 MetaMask hook and integration states
   const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
@@ -186,10 +221,10 @@ export default function Profile() {
         showToast('error', `Vui lòng chuyển mạng sang ${config.networkName} để tiếp tục.`);
         return;
       }
-      
+
       // Auto-link to account on backend!
       const linkRes = await linkWalletAddress(res.address);
-      
+
       if (linkRes.success) {
         showToast('success', 'Liên kết ví thành công!');
       } else {
@@ -253,7 +288,7 @@ export default function Profile() {
     try {
       const config = getBlockchainConfig();
       const provider = new ethers.BrowserProvider((window as any).ethereum);
-      
+
       const networkObj = await provider.getNetwork();
       if (String(networkObj.chainId) !== String(config.chainIdDecimal)) {
         showToast('error', `Vui lòng chuyển mạng sang ${config.networkName} để thực hiện giao dịch.`);
@@ -262,7 +297,7 @@ export default function Profile() {
       }
 
       const balance = await provider.getBalance(walletAddress);
-      
+
       const exchangeRate = parseFloat(import.meta.env.VITE_ETH_EXCHANGE_RATE || '75000000');
       const ethAmountVal = vndAmount / exchangeRate;
       const ethAmountString = ethAmountVal.toFixed(18);
@@ -367,6 +402,13 @@ export default function Profile() {
       useAuthStore.getState().fetchFAQs().catch(() => { });
     }
   }, [currentUser, authChecked, navigate]);
+
+  useEffect(() => {
+    if (activeTab === 'subscriptions' && currentUser) {
+      useAuthStore.getState().fetchActiveSubscriptions().catch(() => { });
+      useAuthStore.getState().fetchSubscriptionHistory().catch(() => { });
+    }
+  }, [activeTab, currentUser]);
 
   useEffect(() => {
     if (activeTab === 'history' && currentUser) {
@@ -533,6 +575,8 @@ export default function Profile() {
       const success = await clearSubscriptionHistory();
       if (success) {
         showToast('success', 'Xóa lịch sử đăng ký thành công.');
+        await useAuthStore.getState().fetchSubscriptionHistory().catch(() => {});
+        await useAuthStore.getState().fetchActiveSubscriptions().catch(() => {});
       } else {
         showToast('error', 'Xóa lịch sử đăng ký thất bại.');
       }
@@ -554,8 +598,7 @@ export default function Profile() {
   const tabs = [
     { id: 'info', label: 'Hồ sơ cá nhân', icon: User, path: '/profile' },
     { id: 'topup', label: 'Nạp tiền tài khoản', icon: CreditCard, path: '/profile/deposit' },
-    { id: 'subscriptions', label: 'Gói cước đang dùng', icon: Shield, path: '/profile/subscriptions' },
-    { id: 'subscription-history', label: 'Lịch sử đăng ký gói cước', icon: Clock, path: '/profile/subscription-history' },
+    { id: 'subscriptions', label: 'Lịch sử đăng ký gói cước', icon: Clock, path: '/profile/subscriptions' },
     { id: 'history', label: 'Lịch sử giao dịch', icon: History, path: '/profile/history' },
     { id: 'change-password', label: 'Đổi mật khẩu', icon: KeyRound, path: '/profile/change-password' }
   ];
@@ -591,10 +634,10 @@ export default function Profile() {
 
       {/* Toast Notification */}
       {toastMsg && (
-        <div 
+        <div
           style={{ zIndex: 9999 }}
           className={`fixed top-20 right-6 px-4 py-3 rounded-lg shadow-lg border-l-4 text-xs font-semibold bg-white text-slate-800 ${toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
-          }`}>
+            }`}>
           {toastMsg.text}
         </div>
       )}
@@ -621,8 +664,8 @@ export default function Profile() {
                   key={tab.id}
                   onClick={() => navigate(tab.path)}
                   className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left focus:outline-none cursor-pointer ${isSelected
-                      ? 'bg-red-50/70 text-primary border-l-2 border-primary pl-4'
-                      : 'text-slate-550 hover:bg-slate-50 hover:text-slate-950'
+                    ? 'bg-red-50/70 text-primary border-l-2 border-primary pl-4'
+                    : 'text-slate-550 hover:bg-slate-50 hover:text-slate-950'
                     }`}
                 >
                   <TabIcon className="w-4 h-4 shrink-0" />
@@ -810,11 +853,10 @@ export default function Profile() {
                         key={preset}
                         type="button"
                         onClick={() => handlePresetSelect(preset)}
-                        className={`py-2.5 px-2 text-center rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer ${
-                          selectedPreset === preset
+                        className={`py-2.5 px-2 text-center rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer ${selectedPreset === preset
                             ? 'bg-red-50 border-primary text-primary shadow-sm'
                             : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         {preset.toLocaleString('vi-VN')} VNĐ
                       </button>
@@ -865,24 +907,33 @@ export default function Profile() {
             </div>
           )}
 
-          {/* Tab 3: Active Subscriptions List */}
+          {/* Unified Tab: Subscription Management & History */}
           {activeTab === 'subscriptions' && (
-            <div className="space-y-6 text-left">
-              <div className="border-b border-slate-50 pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Gói cước đang sử dụng</h2>
-                <p className="text-slate-400 text-xs mt-0.5 font-medium">Danh sách các gói cước dịch vụ đang kích hoạt trên thuê bao di động.</p>
+            <div className="space-y-8 text-left">
+              <div className="border-b border-slate-100 pb-4">
+                <h2 className="text-lg font-bold text-slate-900">Lịch sử & Quản lý đăng ký gói cước</h2>
+                <p className="text-slate-400 text-xs mt-0.5 font-medium">Danh sách gói cước đang hoạt động và toàn bộ lịch sử đăng ký của thuê bao.</p>
               </div>
 
-              {(activeSubscriptions || []).length > 0 ? (
-                <div className="space-y-4">
-                  {(activeSubscriptions || []).map((ap) => {
-                    const cycleText = ap.cycle === 'DAY' ? '1 ngày' : ap.cycle === 'YEAR' ? '365 ngày' : '30 ngày';
-                    return (
-                      <div
-                        key={ap.packageId}
-                        className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-4 relative overflow-hidden"
-                      >
-                        <div className="space-y-1.5 flex-1">
+              {/* ⚡ PHẦN 1: GÓI CƯỚC ĐANG HOẠT ĐỘNG */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <span className="text-base">⚡</span>
+                  <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                    Gói cước đang hoạt động
+                  </h3>
+                </div>
+
+                {(activeSubscriptions || []).length > 0 ? (
+                  <div className="space-y-4">
+                    {(activeSubscriptions || []).map((ap) => {
+                      const cycleText = ap.cycle === 'DAY' ? '1 ngày' : ap.cycle === 'YEAR' ? '365 ngày' : '30 ngày';
+                      return (
+                        <div
+                          key={ap.packageId}
+                          className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-4 relative overflow-hidden"
+                        >
+                          <div className="space-y-1.5 flex-1">
                             <div className="flex items-center space-x-2">
                               <h4 className="text-base font-extrabold text-slate-900 uppercase">{ap.packageName || ap.packageId.toUpperCase()}</h4>
                               <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
@@ -951,123 +1002,170 @@ export default function Profile() {
                                 onClick={() => setCancellingPkgId(ap.subscriptionId)}
                                 className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
                               >
-                                  Hủy đăng ký
+                                Hủy đăng ký
                               </button>
                             )}
                           </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-200/50 p-10 rounded-2xl text-center max-w-sm mx-auto space-y-4">
-                  <p className="text-slate-500 text-xs font-medium">Bạn hiện chưa đăng ký sử dụng gói cước di động nào.</p>
-                  <button
-                    onClick={() => navigate('/packages')}
-                    className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors focus:outline-none cursor-pointer shadow-sm"
-                  >
-                    Xem các gói cước ngay
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-200/50 p-8 rounded-2xl text-center max-w-md mx-auto space-y-3">
+                    <p className="text-slate-500 text-xs font-medium">Bạn hiện chưa đăng ký gói cước di động nào đang hoạt động.</p>
+                    <button
+                      onClick={() => navigate('/packages')}
+                      className="bg-primary hover:bg-primary-hover text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors focus:outline-none cursor-pointer shadow-sm"
+                    >
+                      Xem các gói cước ngay
+                    </button>
+                  </div>
+                )}
+              </div>
 
-          {/* Tab 3.5: Subscription History */}
-          {activeTab === 'subscription-history' && (
-            <div className="space-y-6 text-left">
-              <div className="border-b border-slate-50 pb-4 flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Lịch sử đăng ký gói cước</h2>
-                  <p className="text-slate-400 text-xs mt-0.5 font-medium">Nhật ký toàn bộ các gói cước đã đăng ký trên hệ thống.</p>
+              {/* 📜 PHẦN 2: LỊCH SỬ DÙNG GÓI CƯỚC */}
+              <div className="space-y-4 pt-6 border-t border-slate-100">
+                {/* Header row */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">📜</span>
+                    <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Lịch sử giao dịch gói cước
+                    </h3>
+                  </div>
+
+                  {(() => {
+                    const rawHistory = (subscriptionHistory || []).filter(sub => {
+                      const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                      return sub.status === 'CANCELLED' || sub.status === 'EXPIRED' || sub.status === 'REPLACED' || isExpired;
+                    });
+                    if (rawHistory.length > 0) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setShowClearHistoryModal(true)}
+                          className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-150 px-3.5 py-1.5 rounded-xl transition-all focus:outline-none cursor-pointer"
+                        >
+                          Xóa tất cả lịch sử đã hủy/hết hạn
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
+
+                {/* Filter Bar */}
+                <div className="flex items-center">
+                  <div className="bg-gray-100/80 p-1 inline-flex gap-1 rounded-lg">
+                    {[
+                      { key: 'ALL', label: 'Tất cả' },
+                      { key: 'CANCELLED', label: 'Đã hủy' },
+                      { key: 'EXPIRED', label: 'Hết hạn' },
+                      { key: 'REPLACED', label: 'Bị thay thế' }
+                    ].map((f) => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setHistoryStatusFilter(f.key as any)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                          historyStatusFilter === f.key
+                            ? 'bg-red-600 text-white font-medium shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Table Data */}
                 {(() => {
                   const historyList = (subscriptionHistory || []).filter(sub => {
                     const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
-                    return sub.status === 'CANCELLED' || sub.status === 'EXPIRED' || sub.status === 'REPLACED' || isExpired;
+                    const subStatus = isExpired ? 'EXPIRED' : sub.status;
+
+                    if (!['CANCELLED', 'EXPIRED', 'REPLACED'].includes(subStatus)) return false;
+
+                    if (historyStatusFilter === 'ALL') return true;
+                    return subStatus === historyStatusFilter;
                   });
+
                   if (historyList.length > 0) {
                     return (
-                      <button
-                        type="button"
-                        onClick={() => setShowClearHistoryModal(true)}
-                        className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-150 px-4 py-2 rounded-xl transition-all focus:outline-none cursor-pointer"
-                      >
-                        Xóa lịch sử
-                      </button>
+                      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-semibold text-xs uppercase tracking-wider">
+                              <th className="py-3.5 px-4 text-left">Tên gói</th>
+                              <th className="py-3.5 px-4 text-left">Ngày đăng ký</th>
+                              <th className="py-3.5 px-4 text-left">Ngày hết hạn</th>
+                              <th className="py-3.5 px-4 text-left">Chu kỳ</th>
+                              <th className="py-3.5 px-4 text-center">Trạng thái</th>
+                              <th className="py-3.5 px-4 text-center">Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50 text-slate-700 font-semibold">
+                            {historyList.map((sub) => {
+                              const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                              const subStatus = isExpired ? 'EXPIRED' : sub.status;
+                              const subId = String(sub.subscriptionId || sub._id);
+
+                              return (
+                                <tr key={subId} className="hover:bg-slate-50/40 transition-colors">
+                                  <td className="py-3.5 px-4 text-left font-bold text-slate-900 uppercase">
+                                    {sub.packageName || sub.packageId}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-left text-slate-550">
+                                    {formatDateTime(sub.activatedAt)}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-left text-slate-550">
+                                    {formatDateTime(sub.expiresAt)}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-left text-slate-800">
+                                    {sub.cycle === 'DAY' ? '1 ngày' : sub.cycle === 'YEAR' ? '365 ngày' : '30 ngày'}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-center">
+                                    {subStatus === 'REPLACED' ? (
+                                      <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase">
+                                        Bị thay thế
+                                      </span>
+                                    ) : subStatus === 'CANCELLED' ? (
+                                      <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase">
+                                        Đã hủy
+                                      </span>
+                                    ) : (
+                                      <span className="bg-slate-50 text-slate-500 border border-slate-205 text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase">
+                                        Hết hạn
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReRegisterClick(sub)}
+                                      className="bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-all font-medium px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                      <span>Đăng ký lại</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="bg-slate-50 border border-slate-200/50 p-8 rounded-2xl text-center max-w-md mx-auto space-y-3">
+                        <p className="text-slate-500 text-xs font-semibold">Chưa có lịch sử các gói cước đã hủy hoặc hết hạn.</p>
+                      </div>
                     );
                   }
-                  return null;
                 })()}
               </div>
-
-              {(() => {
-                const historyList = (subscriptionHistory || []).filter(sub => {
-                  const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
-                  return sub.status === 'CANCELLED' || sub.status === 'EXPIRED' || sub.status === 'REPLACED' || isExpired;
-                });
-
-                if (historyList.length > 0) {
-                  return (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-550 font-bold uppercase tracking-wider">
-                            <th className="p-4">Tên gói</th>
-                            <th className="p-4">Ngày đăng ký</th>
-                            <th className="p-4">Ngày hết hạn</th>
-                            <th className="p-4">Chu kỳ</th>
-                            <th className="p-4">Trạng thái</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 text-slate-700 font-semibold">
-                          {historyList.map((sub) => {
-                            const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
-                            const subStatus = isExpired ? 'EXPIRED' : sub.status;
-                            return (
-                              <tr key={sub.subscriptionId || sub._id} className="hover:bg-slate-50/40 transition-colors">
-                                <td className="p-4 font-bold text-slate-900 uppercase">
-                                  {sub.packageId}
-                                </td>
-                                <td className="p-4 text-slate-550">
-                                  {formatDateTime(sub.activatedAt)}
-                                </td>
-                                <td className="p-4 text-slate-550">
-                                  {formatDateTime(sub.expiresAt)}
-                                </td>
-                                <td className="p-4 text-slate-800">
-                                  {sub.cycle === 'DAY' ? '1 ngày' : sub.cycle === 'YEAR' ? '365 ngày' : '30 ngày'}
-                                </td>
-                                <td className="p-4">
-                                  {subStatus === 'REPLACED' ? (
-                                    <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                      Bị thay thế
-                                    </span>
-                                  ) : subStatus === 'CANCELLED' ? (
-                                    <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                      Đã hủy
-                                    </span>
-                                  ) : (
-                                    <span className="bg-slate-50 text-slate-500 border border-slate-205 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                      Hết hạn
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="bg-slate-50 border border-slate-200/50 p-10 rounded-2xl text-center max-w-sm mx-auto space-y-4">
-                      <p className="text-slate-500 text-xs font-semibold">Bạn chưa có lịch sử đăng ký gói cước.</p>
-                    </div>
-                  );
-                }
-              })()}
             </div>
           )}
 
@@ -1368,7 +1466,7 @@ export default function Profile() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left">
             <h3 className="text-base font-extrabold text-slate-900 mb-4">Chi tiết giao dịch</h3>
-            
+
             <div className="space-y-3 text-xs text-slate-600 font-medium">
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trạng thái</span>
@@ -1453,6 +1551,23 @@ export default function Profile() {
           </div>
         </div>
       )}
+      {/* Re-Register Package Modal */}
+      <RegisterModal
+        isOpen={isRegisterModalOpen}
+        pkg={selectedRegisterPkg}
+        onClose={() => {
+          setIsRegisterModalOpen(false);
+          setSelectedRegisterPkg(null);
+        }}
+        onSuccess={(msg) => {
+          showToast('success', msg || 'Đăng ký lại gói cước thành công!');
+          useAuthStore.getState().fetchActiveSubscriptions().catch(() => {});
+          useAuthStore.getState().fetchSubscriptionHistory().catch(() => {});
+        }}
+        onError={(msg) => {
+          showToast('error', msg || 'Đăng ký lại thất bại.');
+        }}
+      />
     </div>
   );
 }

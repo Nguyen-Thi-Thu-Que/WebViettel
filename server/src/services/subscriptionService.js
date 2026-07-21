@@ -41,7 +41,6 @@ async function runMetadataMigration() {
           service_group = 'VOICE';
         }
 
-        // Assign deterministic policy rules for metadata tests
         let registration_policy = 'REPLACE';
         if (pkg.package_id % 3 === 0) {
           registration_policy = 'ALLOW';
@@ -80,7 +79,6 @@ const calculateExpiryDate = (activatedAt, duration, cycleType, validityMode) => 
     throw new Error('Invalid activatedAt date');
   }
 
-  // All packages duration is added in days
   date.setDate(date.getDate() + duration);
 
   if (validityMode === 'END_OF_DAY') {
@@ -166,7 +164,8 @@ const subscriptionService = {
     const activeSubs = await UserSubscription.find({
       userId: userId,
       status: 'ACTIVE',
-      expiresAt: { $gt: now }
+      expiresAt: { $gt: now },
+      isDeleted: { $ne: true }
     }).session(session);
 
     // BƯỚC 1 - TRÙNG GÓI (EXACT DUPLICATE)
@@ -263,7 +262,6 @@ const subscriptionService = {
 
         if (activeGroup === newGroup) {
           const activeDays = parseInt(activePkg.chu_ky_ngay || '30', 10);
-          // Trường hợp 4A - Nâng cấp chu kỳ (Thấp → Cao)
           if (newDays > activeDays) {
             replaceSubscriptions.push({
               subscriptionId: sub._id,
@@ -277,7 +275,6 @@ const subscriptionService = {
               finalMessage = 'Gói mới sẽ thay thế các gói đang sử dụng.';
             }
           } else {
-            // Trường hợp 4B - Hạ cấp chu kỳ (Cao → Thấp) hoặc Trùng chu kỳ tương đương
             return {
               action: 'REJECT',
               message: 'Không thể đăng ký song song hoặc hạ cấp chu kỳ gói cước ứng dụng. Bạn bắt buộc phải hủy thủ công gói chu kỳ cao hiện tại trước khi đăng ký gói này.',
@@ -300,7 +297,6 @@ const subscriptionService = {
 
         if (activeSysType === newSysType) {
           const activeDays = parseInt(activePkg.chu_ky_ngay || '30', 10);
-          // Trường hợp 5A - Nâng cấp chu kỳ (Thấp → Cao)
           if (newDays > activeDays) {
             replaceSubscriptions.push({
               subscriptionId: sub._id,
@@ -312,17 +308,13 @@ const subscriptionService = {
               finalAction = 'REPLACE';
               finalMessage = 'Gói mới sẽ thay thế các gói đang sử dụng.';
             }
-          }
-          // Trường hợp 5B - Hạ cấp chu kỳ (Cao → Thấp)
-          else if (newDays < activeDays) {
+          } else if (newDays < activeDays) {
             return {
               action: 'REJECT',
               message: 'Không thể hạ cấp chu kỳ gói cước cùng phân hệ. Vui lòng hủy gói chu kỳ cao hiện tại trước khi đăng ký.',
               hasActive: true
             };
-          }
-          // Trường hợp 5C - Chu kỳ tương đương
-          else {
+          } else {
             const policy = (pkg.registration_policy || '').toUpperCase().trim();
             if (policy === 'REPLACE') {
               replaceSubscriptions.push({
@@ -413,7 +405,6 @@ const subscriptionService = {
       let returnedSub = null;
 
       if (conflictResult.action === 'RENEW_SHORT') {
-        // Chuyển gói cũ sang EXPIRED
         const oldSub = await UserSubscription.findById(conflictResult.exactSubId).session(session);
         if (!oldSub) {
           throw new Error('Không tìm thấy gói cước đang hoạt động để gia hạn.');
@@ -421,11 +412,9 @@ const subscriptionService = {
         oldSub.status = 'EXPIRED';
         await oldSub.save({ session });
 
-        // Trừ tiền tài khoản
         account.balance -= pkg.gia;
         await account.save({ session });
 
-        // Tạo gói mới ACTIVE
         const newSub = new UserSubscription({
           userId: userId,
           packageId: pkg.package_id,
@@ -443,11 +432,9 @@ const subscriptionService = {
 
         returnedSub = newSub;
       } else {
-        // Trừ tiền tài khoản
         account.balance -= pkg.gia;
         await account.save({ session });
 
-        // Tạo gói mới ACTIVE
         const newSub = new UserSubscription({
           userId: userId,
           packageId: pkg.package_id,
@@ -504,20 +491,25 @@ const subscriptionService = {
     return await UserSubscription.find({
       userId: userId,
       status: 'ACTIVE',
-      expiresAt: { $gt: now }
+      expiresAt: { $gt: now },
+      isDeleted: { $ne: true }
     });
   },
 
   getSubscriptionHistory: async (userId) => {
     await processAutoRenewals().catch(err => console.error("Real-time auto renewal process failed:", err));
-    return await UserSubscription.find({ userId: userId }).sort({ createdAt: -1 });
+    return await UserSubscription.find({
+      userId: userId,
+      isDeleted: { $ne: true }
+    }).sort({ createdAt: -1 });
   },
 
   cancelSubscription: async (userId, subscriptionId) => {
     const sub = await UserSubscription.findOne({
       _id: subscriptionId,
       userId: userId,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      isDeleted: { $ne: true }
     });
 
     if (!sub) {
@@ -535,7 +527,8 @@ const subscriptionService = {
     const sub = await UserSubscription.findOne({
       _id: subscriptionId,
       userId: userId,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      isDeleted: { $ne: true }
     });
 
     if (!sub) {
@@ -549,20 +542,45 @@ const subscriptionService = {
 
   clearSubscriptionHistory: async (userId) => {
     const now = getVirtualDate();
-    return await UserSubscription.deleteMany({
-      userId: userId,
-      $or: [
-        { status: { $in: ['CANCELLED', 'EXPIRED', 'REPLACED'] } },
-        { status: 'ACTIVE', expiresAt: { $lte: now } }
-      ]
-    });
+    return await UserSubscription.updateMany(
+      {
+        userId: userId,
+        isDeleted: { $ne: true },
+        $or: [
+          { status: { $in: ['CANCELLED', 'EXPIRED', 'REPLACED'] } },
+          { status: 'ACTIVE', expiresAt: { $lte: now } }
+        ]
+      },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: now
+        }
+      }
+    );
+  },
+
+  deleteSubscriptionHistoryItem: async (userId, subscriptionId) => {
+    const now = getVirtualDate();
+    return await UserSubscription.updateOne(
+      {
+        _id: subscriptionId,
+        userId: userId
+      },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: now
+        }
+      }
+    );
   }
 };
 
 const processAutoRenewals = async () => {
   const now = getVirtualDate();
-  const activeSubs = await UserSubscription.find({ status: 'ACTIVE' });
-  
+  const activeSubs = await UserSubscription.find({ status: 'ACTIVE', isDeleted: { $ne: true } });
+
   for (const sub of activeSubs) {
     const expiresAt = sub.expiresAt;
     const expiresAtLocal = new Date(expiresAt.getTime() + 7 * 60 * 60 * 1000);
@@ -570,7 +588,7 @@ const processAutoRenewals = async () => {
     nextDayLocal.setUTCHours(0, 0, 0, 0);
     nextDayLocal.setUTCDate(nextDayLocal.getUTCDate() + 1);
     const renewalThreshold = new Date(nextDayLocal.getTime() - 7 * 60 * 60 * 1000);
-    
+
     if (now >= renewalThreshold) {
       if (sub.autoRenew) {
         let pkg = await Package.findOne({ package_id: sub.packageId });
@@ -578,11 +596,11 @@ const processAutoRenewals = async () => {
           pkg = await Package.findOne({ $or: [{ package_id: Number(sub.packageId) }, { id: Number(sub.packageId) }] });
         }
         const account = await Account.findOne({ user_id: sub.userId });
-        
+
         if (pkg && account && account.balance >= pkg.gia) {
           account.balance -= pkg.gia;
           await account.save();
-          
+
           const metadata = getPkgMetadata(pkg);
           const newExpiresAt = calculateExpiryDate(
             now,
@@ -590,7 +608,7 @@ const processAutoRenewals = async () => {
             metadata.cycle_type,
             metadata.validity_mode
           );
-          
+
           sub.activatedAt = now;
           sub.startedAt = now;
           sub.expiresAt = newExpiresAt;

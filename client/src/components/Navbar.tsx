@@ -182,14 +182,6 @@ export default function Navbar() {
                       onClick={() => setIsProfileOpen(false)}
                       className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors font-bold text-slate-700"
                     >
-                      <Shield className="w-4 h-4 mr-2" />
-                      Gói cước đang dùng
-                    </Link>
-                    <Link
-                      to="/profile/subscription-history"
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors font-bold text-slate-700"
-                    >
                       <FileText className="w-4 h-4 mr-2" />
                       Lịch sử đăng ký gói cước
                     </Link>
