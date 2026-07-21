@@ -38,6 +38,8 @@ export interface Package {
   is_addon?: boolean;
   is_long_term?: boolean;
   requires_base_package?: boolean;
+  matchScore?: number;
+  recommendationTag?: string;
 }
 
 export interface User {
@@ -106,10 +108,13 @@ export interface ChatbotConfig {
 }
 
 export interface SurveyAnswers {
-  budget: 'under_50' | '50_100' | '100_200' | 'above_200' | 'any';
-  dataDemand: 'none' | 'low' | 'medium' | 'high' | 'unlimited';
-  voiceDemand: 'none' | 'low' | 'high';
-  socialApps: string[]; // e.g., ["TikTok", "YouTube", "Facebook"]
+  budget?: 'under_90' | '90_150' | 'above_150' | string;
+  demand_branch?: 'DATA_ONLY' | 'COMBO' | 'SOCIAL_DEEP' | string;
+  data_per_day?: '1GB' | '2_3GB' | 'UNLIMITED' | string;
+  combo_priority?: 'DATA_FIRST' | 'VOICE_FIRST' | 'BALANCED' | string;
+  primary_app?: 'TikTok' | 'YouTube' | 'Facebook' | 'ALL_SOCIAL' | string;
+  cycle_preference?: 'MONTHLY' | 'LONG_TERM' | 'ANY' | string;
+  [key: string]: any;
 }
 
 export type SubscriptionStatus = 'ACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'CANCELLED';

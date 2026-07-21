@@ -338,10 +338,10 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Backend đã có API `depositFiat` (tạo giao dịch ảo ghi nhận nạp tiền loại VietQR) nhưng frontend chưa dựng giao diện tương ứng. Hiện chỉ có duy nhất giao diện nạp tiền qua cổng blockchain MetaMask ở trang cá nhân.
 
 ### ⚙️ Cơ chế bảo mật & hiệu năng Backend (`server/src/index.js`)
+
 - **Security Headers thủ công**: Server tự thiết lập các header bảo mật tiêu chuẩn (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security`) mà không phụ thuộc thư viện Helmet.
 - **Rate Limiter tự viết**: Giới hạn tối đa 120 request/phút cho mỗi địa chỉ IP trên tất cả các route `/api/`. Trả về HTTP 429 kèm thông báo tiếng Việt khi vượt ngưỡng.
 - **JWT tự triển khai**: Ký và xác thực token theo chuẩn HMAC-SHA256 hoàn toàn bằng module `crypto` gốc của Node.js, không dùng thư viện `jsonwebtoken`.
-
 
 ### CSDL hiện có trong API MongoDB
 

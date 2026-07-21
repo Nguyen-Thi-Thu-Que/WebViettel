@@ -71,6 +71,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Auto fetch other details
       get().fetchTransactions().catch(() => { });
       get().fetchFAQs().catch(() => { });
+
+      // Automatically reset survey state to clean initial state
+      useSurveyStore.getState().resetSurvey().catch(() => { });
       return true;
     } catch (err: any) {
       set({
@@ -93,6 +96,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().fetchActiveSubscriptions().catch(() => { });
       await get().fetchSubscriptionHistory().catch(() => { });
 
+      // Automatically reset survey state to clean initial state
+      useSurveyStore.getState().resetSurvey().catch(() => { });
       return true;
     } catch (err: any) {
       set({
@@ -107,6 +112,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     localStorage.removeItem('token');
     set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [] });
+    // Automatically reset survey state to clean initial state
+    useSurveyStore.getState().resetSurvey().catch(() => { });
   },
 
   fetchMe: async () => {
@@ -715,99 +722,144 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
   }
 }));
 
-// Subscribe to currentUser changes to hydrate chatbot history
-let lastUserId: string | null | undefined = undefined;
-
-useAuthStore.subscribe((state) => {
-  const currentUserId = state.currentUser?.id;
-  if (currentUserId !== lastUserId) {
-    lastUserId = currentUserId;
-    if (state.currentUser) {
-      useChatbotStore.getState().hydrateHistory();
-    } else {
-      useChatbotStore.setState({ messages: [INITIAL_WELCOME_MSG] });
-    }
-  }
-});
-
 // ==========================================
 // 4. SURVEY STORE
 // ==========================================
+
 interface SurveyState {
-  questions: any[];
   answers: SurveyAnswers;
-  currentStep: number;
+  nextQuestion: any;
   recommendedPackages: Package[];
+  isCompleted: boolean;
+  remainingCount: number;
+  currentStepNum: number;
+  totalFixedSteps: number;
+  isDynamicPhase: boolean;
+  surveyMessage: string;
   loading: boolean;
   hasHistory: boolean;
-  isEarlyTerminated: boolean;
-  setAnswer: <K extends keyof SurveyAnswers>(field: K, value: SurveyAnswers[K]) => void;
-  setStep: (step: number) => void;
-  resetSurvey: () => void;
-  fetchConfig: (answers?: SurveyAnswers) => Promise<void>;
-  submitAnswers: () => Promise<void>;
+  historyStack: SurveyAnswers[];
+  setAnswerAndSubmit: (field: string, value: any) => Promise<void>;
+  goBack: () => Promise<void>;
+  resetSurvey: () => Promise<void>;
+  fetchConfig: () => Promise<void>;
   fetchHistory: () => Promise<boolean>;
   deleteHistory: () => Promise<void>;
 }
 
-const INITIAL_ANSWERS: SurveyAnswers = {
-  budget: 'any',
-  dataDemand: 'none',
-  socialApps: [],
-  voiceDemand: 'none'
-};
-
 export const useSurveyStore = create<SurveyState>((set, get) => ({
-  questions: [],
-  answers: INITIAL_ANSWERS,
-  currentStep: 0,
+  answers: {},
+  nextQuestion: null,
   recommendedPackages: [],
+  isCompleted: false,
+  remainingCount: 0,
+  currentStepNum: 1,
+  totalFixedSteps: 3,
+  isDynamicPhase: false,
+  surveyMessage: '',
   loading: false,
   hasHistory: false,
-  isEarlyTerminated: false,
+  historyStack: [],
 
-  setAnswer: (field, value) => {
-    set(state => {
-      const newAnswers = {
-        ...state.answers,
-        [field]: value
-      };
-      // Gọi fetchConfig bất đồng bộ để cập nhật tính khả dụng (disabled) của các câu hỏi tiếp theo
-      get().fetchConfig(newAnswers);
-      return { answers: newAnswers };
-    });
-  },
-
-  setStep: (step) => set({ currentStep: step }),
-
-  resetSurvey: () => set({ answers: INITIAL_ANSWERS, currentStep: 0, recommendedPackages: [], isEarlyTerminated: false }),
-
-  fetchConfig: async (answersParam) => {
+  setAnswerAndSubmit: async (field, value) => {
     set({ loading: true });
     try {
-      const activeAnswers = answersParam || get().answers;
-      const questions = await surveyApi.fetchConfig(activeAnswers);
-      set({ questions, loading: false });
+      const currentAnswers = get().answers;
+      const currentStack = get().historyStack;
+      
+      const newAnswers = {
+        ...currentAnswers,
+        [field]: value
+      };
+
+      const res = await surveyApi.submitAnswers(newAnswers);
+      
+      set({
+        answers: res.answers,
+        nextQuestion: res.nextQuestion,
+        recommendedPackages: res.packages,
+        isCompleted: res.isCompleted,
+        remainingCount: res.remainingCount,
+        currentStepNum: res.currentStepNum || 1,
+        totalFixedSteps: res.totalFixedSteps || 3,
+        isDynamicPhase: res.isDynamicPhase || false,
+        surveyMessage: res.message || '',
+        historyStack: [...currentStack, currentAnswers],
+        loading: false
+      });
     } catch (err) {
-      console.error("Error fetching survey configs:", err);
+      console.error("Error submitting survey answer:", err);
       set({ loading: false });
     }
   },
 
-  submitAnswers: async () => {
+  goBack: async () => {
+    const stack = get().historyStack;
+    if (stack.length === 0) return;
+    
     set({ loading: true });
+    const prevAnswers = stack[stack.length - 1];
+    const newStack = stack.slice(0, -1);
+
     try {
-      const { answers } = get();
-      const res = await surveyApi.submitAnswers(answers);
+      const res = await surveyApi.submitAnswers(prevAnswers);
       set({
         answers: res.answers,
-        recommendedPackages: res.recommendedPackages,
-        isEarlyTerminated: res.isEarlyTerminated || false,
-        hasHistory: true,
+        nextQuestion: res.nextQuestion,
+        recommendedPackages: res.packages,
+        isCompleted: res.isCompleted,
+        remainingCount: res.remainingCount,
+        currentStepNum: res.currentStepNum || 1,
+        totalFixedSteps: res.totalFixedSteps || 3,
+        isDynamicPhase: res.isDynamicPhase || false,
+        surveyMessage: res.message || '',
+        historyStack: newStack,
         loading: false
       });
     } catch (err) {
-      console.error("Error submitting survey answers:", err);
+      console.error("Error going back in survey:", err);
+      set({ loading: false });
+    }
+  },
+
+  resetSurvey: async () => {
+    set({ loading: true, answers: {}, historyStack: [], isCompleted: false, recommendedPackages: [], nextQuestion: null, remainingCount: 0, currentStepNum: 1, totalFixedSteps: 3, isDynamicPhase: false });
+    try {
+      const res = await surveyApi.fetchConfig({});
+      set({
+        nextQuestion: res.nextQuestion,
+        recommendedPackages: res.packages,
+        isCompleted: res.isCompleted,
+        remainingCount: res.remainingCount,
+        currentStepNum: res.currentStepNum || 1,
+        totalFixedSteps: res.totalFixedSteps || 3,
+        isDynamicPhase: res.isDynamicPhase || false,
+        surveyMessage: res.message || '',
+        loading: false
+      });
+    } catch (err) {
+      console.error("Error resetting survey:", err);
+      set({ loading: false });
+    }
+  },
+
+  fetchConfig: async () => {
+    set({ loading: true });
+    try {
+      const res = await surveyApi.fetchConfig(get().answers);
+      set({
+        nextQuestion: res.nextQuestion,
+        recommendedPackages: res.packages,
+        isCompleted: res.isCompleted,
+        remainingCount: res.remainingCount,
+        currentStepNum: res.currentStepNum || 1,
+        totalFixedSteps: res.totalFixedSteps || 3,
+        isDynamicPhase: res.isDynamicPhase || false,
+        surveyMessage: res.message || '',
+        loading: false
+      });
+    } catch (err) {
+      console.error("Error fetching survey config:", err);
       set({ loading: false });
     }
   },
@@ -819,17 +871,16 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     set({ loading: true });
     try {
       const res = await surveyApi.fetchHistory();
-      if (res.hasHistory && res.answers && res.recommendedPackages) {
+      if (res.hasHistory && res.packages && res.packages.length > 0) {
         set({
-          answers: res.answers,
-          recommendedPackages: res.recommendedPackages,
-          isEarlyTerminated: res.isEarlyTerminated || false,
+          answers: res.answers || {},
+          recommendedPackages: res.packages,
+          isCompleted: true,
           hasHistory: true,
-          currentStep: get().questions.length || 7, // Hướng thẳng tới màn hình kết quả
+          remainingCount: res.packages.length,
+          surveyMessage: res.message || '',
           loading: false
         });
-        // Tải lại cấu hình khả dụng (disabled) dựa trên lịch sử đã tải
-        await get().fetchConfig(res.answers);
         return true;
       }
       set({ hasHistory: false, loading: false });
@@ -849,13 +900,19 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     try {
       await surveyApi.deleteHistory();
       set({
-        answers: INITIAL_ANSWERS,
+        answers: {},
+        historyStack: [],
         recommendedPackages: [],
-        currentStep: 0,
+        nextQuestion: null,
+        isCompleted: false,
         hasHistory: false,
-        isEarlyTerminated: false,
+        remainingCount: 0,
+        currentStepNum: 1,
+        totalFixedSteps: 3,
+        isDynamicPhase: false,
         loading: false
       });
+      get().fetchConfig();
     } catch (err) {
       console.error("Error deleting survey history:", err);
       set({ loading: false });

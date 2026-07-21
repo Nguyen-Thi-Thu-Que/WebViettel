@@ -53,11 +53,13 @@ const PackageCard = React.memo(function PackageCard({
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-350 p-4 sm:p-4.5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative text-xs font-semibold select-none text-left h-full min-h-[290px]">
-      {/* Badge Hot */}
+      {/* Badges bar */}
       {isHot && (
-        <div className="absolute top-4 right-4 bg-primary text-white text-[9px] font-black px-2.5 py-1 rounded-full flex items-center space-x-1 shadow-sm z-10">
-          <Sparkles className="w-3 h-3 fill-white text-white" />
-          <span>HOT</span>
+        <div className="flex flex-wrap items-center gap-1.5 mb-2 z-10">
+          <div className="ml-auto bg-primary text-white text-[9px] font-black px-2.5 py-1 rounded-full flex items-center space-x-1 shadow-sm">
+            <Sparkles className="w-3 h-3 fill-white text-white" />
+            <span>HOT</span>
+          </div>
         </div>
       )}
 

@@ -101,7 +101,9 @@ export function toVietnamesePackage(apiPkg: any): Package {
     has_facebook: apiPkg.has_facebook,
     is_addon: apiPkg.is_addon,
     is_long_term: apiPkg.is_long_term,
-    requires_base_package: apiPkg.requires_base_package
+    requires_base_package: apiPkg.requires_base_package,
+    matchScore: apiPkg.matchScore,
+    recommendationTag: apiPkg.recommendationTag
   };
 
 
@@ -426,30 +428,44 @@ export const userApi = {
 
 // 7. Survey APIs
 export const surveyApi = {
-  fetchConfig: async (answers?: any): Promise<any[]> => {
+  fetchConfig: async (answers?: any): Promise<{ isCompleted: boolean; packages: Package[]; nextQuestion: any; remainingCount: number; currentStepNum?: number; totalFixedSteps?: number; isDynamicPhase?: boolean; message?: string }> => {
     const params = answers ? { answers: JSON.stringify(answers) } : undefined;
-    const response = await axiosInstance.get<{ success: boolean; config: any[] }>('/api/survey/config', { params });
-    return response.data.config;
-  },
-
-  submitAnswers: async (answers: any): Promise<{ answers: any; recommendedPackages: Package[]; isEarlyTerminated?: boolean }> => {
-    const response = await axiosInstance.post<{ success: boolean; answers: any; recommendedPackages: any[]; isEarlyTerminated?: boolean }>('/api/survey', { answers });
+    const response = await axiosInstance.get<any>('/api/survey/config', { params });
     return {
-      answers: response.data.answers,
-      recommendedPackages: (response.data.recommendedPackages || []).map(toVietnamesePackage),
-      isEarlyTerminated: response.data.isEarlyTerminated
+      isCompleted: response.data.isCompleted,
+      packages: (response.data.packages || []).map(toVietnamesePackage),
+      nextQuestion: response.data.nextQuestion,
+      remainingCount: response.data.remainingCount || 0,
+      currentStepNum: response.data.currentStepNum || 1,
+      totalFixedSteps: response.data.totalFixedSteps || 3,
+      isDynamicPhase: response.data.isDynamicPhase || false,
+      message: response.data.message
     };
   },
 
-  fetchHistory: async (): Promise<{ hasHistory: boolean; answers?: any; recommendedPackages?: Package[]; isEarlyTerminated?: boolean }> => {
-    const response = await axiosInstance.get<{ success: boolean; hasHistory: boolean; answers?: any; recommendedPackages?: any[]; isEarlyTerminated?: boolean }>('/api/survey/history');
+  submitAnswers: async (answers: any): Promise<{ isCompleted: boolean; answers: any; packages: Package[]; nextQuestion: any; remainingCount: number; currentStepNum?: number; totalFixedSteps?: number; isDynamicPhase?: boolean; message?: string }> => {
+    const response = await axiosInstance.post<any>('/api/survey', { answers });
+    return {
+      isCompleted: response.data.isCompleted,
+      answers: response.data.answers || answers,
+      packages: (response.data.packages || []).map(toVietnamesePackage),
+      nextQuestion: response.data.nextQuestion,
+      remainingCount: response.data.remainingCount || 0,
+      currentStepNum: response.data.currentStepNum || 1,
+      totalFixedSteps: response.data.totalFixedSteps || 3,
+      isDynamicPhase: response.data.isDynamicPhase || false,
+      message: response.data.message
+    };
+  },
+
+  fetchHistory: async (): Promise<{ hasHistory: boolean; answers?: any; packages?: Package[]; isCompleted?: boolean; message?: string }> => {
+    const response = await axiosInstance.get<any>('/api/survey/history');
     return {
       hasHistory: response.data.hasHistory,
       answers: response.data.answers,
-      recommendedPackages: response.data.recommendedPackages
-        ? response.data.recommendedPackages.map(toVietnamesePackage)
-        : undefined,
-      isEarlyTerminated: response.data.isEarlyTerminated
+      packages: response.data.packages ? response.data.packages.map(toVietnamesePackage) : undefined,
+      isCompleted: response.data.isCompleted,
+      message: response.data.message
     };
   },
 

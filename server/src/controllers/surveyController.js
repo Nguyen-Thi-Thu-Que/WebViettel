@@ -1,11 +1,10 @@
 const surveyService = require('../services/surveyService');
-const { mapToEnglish } = require('./packageController');
 
 module.exports = {
   getConfig: async (req, res, next) => {
     try {
       const answersStr = req.query.answers;
-      let answers = null;
+      let answers = {};
       if (answersStr) {
         try {
           answers = JSON.parse(answersStr);
@@ -13,10 +12,10 @@ module.exports = {
           // Bỏ qua lỗi phân tích JSON
         }
       }
-      const config = await surveyService.getSurveyConfig(answers, req.user);
+      const result = await surveyService.evaluateState(req.user, answers);
       res.status(200).json({
         success: true,
-        config
+        ...result
       });
     } catch (error) {
       next(error);
@@ -28,22 +27,19 @@ module.exports = {
       const userId = req.user ? req.user.user_id : null;
       const { answers } = req.body;
 
-      if (!answers) {
-        return res.status(400).json({
-          success: false,
-          message: 'Thiếu câu trả lời khảo sát.'
-        });
-      }
-
-      // Xử lý gửi câu trả lời và chạy so khớp gói cước bằng service chung
-      const result = await surveyService.submitSurveyAnswers(userId, answers);
+      const result = await surveyService.submitSurveyAnswers(userId, answers || {});
 
       res.status(200).json({
         success: true,
-        message: 'Khảo sát hoàn tất thành công!',
-        answers: result.surveyHistory.answers,
-        recommendedPackages: result.packages,
-        isEarlyTerminated: result.surveyHistory.isEarlyTerminated || false
+        isCompleted: result.isCompleted,
+        message: result.message,
+        answers: answers || {},
+        packages: result.packages || [],
+        nextQuestion: result.nextQuestion || null,
+        remainingCount: result.remainingCount || 0,
+        currentStepNum: result.currentStepNum || 1,
+        totalFixedSteps: result.totalFixedSteps || 3,
+        isDynamicPhase: result.isDynamicPhase || false
       });
     } catch (error) {
       next(error);
@@ -70,9 +66,11 @@ module.exports = {
       res.status(200).json({
         success: true,
         hasHistory: true,
+        isCompleted: true,
+        message: 'Lịch sử khảo sát trước đây',
         answers: result.history.answers,
-        recommendedPackages: result.packages,
-        isEarlyTerminated: result.history.isEarlyTerminated || false
+        packages: result.packages || [],
+        remainingCount: (result.packages || []).length
       });
     } catch (error) {
       next(error);
@@ -104,3 +102,4 @@ module.exports = {
     }
   }
 };
+

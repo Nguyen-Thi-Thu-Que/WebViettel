@@ -8,7 +8,7 @@ const { canViewPackage } = require('../utils/permission');
 const { mapToEnglish } = require('../controllers/packageController');
 
 /**
- * Các hàm tiện ích hỗ trợ suy luận đặc trưng gói cước một lần (sync)
+ * Tiện ích kiểm tra thông số gói cước thực tế từ CSDL
  */
 function hasRealData(pkg) {
   if (!pkg.data_theo_ngay) return false;
@@ -51,12 +51,14 @@ function checkKeyword(pkg, keyword) {
     (pkg.tien_ich_free && regex.test(pkg.tien_ich_free)) ||
     (pkg.uudaitrong && regex.test(pkg.uudaitrong)) ||
     (pkg.dieu_kien_dang_ky && regex.test(pkg.dieu_kien_dang_ky)) ||
-    (pkg.ten && regex.test(pkg.ten))
+    (pkg.ten && regex.test(pkg.ten)) ||
+    (pkg.noi_dung_ngoai && regex.test(pkg.noi_dung_ngoai)) ||
+    (pkg.tienich && regex.test(pkg.tienich))
   );
 }
 
 /**
- * Đồng bộ hóa dữ liệu từ goi_cuoc sang package_features
+ * Đồng bộ hóa dữ liệu gói cước sang bảng PackageFeature
  */
 async function syncPackageFeatures() {
   const packages = await Package.find();
@@ -75,7 +77,7 @@ async function syncPackageFeatures() {
     
     const isCombo = pkg.phan_loai_goi === 'Combo' || pkg.service_group === 'COMBO' || (hasData && hasVoice);
     const isDataOnly = hasData && !hasVoice;
-    const isSocial = ['YOUTUBE', 'TIKTOK', 'FACEBOOK', 'MOVIE', 'SOCIAL'].includes(pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '') || pkg.phan_loai_goi === 'Social';
+    const isSocial = ['YOUTUBE', 'TIKTOK', 'FACEBOOK', 'MOVIE', 'SOCIAL'].includes(pkg.benefit_group ? pkg.benefit_group.toUpperCase() : '') || pkg.phan_loai_goi === 'Social' || pkg.phan_loai_goi === 'MXH';
     const isAddon = pkg.is_addon === true || pkg.requires_base_package === true;
     
     const cycleDays = parseInt(pkg.chu_ky_ngay) || 30;
@@ -122,14 +124,6 @@ async function syncPackageFeatures() {
       const smsCount = parseSms(pkg.sms);
       smsLevel = smsCount >= 100 ? 'high' : 'low';
     }
-    
-    const searchableTags = [
-      pkg.phan_khuc_gia,
-      pkg.phan_loai_goi,
-      pkg.loai_mang,
-      pkg.service_group,
-      pkg.benefit_group
-    ].filter(Boolean).map(t => t.toLowerCase());
 
     await PackageFeature.findOneAndUpdate(
       { package_id: pkg.package_id },
@@ -155,321 +149,422 @@ async function syncPackageFeatures() {
         price_level: priceLevel,
         data_level: dataLevel,
         voice_level: voiceLevel,
-        sms_level: smsLevel,
-        searchable_tags: searchableTags
+        sms_level: smsLevel
       },
       { upsert: true, returnDocument: 'after' }
     );
   }
-  console.log(`Successfully synced ${packages.length} packages to package_features.`);
 }
 
 /**
- * Kiểm tra xem gói cước có đáp ứng tùy chọn riêng lẻ (single value) của câu hỏi hay không
+ * QUY TRÌNH 3 BƯỚC CỐ ĐỊNH BAN ĐẦU (FIXED BASE PHASES)
  */
-function matchSingleOption(pkg, field, value) {
-  if (field === 'category') {
-    if (value === 'DATA') return pkg.has_data === true;
-    if (value === 'COMBO') return pkg.is_combo === true;
-    if (value === 'VOICE') return pkg.has_voice === true;
-    if (value === 'SMS') return pkg.has_sms === true;
-    if (value === 'MXH') return pkg.has_social === true || pkg.is_social === true;
-    if (value === 'APP') return pkg.has_tv360 === true || pkg.has_movie === true;
-    if (value === 'ADDON') return pkg.is_addon === true;
-    return true;
+const FIXED_QUESTIONS = {
+  phan_loai_goi: {
+    field: 'phan_loai_goi',
+    title: 'Bước 1: Nhu cầu cốt lõi',
+    description: 'Lựa chọn loại hình dịch vụ di động chính bạn muốn sử dụng',
+    component: 'single-choice',
+    options: [
+      { label: 'Chỉ Data lướt web', value: 'Data', detail: 'Chỉ lướt web, học tập & làm việc di động' },
+      { label: 'Combo (Data + Gọi thoại)', value: 'Combo', detail: 'Tích hợp cả Data dung lượng lớn và phút gọi miễn phí' },
+      { label: 'Mạng xã hội & Tiện ích', value: 'MXH', detail: 'Tập trung ưu đãi cước TikTok, YouTube, Facebook, TV360' }
+    ]
+  },
+  phan_khuc_gia: {
+    field: 'phan_khuc_gia',
+    title: 'Bước 2: Khoảng Ngân Sách',
+    description: 'Lựa chọn mức cước phí hàng tháng phù hợp khả năng tài chính',
+    component: 'single-choice',
+    options: [
+      { label: 'Giá rẻ (Dưới 50.000đ / tháng)', value: 'Gia_re', detail: 'Tiết kiệm chi phí cước hàng tháng tối đa' },
+      { label: 'Trung bình (50.000đ - 150.000đ)', value: 'Trung_binh', detail: 'Phân khúc phổ biến nhất với nhiều ưu đãi hot' },
+      { label: 'Cao cấp (Trên 150.000đ / tháng)', value: 'Cao_cap', detail: 'Nhu cầu cao, Data dung lượng lớn & đàm thoại thả ga' }
+    ]
+  },
+  chu_ky_ngay: {
+    field: 'chu_ky_ngay',
+    title: 'Bước 3: Chu Kỳ Sử Dụng',
+    description: 'Lựa chọn thời hạn chu kỳ cước gói cước bạn mong muốn',
+    component: 'single-choice',
+    options: [
+      { label: 'Dùng theo Ngày/Tuần (<= 15 ngày)', value: 'short', detail: 'Gói cước ngắn hạn khi đi du lịch hoặc công tác' },
+      { label: 'Theo Tháng (30 ngày)', value: 'monthly', detail: 'Chu kỳ cước phổ thông thanh toán từng tháng' },
+      { label: 'Chu kỳ dài (>= 90 ngày)', value: 'long', detail: 'Chu kỳ đa tháng / năm tiết kiệm chi phí gia hạn' }
+    ]
   }
-  if (field === 'dataDemand') {
-    if (value === 'none') return !pkg.has_data;
-    if (value === 'low') return pkg.data_level === 'low';
-    if (value === 'medium') return pkg.data_level === 'medium';
-    if (value === 'high') return pkg.data_level === 'high';
-    if (value === 'unlimited') return pkg.data_level === 'unlimited';
-    return true;
+};
+
+/**
+ * CÁC BƯỚC TỰ SINH ĐỘNG TỪ BƯỚC 4 TRỞ ĐI (DYNAMIC PHASES)
+ */
+const DYNAMIC_QUESTIONS = {
+  tien_ich_free: {
+    field: 'tien_ich_free',
+    title: 'Ứng dụng thường dùng được miễn cước Data 100%',
+    description: 'Lựa chọn ứng dụng bạn sử dụng thường xuyên nhất',
+    component: 'single-choice',
+    options: [
+      { label: 'TikTok', value: 'TikTok', detail: 'Miễn phí 100% cước Data lướt video TikTok' },
+      { label: 'YouTube', value: 'YouTube', detail: 'Miễn phí 100% cước Data xem video YouTube HD' },
+      { label: 'Facebook', value: 'Facebook', detail: 'Miễn phí 100% cước Data Facebook & Messenger' },
+      { label: 'TV360', value: 'TV360', detail: 'Xem phim & truyền hình trực tuyến TV360' }
+    ]
+  },
+  loai_mang: {
+    field: 'loai_mang',
+    title: 'Hạ tầng mạng di động ưu tiên',
+    description: 'Lựa chọn công nghệ mạng ưu tiên cho thiết bị',
+    component: 'single-choice',
+    options: [
+      { label: 'Mạng 4G LTE', value: '4G', detail: 'Tốc độ cao phổ thông toàn quốc' },
+      { label: 'Mạng 5G siêu tốc', value: '5G', detail: 'Tốc độ vượt trội trên hạ tầng 5G Viettel' }
+    ]
+  },
+  free_noi_mang: {
+    field: 'free_noi_mang',
+    title: 'Nhu cầu gọi thoại miễn phí',
+    description: 'Nhu cầu gọi điện liên lạc nội/ngoại mạng của bạn',
+    component: 'single-choice',
+    options: [
+      { label: 'Không cần phút gọi miễn phí', value: 'none', detail: 'Chủ yếu liên lạc online qua các ứng dụng OTT' },
+      { label: 'Cần miễn phí phút gọi thoại', value: 'voice', detail: 'Tần suất đàm thoại liên lạc thoại nhiều' }
+    ]
   }
-  if (field === 'voiceDemand') {
-    if (value === 'none') return !pkg.has_voice;
-    if (value === 'low') return pkg.voice_level === 'low' || pkg.voice_level === 'medium';
-    if (value === 'high') return pkg.voice_level === 'high';
-    return true;
-  }
-  if (field === 'smsDemand') {
-    if (value === 'none') return !pkg.has_sms;
-    if (value === 'sms') return pkg.has_sms;
-    return true;
-  }
-  if (field === 'cycle') {
-    if (value === 'short') return pkg.cycle_days < 15;
-    if (value === 'monthly') return pkg.cycle_days >= 15 && pkg.cycle_days <= 30;
-    if (value === 'long') return pkg.cycle_days > 30 && pkg.cycle_days < 360;
-    if (value === 'yearly') return pkg.cycle_days >= 360;
-    return true;
-  }
-  if (field === 'utilities') {
-    if (value === 'any') return true;
-    if (value === 'none') {
-      return !pkg.has_tiktok && !pkg.has_youtube && !pkg.has_facebook && !pkg.has_tv360 && !pkg.has_movie;
+};
+
+/**
+ * Kiểm tra tiêu chí ánh xạ chính xác với CSDL goi_cuoc
+ */
+function matchPackageCriteria(pkg, feat, field, value) {
+  if (!value) return true;
+
+  if (field === 'phan_loai_goi') {
+    if (value === 'Data') {
+      return pkg.phan_loai_goi === 'Data' || feat.is_data_only || (feat.has_data && !feat.has_voice);
     }
-    if (value === 'TikTok') return pkg.has_tiktok === true;
-    if (value === 'YouTube') return pkg.has_youtube === true;
-    if (value === 'Facebook') return pkg.has_facebook === true;
-    if (value === 'TV360') return pkg.has_tv360 === true;
-    if (value === 'Movie') return pkg.has_movie === true;
+    if (value === 'Combo') {
+      return pkg.phan_loai_goi === 'Combo' || feat.is_combo || hasRealVoice(pkg) || (feat.has_data && feat.has_voice);
+    }
+    if (value === 'MXH') {
+      return pkg.phan_loai_goi === 'Social' || pkg.phan_loai_goi === 'MXH' || (pkg.tien_ich_free && pkg.tien_ich_free !== '0') || feat.is_social || feat.has_social || feat.has_tiktok || feat.has_youtube || feat.has_facebook || feat.has_tv360;
+    }
     return true;
   }
-  if (field === 'budget') {
-    if (value === 'under_50') return pkg.price <= 50000;
-    if (value === '50_100') return pkg.price > 50000 && pkg.price <= 100000;
-    if (value === '100_200') return pkg.price > 100000 && pkg.price <= 200000;
-    if (value === 'above_200') return pkg.price > 200000;
-    if (value === 'any') return true;
+
+  if (field === 'phan_khuc_gia') {
+    const price = pkg.gia;
+    if (value === 'Gia_re') return price <= 50000 || pkg.phan_khuc_gia === 'Gia_re';
+    if (value === 'Trung_binh') return (price > 50000 && price <= 150000) || pkg.phan_khuc_gia === 'Trung_binh';
+    if (value === 'Cao_cap') return price > 150000 || pkg.phan_khuc_gia === 'Cao_cap';
     return true;
   }
+
+  if (field === 'chu_ky_ngay') {
+    const days = parseInt(pkg.chu_ky_ngay) || feat.cycle_days || 30;
+    if (value === 'short') return days <= 15;
+    if (value === 'monthly') return days === 30 || (days > 15 && days <= 30);
+    if (value === 'long') return days >= 90;
+    return true;
+  }
+
+  if (field === 'tien_ich_free') {
+    if (value === 'TikTok') return feat.has_tiktok || checkKeyword(pkg, 'tiktok');
+    if (value === 'YouTube') return feat.has_youtube || checkKeyword(pkg, 'youtube');
+    if (value === 'Facebook') return feat.has_facebook || checkKeyword(pkg, 'facebook');
+    if (value === 'TV360') return feat.has_tv360 || checkKeyword(pkg, 'tv360');
+    return true;
+  }
+
+  if (field === 'loai_mang') {
+    const loai = (pkg.loai_mang || '').toUpperCase();
+    if (value === '5G') return feat.has_5g || loai.includes('5G');
+    if (value === '4G') return !loai.includes('5G') || loai.includes('4G') || loai.includes('LTE');
+    return true;
+  }
+
+  if (field === 'free_noi_mang') {
+    if (value === 'none') return !hasRealVoice(pkg);
+      if (value === 'voice') return hasRealVoice(pkg);
+    return true;
+  }
+
   return true;
 }
 
 /**
- * Kiểm tra xem gói cước có khớp với câu trả lời (có thể là mảng lựa chọn) hay không
+ * Lọc danh sách gói cước thỏa mãn các tiêu chí trong answers
  */
-function matchAnswer(pkg, field, answer) {
-  if (answer === undefined || answer === null) return true;
-  if (Array.isArray(answer)) {
-    if (answer.includes('any')) return true;
-    if (answer.includes('none')) {
-      return !pkg.has_tiktok && !pkg.has_youtube && !pkg.has_facebook && !pkg.has_tv360 && !pkg.has_movie;
-    }
-    for (const val of answer) {
-      if (!matchSingleOption(pkg, field, val)) {
+function filterCurrentPackages(allPackages, allFeaturesMap, answers) {
+  return allPackages.filter(pkg => {
+    const feat = allFeaturesMap[pkg.package_id || pkg.id] || {};
+    for (const [field, value] of Object.entries(answers || {})) {
+      if (value && !matchPackageCriteria(pkg, feat, field, value)) {
         return false;
       }
     }
     return true;
-  }
-  return matchSingleOption(pkg, field, answer);
+  });
 }
 
-function areSubsetsEqual(sub1, sub2) {
-  if (sub1.length !== sub2.length) return false;
-  const ids1 = sub1.map(p => p.package_id).sort();
-  const ids2 = sub2.map(p => p.package_id).sort();
-  for (let i = 0; i < ids1.length; i++) {
-    if (ids1[i] !== ids2[i]) return false;
+function getSmartFallbackPackages(visiblePackages, allFeaturesMap, answers) {
+  const fallbackList = [];
+  const addedIds = new Set();
+
+  const answersNoCycle = { ...answers };
+  delete answersNoCycle.chu_ky_ngay;
+  const matchNoCycle = filterCurrentPackages(visiblePackages, allFeaturesMap, answersNoCycle);
+  matchNoCycle.sort((a, b) => a.gia - b.gia);
+
+  for (const pkg of matchNoCycle) {
+    const id = pkg.package_id || pkg.id;
+    if (!addedIds.has(id)) {
+      const mapped = mapToEnglish(pkg);
+      fallbackList.push(mapped);
+      addedIds.add(id);
+      if (fallbackList.length >= 1) break;
+    }
   }
-  return true;
-}
 
-function getValidQuestionMeta(questionMeta, currentRemaining) {
-  const validOptions = [];
-  const subsets = [];
+  const answersNoPrice = { ...answers };
+  delete answersNoPrice.phan_khuc_gia;
+  const matchNoPrice = filterCurrentPackages(visiblePackages, allFeaturesMap, answersNoPrice);
+  matchNoPrice.sort((a, b) => Math.abs(a.gia - 100000) - Math.abs(b.gia - 100000));
 
-  for (const opt of questionMeta.options) {
-    const matchedPkgs = currentRemaining.filter(pkg => matchSingleOption(pkg, questionMeta.field, opt.value));
-    if (matchedPkgs.length > 0) {
-      // Kiểm tra trùng lặp tập kết quả với các tùy chọn đã duyệt qua
-      const isDuplicate = subsets.some(sub => areSubsetsEqual(sub, matchedPkgs));
-      if (!isDuplicate) {
-        validOptions.push(opt);
-        subsets.push(matchedPkgs);
+  for (const pkg of matchNoPrice) {
+    const id = pkg.package_id || pkg.id;
+    if (!addedIds.has(id)) {
+      const mapped = mapToEnglish(pkg);
+      fallbackList.push(mapped);
+      addedIds.add(id);
+      if (fallbackList.length >= 2) break;
+    }
+  }
+
+  const answersOnlyCat = { phan_loai_goi: answers.phan_loai_goi };
+  const matchCatOnly = filterCurrentPackages(visiblePackages, allFeaturesMap, answersOnlyCat);
+  matchCatOnly.sort((a, b) => a.gia - b.gia);
+
+  for (const pkg of matchCatOnly) {
+    const id = pkg.package_id || pkg.id;
+    if (!addedIds.has(id)) {
+      const mapped = mapToEnglish(pkg);
+      fallbackList.push(mapped);
+      addedIds.add(id);
+      if (fallbackList.length >= 3) break;
+    }
+  }
+
+  if (fallbackList.length < 3) {
+    for (const pkg of visiblePackages) {
+      const id = pkg.package_id || pkg.id;
+      if (!addedIds.has(id)) {
+        const mapped = mapToEnglish(pkg);
+        fallbackList.push(mapped);
+        addedIds.add(id);
+        if (fallbackList.length >= 3) break;
       }
     }
   }
 
-  // Một câu hỏi hợp lệ khi và chỉ khi:
-  // 1. Có từ 2 lựa chọn hợp lệ trở lên (cho ra tập package khác nhau)
-  if (validOptions.length < 2) {
-    return null;
-  }
-
-  // 2. Ít nhất một lựa chọn có khả năng lọc/thu hẹp tập package
-  const canFilter = subsets.some(sub => sub.length < currentRemaining.length);
-  if (!canFilter) {
-    return null;
-  }
-
-  // Tính điểm phân loại (khả năng loại bỏ gói cước trung bình của câu hỏi)
-  let totalRemovedFraction = 0;
-  for (const sub of subsets) {
-    totalRemovedFraction += (currentRemaining.length - sub.length) / currentRemaining.length;
-  }
-  const score = totalRemovedFraction / subsets.length;
-
-  return {
-    questionMeta: {
-      ...questionMeta,
-      options: validOptions.map(opt => ({ ...opt, disabled: false }))
-    },
-    score
-  };
+  return fallbackList.slice(0, 3);
 }
 
-function buildSurveyTree(answers, allFeatures, configMap) {
-  const activeQuestions = [];
-  const unansweredFields = ['category', 'cycle', 'dataDemand', 'voiceDemand', 'smsDemand', 'utilities', 'budget'];
-  let currentRemaining = [...allFeatures];
-  let isEarlyTerminated = false;
+/**
+ * TỰ SINH BƯỚC ĐỘNG TỪ BƯỚC 4 (ĐẢM BẢO KHÔNG LẶP LẠI TRƯỜNG ĐÃ HỎI)
+ */
+function generateNextDynamicQuestion(currentPackages, allFeaturesMap, answeredFields) {
+  const dynamicCandidateKeys = ['tien_ich_free', 'loai_mang', 'free_noi_mang'];
+  const unansweredKeys = dynamicCandidateKeys.filter(k => !answeredFields.includes(k));
 
-  // 1. Câu hỏi đầu tiên luôn là Nhu cầu chính (category)
-  const categoryMeta = configMap['category'];
-  if (categoryMeta) {
-    const validQ = getValidQuestionMeta(categoryMeta, currentRemaining);
-    if (validQ) {
-      activeQuestions.push(validQ.questionMeta);
-    }
-  }
+  let bestQuestion = null;
+  let bestScore = -1;
 
-  const categoryAns = answers && answers.category;
-  if (!categoryAns) {
-    return { activeQuestions, remainingPackages: currentRemaining, isEarlyTerminated: false };
-  }
+  for (const key of unansweredKeys) {
+    const def = DYNAMIC_QUESTIONS[key];
+    if (!def) continue;
 
-  // Áp dụng lựa chọn category
-  currentRemaining = currentRemaining.filter(pkg => matchAnswer(pkg, 'category', categoryAns));
-  const catIdx = unansweredFields.indexOf('category');
-  if (catIdx > -1) unansweredFields.splice(catIdx, 1);
+    const validOptions = [];
+    const optionCounts = [];
 
-  // 2. Vòng lặp sinh động các câu hỏi tiếp theo dựa trên Decision Tree
-  while (unansweredFields.length > 0) {
-    if (currentRemaining.length <= 4) {
-      isEarlyTerminated = true;
-      break;
-    }
+    for (const opt of def.options) {
+      const matched = currentPackages.filter(pkg => {
+        const feat = allFeaturesMap[pkg.package_id || pkg.id] || {};
+        return matchPackageCriteria(pkg, feat, key, opt.value);
+      });
 
-    const candidates = [];
-    for (const field of unansweredFields) {
-      const qMeta = configMap[field];
-      if (!qMeta) continue;
-
-      const validQ = getValidQuestionMeta(qMeta, currentRemaining);
-      if (validQ) {
-        candidates.push({
-          field,
-          questionMeta: validQ.questionMeta,
-          score: validQ.score
+      if (matched.length > 0) {
+        validOptions.push({
+          ...opt,
+          count: matched.length,
+          detail: `${opt.detail} (${matched.length} gói cước)`
         });
+        optionCounts.push(matched.length);
       }
     }
 
-    if (candidates.length === 0) {
-      // Dừng do không còn câu hỏi nào có khả năng phân loại thêm
-      isEarlyTerminated = true;
-      break;
-    }
+    if (validOptions.length >= 2) {
+      let totalEliminated = 0;
+      for (const count of optionCounts) {
+        totalEliminated += (currentPackages.length - count);
+      }
+      const score = totalEliminated / optionCounts.length;
 
-    // Sắp xếp theo thứ tự ưu tiên: câu hỏi lọc được nhiều package nhất lên trước
-    candidates.sort((a, b) => b.score - a.score);
-
-    const best = candidates[0];
-    const userAns = answers && answers[best.field];
-
-    if (userAns !== undefined && userAns !== null && userAns !== '' && (!Array.isArray(userAns) || userAns.length > 0)) {
-      // Câu hỏi này đã được trả lời
-      activeQuestions.push(best.questionMeta);
-
-      // Áp dụng bộ lọc của câu trả lời
-      currentRemaining = currentRemaining.filter(pkg => matchAnswer(pkg, best.field, userAns));
-
-      // Loại ra khỏi danh sách chưa trả lời
-      const idx = unansweredFields.indexOf(best.field);
-      if (idx > -1) unansweredFields.splice(idx, 1);
-    } else {
-      // Câu hỏi tốt nhất tiếp theo chưa trả lời -> Add vào wizard list và DỪNG để chờ user chọn
-      activeQuestions.push(best.questionMeta);
-      break;
+      if (score > bestScore) {
+        bestScore = score;
+        bestQuestion = {
+          ...def,
+          options: validOptions
+        };
+      }
     }
   }
 
-  return {
-    activeQuestions,
-    remainingPackages: currentRemaining,
-    isEarlyTerminated
-  };
+  return bestQuestion;
 }
 
 const surveyService = {
-  getSurveyConfig: async (answers = null, user = null) => {
+  /**
+   * Hybrid Adaptive Decision Tree Engine + Immediate Early Exit at Every Step
+   */
+  evaluateState: async (user, answers = {}) => {
     const allPackages = await getPackageContext();
     const visiblePackages = allPackages.filter(pkg => {
       const mapped = mapToEnglish(pkg);
       return canViewPackage(user, mapped);
     });
+
     const visibleIds = visiblePackages.map(pkg => pkg.package_id || pkg.id);
-    const allFeatures = await PackageFeature.find({ package_id: { $in: visibleIds } });
+    const featuresList = await PackageFeature.find({ package_id: { $in: visibleIds } });
 
-    const activeAnswers = answers || {};
+    const allFeaturesMap = {};
+    featuresList.forEach(feat => {
+      allFeaturesMap[feat.package_id] = feat;
+    });
 
-    const rawConfigs = await SurveyConfig.find().sort({ order: 1 });
-    const configMap = {};
-    for (const conf of rawConfigs) {
-      configMap[conf.field] = conf.toObject();
+    const answeredFields = Object.keys(answers).filter(k => answers[k] !== undefined && answers[k] !== null && answers[k] !== '');
+    const currentPackages = filterCurrentPackages(visiblePackages, allFeaturesMap, answers);
+    currentPackages.sort((a, b) => a.gia - b.gia);
+
+    // KÍCH HOẠT KIỂM TRA DỪNG SỚM / SMART FALLBACK TỨC THÌ
+    if (answeredFields.length > 0) {
+      if (currentPackages.length === 0) {
+        const fallbackPkgs = getSmartFallbackPackages(visiblePackages, allFeaturesMap, answers);
+        return {
+          isCompleted: true,
+          status: 'SMART_FALLBACK',
+          message: 'Không có gói cước thỏa mãn 100% tất cả tiêu chí. Hệ thống đã tự động chọn các gói cước gần nhất với nhu cầu.',
+          packages: fallbackPkgs,
+          nextQuestion: null,
+          remainingCount: fallbackPkgs.length,
+          currentStepNum: answeredFields.length
+        };
+      }
+
+      if (currentPackages.length <= 3) {
+        const mappedPkgs = currentPackages.map(pkg => mapToEnglish(pkg));
+
+        return {
+          isCompleted: true,
+          status: 'EXACT_MATCH',
+          message: `⚡ Đã khoanh vùng được ${currentPackages.length} gói cước phù hợp nhất!`,
+          packages: mappedPkgs,
+          nextQuestion: null,
+          remainingCount: currentPackages.length,
+          currentStepNum: answeredFields.length
+        };
+      }
     }
 
-    const { activeQuestions } = buildSurveyTree(activeAnswers, allFeatures, configMap);
-    return activeQuestions;
+    if (!answers.phan_loai_goi) {
+      return {
+        isCompleted: false,
+        currentStepNum: 1,
+        totalFixedSteps: 3,
+        isDynamicPhase: false,
+        nextQuestion: FIXED_QUESTIONS.phan_loai_goi,
+        remainingCount: visiblePackages.length,
+        answeredFields: []
+      };
+    }
+
+    if (!answers.phan_khuc_gia) {
+      return {
+        isCompleted: false,
+        currentStepNum: 2,
+        totalFixedSteps: 3,
+        isDynamicPhase: false,
+        nextQuestion: FIXED_QUESTIONS.phan_khuc_gia,
+        remainingCount: currentPackages.length,
+        answeredFields: ['phan_loai_goi']
+      };
+    }
+
+    if (!answers.chu_ky_ngay) {
+      return {
+        isCompleted: false,
+        currentStepNum: 3,
+        totalFixedSteps: 3,
+        isDynamicPhase: false,
+        nextQuestion: FIXED_QUESTIONS.chu_ky_ngay,
+        remainingCount: currentPackages.length,
+        answeredFields: ['phan_loai_goi', 'phan_khuc_gia']
+      };
+    }
+
+    const dynamicNextQuestion = generateNextDynamicQuestion(currentPackages, allFeaturesMap, answeredFields);
+
+    if (!dynamicNextQuestion) {
+      const mappedPkgs = currentPackages.map(pkg => mapToEnglish(pkg));
+
+      return {
+        isCompleted: true,
+        status: 'EXACT_MATCH',
+        message: '✨ Đã hiển thị toàn bộ các gói cước đáp ứng tiêu chí lọc!',
+        packages: mappedPkgs,
+        nextQuestion: null,
+        remainingCount: currentPackages.length,
+        currentStepNum: answeredFields.length
+      };
+    }
+
+    return {
+      isCompleted: false,
+      currentStepNum: answeredFields.length + 1,
+      totalFixedSteps: 3,
+      isDynamicPhase: true,
+      nextQuestion: dynamicNextQuestion,
+      remainingCount: currentPackages.length,
+      answeredFields
+    };
   },
 
   submitSurveyAnswers: async (userId, answers) => {
     const userObj = userId ? await Account.findOne({ user_id: userId }) : null;
-    const allPackages = await getPackageContext();
-    const visiblePackages = allPackages.filter(pkg => {
-      const mapped = mapToEnglish(pkg);
-      return canViewPackage(userObj, mapped);
-    });
-    const visibleIds = visiblePackages.map(pkg => pkg.package_id || pkg.id);
-    const allFeatures = await PackageFeature.find({ package_id: { $in: visibleIds } });
+    const result = await surveyService.evaluateState(userObj, answers);
 
-    const rawConfigs = await SurveyConfig.find().sort({ order: 1 });
-    const configMap = {};
-    for (const conf of rawConfigs) {
-      configMap[conf.field] = conf.toObject();
-    }
-
-    const { remainingPackages, isEarlyTerminated } = buildSurveyTree(answers, allFeatures, configMap);
-
-    remainingPackages.sort((a, b) => a.price - b.price);
-
-    const matchedPackages = [];
-    for (const feat of remainingPackages) {
-      const pkg = await Package.findOne({ package_id: feat.package_id });
-      if (pkg) {
-        matchedPackages.push(pkg);
-      }
-    }
-
-    const mappedPackages = matchedPackages.map(pkg => mapToEnglish(pkg));
-
-    let surveyHistory;
-    if (userId) {
-      surveyHistory = await SurveyHistory.findOneAndUpdate(
-        { userId },
-        {
-          userId,
-          answers,
-          filters: {},
-          recommendedPackages: mappedPackages,
-          deleted: false,
-          deletedAt: null,
-          isEarlyTerminated
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
-    } else {
+    let surveyHistory = null;
+    // CHỈ LƯU VÀO CSDL KHI KHẢO SÁT ĐÃ HOÀN THÀNH KẾT QUẢ (isCompleted === true) VÀ LÀ USER ĐÃ ĐĂNG NHẬP
+    if (result.isCompleted && userId) {
       surveyHistory = await SurveyHistory.create({
+        userId,
         answers,
-        filters: {},
-        recommendedPackages: mappedPackages,
+        filters: { isCompleted: result.isCompleted, remainingCount: result.remainingCount },
+        recommendedPackages: result.packages || [],
         deleted: false,
         deletedAt: null,
-        isEarlyTerminated
+        isEarlyTerminated: result.remainingCount <= 3
       });
     }
 
     return {
-      surveyHistory,
-      packages: mappedPackages
+      ...result,
+      surveyHistory
     };
   },
 
   getSurveyHistory: async (userId) => {
-    const history = await SurveyHistory.findOne({ userId, deleted: { $ne: true } });
+    const history = await SurveyHistory.findOne({ userId, deleted: { $ne: true } }).sort({ createdAt: -1 });
     if (!history) {
       return null;
     }
@@ -480,7 +575,7 @@ const surveyService = {
   },
 
   deleteSurveyHistory: async (userId) => {
-    const result = await SurveyHistory.updateOne(
+    const result = await SurveyHistory.updateMany(
       { userId, deleted: { $ne: true } },
       {
         $set: {
@@ -498,117 +593,6 @@ const surveyService = {
     } catch (err) {
       console.error("Auto-sync package features failed:", err);
     }
-
-    console.log("Seeding default Survey Configurations into database...");
-    await SurveyConfig.deleteMany({});
-
-    const defaultConfigs = [
-      {
-        title: "Nhu cầu chính",
-        description: "Lựa chọn loại dịch vụ phù hợp với nhu cầu chính của bạn",
-        field: "category",
-        component: "single-choice",
-        order: 1,
-        multiple: false,
-        options: [
-          { label: "Gói cước chỉ có Data di động", value: "DATA", detail: "Chỉ lướt web, không cần gọi thoại miễn phí" },
-          { label: "Gói cước Combo (Cả Data và Thoại)", value: "COMBO", detail: "Combo đầy đủ data dung lượng cao và thoại miễn phí" },
-          { label: "Gói cước chuyên đàm thoại", value: "VOICE", detail: "Chỉ đàm thoại, không có dung lượng data" },
-          { label: "Gói cước tin nhắn SMS", value: "SMS", detail: "Chuyên gửi tin nhắn SMS truyền thống" },
-          { label: "Gói cước chuyên biệt Mạng xã hội", value: "MXH", detail: "Tập trung truy cập Facebook, TikTok, YouTube" },
-          { label: "Gói cước Tiện ích / Ứng dụng", value: "APP", detail: "Xem truyền hình TV360, xem phim giải trí" },
-          { label: "Gói cước mua thêm (Add-on)", value: "ADDON", detail: "Gói cước mua thêm song song với gói chính" }
-        ]
-      },
-      {
-        title: "Dung lượng Data",
-        description: "Nhu cầu truy cập Internet, lướt web hàng ngày của bạn",
-        field: "dataDemand",
-        component: "single-choice",
-        order: 2,
-        multiple: false,
-        options: [
-          { label: "Không dùng Data di động", value: "none", detail: "Chỉ dùng Wi-Fi ở nhà hoặc nơi làm việc" },
-          { label: "Dùng ít (Dưới 1 GB/ngày)", value: "low", detail: "Chỉ đọc tin nhắn, tin tức cơ bản khi ra ngoài" },
-          { label: "Trung bình (1 - 3 GB/ngày)", value: "medium", detail: "Lướt web, nghe nhạc, mạng xã hội liên tục" },
-          { label: "Nhiều (Từ 3 - 5 GB/ngày)", value: "high", detail: "Xem video HD, livestream, làm việc di động nhiều" },
-          { label: "Không giới hạn dung lượng", value: "unlimited", detail: "Tốc độ cao nhất để chơi game, download lớn" }
-        ]
-      },
-      {
-        title: "Chu kỳ sử dụng",
-        description: "Thời gian chu kỳ cước gói cước bạn mong muốn",
-        field: "cycle",
-        component: "single-choice",
-        order: 3,
-        multiple: false,
-        options: [
-          { label: "Sử dụng ngắn hạn (Gói ngày/tuần)", value: "short", detail: "Chu kỳ cước dưới 15 ngày" },
-          { label: "Sử dụng tháng (30 ngày)", value: "monthly", detail: "Chu kỳ cước phổ thông 30 ngày" },
-          { label: "Sử dụng dài hạn (3 - 6 tháng)", value: "long", detail: "Chu kỳ cước từ 90 đến 180 ngày" },
-          { label: "Sử dụng chu kỳ năm (12 tháng)", value: "yearly", detail: "Tiết kiệm chi phí, không lo quên nạp tiền gia hạn" }
-        ]
-      },
-      {
-        title: "Gọi thoại miễn phí",
-        description: "Nhu cầu đàm thoại, gọi điện nội/ngoại mạng của bạn",
-        field: "voiceDemand",
-        component: "single-choice",
-        order: 4,
-        multiple: false,
-        options: [
-          { label: "Không gọi nhiều", value: "none", detail: "Chủ yếu liên lạc online qua MXH" },
-          { label: "Gọi ít (Dưới 500 phút)", value: "low", detail: "Liên hệ ngắn công việc hoặc gia đình" },
-          { label: "Gọi nhiều (Trên 1000 phút)", value: "high", detail: "Tần suất gọi cao, bán hàng, CSKH" }
-        ]
-      },
-      {
-        title: "Ưu đãi tin nhắn SMS",
-        description: "Nhu cầu sử dụng tin nhắn SMS nội mạng và ngoại mạng",
-        field: "smsDemand",
-        component: "single-choice",
-        order: 5,
-        multiple: false,
-        options: [
-          { label: "Không cần nhắn tin SMS", value: "none", detail: "Chủ yếu liên lạc qua ứng dụng OTT" },
-          { label: "Cần miễn phí nhắn tin SMS", value: "sms", detail: "Thường xuyên gửi tin nhắn SMS truyền thống" }
-        ]
-      },
-      {
-        title: "Mạng xã hội và Tiện ích miễn phí",
-        description: "Lựa chọn các ứng dụng bạn muốn được miễn cước data 100%",
-        field: "utilities",
-        component: "multi-choice",
-        order: 6,
-        multiple: true,
-        options: [
-          { label: "TikTok", value: "TikTok", detail: "Miễn phí 100% dung lượng TikTok" },
-          { label: "YouTube", value: "YouTube", detail: "Miễn phí 100% dung lượng YouTube" },
-          { label: "Facebook", value: "Facebook", detail: "Miễn phí 100% dung lượng Facebook" },
-          { label: "TV360", value: "TV360", detail: "Xem TV di động trực tuyến trên TV360" },
-          { label: "Xem phim giải trí", value: "Movie", detail: "Truy cập các ứng dụng xem phim giải trí" },
-          { label: "Tiện ích nào cũng được", value: "any", detail: "Không giới hạn lựa chọn các tiện ích" },
-          { label: "Không có nhu cầu tiện ích", value: "none", detail: "Ưu tiên các gói không kèm tiện ích để tối ưu chi phí" }
-        ]
-      },
-      {
-        title: "Ngân sách cước phí",
-        description: "Mức chi phí tối đa bạn muốn bỏ ra hàng tháng",
-        field: "budget",
-        component: "single-choice",
-        order: 7,
-        multiple: false,
-        options: [
-          { label: "Dưới 50.000đ / tháng", value: "under_50", detail: "Nhu cầu nghe gọi hoặc data cơ bản" },
-          { label: "Từ 50.000đ - 100.000đ / tháng", value: "50_100", detail: "Tiết kiệm, có lướt web & mạng xã hội" },
-          { label: "Từ 100.000đ - 200.000đ / tháng", value: "100_200", detail: "Combo thoại thoải mái và dung lượng lớn" },
-          { label: "Trên 200.000đ / tháng", value: "above_200", detail: "Nhu cầu đàm thoại VIP và không giới hạn" },
-          { label: "Mức ngân sách nào cũng được", value: "any", detail: "Đặt hiệu năng và dung lượng lên hàng đầu" }
-        ]
-      }
-    ];
-
-    await SurveyConfig.insertMany(defaultConfigs);
     console.log("Successfully seeded default Survey Configurations.");
   }
 };
