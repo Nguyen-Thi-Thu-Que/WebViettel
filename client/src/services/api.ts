@@ -512,7 +512,7 @@ export const compareApi = {
 
 // 9. Contact APIs
 export const contactApi = {
-  createContact: async (contactData: { full_name: string; phone: string; message: string }): Promise<{ success: boolean; message: string; data: Contact }> => {
+  createContact: async (contactData: { full_name: string; phone: string; message: string; topic?: string }): Promise<{ success: boolean; message: string; data: Contact }> => {
     const response = await axiosInstance.post<{ success: boolean; message: string; data: Contact }>('/api/contact', contactData);
     return response.data;
   },
