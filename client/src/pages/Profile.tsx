@@ -212,19 +212,13 @@ export default function Profile() {
 
   const handlePresetSelect = (presetVal: number) => {
     setSelectedPreset(presetVal);
-    setCustomAmountStr(presetVal.toLocaleString('vi-VN') + ' VNĐ');
+    setCustomAmountStr(String(presetVal));
   };
 
   const handleCustomAmountInput = (val: string) => {
     const numericString = val.replace(/\D/g, '');
-    if (!numericString) {
-      setCustomAmountStr('');
-      setSelectedPreset(null);
-      return;
-    }
-    const parsedNum = parseInt(numericString, 10);
     setSelectedPreset(null);
-    setCustomAmountStr(parsedNum.toLocaleString('vi-VN') + ' VNĐ');
+    setCustomAmountStr(numericString);
   };
 
   const getSummaryAmount = () => {
@@ -234,7 +228,7 @@ export default function Profile() {
     if (!customAmountStr) {
       return '0 VNĐ';
     }
-    return customAmountStr;
+    return Number(customAmountStr).toLocaleString('vi-VN') + ' VNĐ';
   };
 
   const handleBlockchainDeposit = async () => {
@@ -242,10 +236,7 @@ export default function Profile() {
     if (selectedPreset !== null) {
       vndAmount = selectedPreset;
     } else if (customAmountStr) {
-      const numStr = customAmountStr.replace(/\D/g, '');
-      if (numStr) {
-        vndAmount = parseInt(numStr, 10);
-      }
+      vndAmount = parseInt(customAmountStr, 10) || 0;
     }
 
     if (vndAmount < 10000) {
@@ -836,13 +827,18 @@ export default function Profile() {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Số tiền muốn nạp
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Nhập số tiền..."
-                    value={customAmountStr}
-                    onChange={(e) => handleCustomAmountInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus font-bold"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder="Nhập số tiền..."
+                      value={customAmountStr ? Number(customAmountStr).toLocaleString('vi-VN') : ''}
+                      onChange={(e) => handleCustomAmountInput(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-primary/50 focus:bg-white rounded-xl py-2.5 pl-3.5 pr-14 text-xs text-slate-700 focus:outline-none transition-colors input-premium-focus font-bold"
+                    />
+                    <span className="absolute right-4 text-slate-500 font-bold text-xs pointer-events-none select-none">
+                      VNĐ
+                    </span>
+                  </div>
                 </div>
 
                 {/* 6. Tóm tắt giao dịch & 7. Nút thanh toán */}
