@@ -81,8 +81,8 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto border-t border-slate-200 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between text-[11px] text-slate-400">
         <p>© 2026 Tổng Công ty Viễn thông Viettel.</p>
         <div className="flex space-x-4 mt-2 md:mt-0">
-          <a href="#" className="hover:text-slate-700">Điều khoản sử dụng</a>
-          <a href="#" className="hover:text-slate-700">Chính sách bảo mật</a>
+          <Link to="/terms" className="hover:text-slate-700">Điều khoản sử dụng</Link>
+          <Link to="/privacy" className="hover:text-slate-700">Chính sách bảo mật</Link>
         </div>
       </div>
     </footer>
