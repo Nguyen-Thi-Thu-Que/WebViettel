@@ -18,7 +18,9 @@ const depositSchema = new mongoose.Schema({
   fiat_equivalent: { type: mongoose.Schema.Types.Decimal128 },
   tx_hash: { type: String },
 
-  created_at: { type: String, default: () => new Date().toISOString() }
+  created_at: { type: String, default: () => new Date().toISOString() },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null }
 }, {
   collection: 'deposits',
   timestamps: false

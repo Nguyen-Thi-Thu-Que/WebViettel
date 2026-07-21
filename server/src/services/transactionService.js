@@ -93,13 +93,14 @@ const transactionService = {
     session.startTransaction();
 
     try {
-      const existingDep = await Deposit.findOne({
+      let existingDep = await Deposit.findOne({
         $or: [
           { txHash: txHash },
           { tx_hash: txHash }
         ]
       }).session(session);
-      if (existingDep) {
+
+      if (existingDep && existingDep.status === 'success') {
         throw new Error('Giao dịch đã được xử lý.');
       }
 
@@ -127,25 +128,33 @@ const transactionService = {
       account.balance += numericAmount;
       await account.save({ session });
 
-      const lastDep = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
-      const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
+      if (existingDep) {
+        existingDep.status = 'success';
+        existingDep.amountVND = numericAmount;
+        existingDep.walletAddress = walletAddress.toLowerCase();
+        existingDep.network = network;
+        await existingDep.save({ session });
+      } else {
+        const lastDep = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
+        const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
 
-      await Deposit.create([{
-        deposit_id: nextId,
-        user_id: userId,
-        amountVND: numericAmount,
-        amountETH: expectedEthAmount.toString(),
-        exchangeRate: exchangeRate,
-        txHash: txHash,
-        walletAddress: walletAddress.toLowerCase(),
-        network: network,
-        status: 'success',
+        await Deposit.create([{
+          deposit_id: nextId,
+          user_id: userId,
+          amountVND: numericAmount,
+          amountETH: expectedEthAmount.toString(),
+          exchangeRate: exchangeRate,
+          txHash: txHash,
+          walletAddress: walletAddress.toLowerCase(),
+          network: network,
+          status: 'success',
 
-        // legacy compatibility
-        amount: numericAmount,
-        fiat_equivalent: numericAmount,
-        tx_hash: txHash
-      }], { session });
+          // legacy compatibility
+          amount: numericAmount,
+          fiat_equivalent: numericAmount,
+          tx_hash: txHash
+        }], { session });
+      }
 
       await session.commitTransaction();
       return {
@@ -157,6 +166,59 @@ const transactionService = {
     } finally {
       session.endSession();
     }
+  },
+
+  createPendingDeposit: async (userId, amount, network, walletAddress, txHash = '') => {
+    const lastDep = await Deposit.findOne().sort({ deposit_id: -1 });
+    const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
+    const exchangeRate = parseFloat(process.env.ETH_EXCHANGE_RATE || '75000000');
+    const numericAmount = Number(amount) || 0;
+    const expectedEthAmount = numericAmount / exchangeRate;
+    const hashToUse = txHash && txHash.trim() ? txHash.trim() : `pending_dep_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    const dep = await Deposit.create({
+      deposit_id: nextId,
+      user_id: userId,
+      amountVND: numericAmount,
+      amountETH: expectedEthAmount.toString(),
+      exchangeRate: exchangeRate,
+      txHash: hashToUse,
+      walletAddress: (walletAddress || '').toLowerCase(),
+      network: network || 'Sepolia',
+      status: 'pending',
+      amount: numericAmount,
+      fiat_equivalent: numericAmount,
+      tx_hash: hashToUse
+    });
+
+    return dep;
+  },
+
+  cancelPendingDeposit: async (userId, depositIdOrHash) => {
+    let query = { user_id: userId, status: 'pending' };
+    if (depositIdOrHash) {
+      if (typeof depositIdOrHash === 'number' || !isNaN(Number(depositIdOrHash))) {
+        query.$or = [{ deposit_id: Number(depositIdOrHash) }, { txHash: String(depositIdOrHash) }];
+      } else {
+        query.$or = [
+          { txHash: depositIdOrHash },
+          { tx_hash: depositIdOrHash },
+          { _id: mongoose.Types.ObjectId.isValid(depositIdOrHash) ? depositIdOrHash : null }
+        ];
+      }
+    }
+
+    let dep = await Deposit.findOne(query).sort({ deposit_id: -1 });
+    if (!dep) {
+      dep = await Deposit.findOne({ user_id: userId, status: 'pending' }).sort({ deposit_id: -1 });
+    }
+
+    if (dep) {
+      dep.status = 'cancelled';
+      await dep.save();
+      return dep;
+    }
+    return null;
   },
 
   // 1. Process Virtual deposit
@@ -309,33 +371,80 @@ const transactionService = {
     return true;
   },
 
-  // 4. Merge deposits & subscriptions into user transactions
+  // 4. Merge deposits & subscriptions into user transactions (Soft-delete aware)
   getTransactionsForUser: async (userId) => {
-    const userDeposits = await Deposit.find({ user_id: userId });
+    const userDeposits = await Deposit.find({ user_id: userId, isDeleted: { $ne: true } });
+    const userSubs = await UserSubscription.find({ userId: userId, isDeleted: { $ne: true } });
+
+    const packages = await Package.find({});
+    const pkgMap = new Map();
+    for (const p of packages) {
+      pkgMap.set(p.package_id, p);
+    }
 
     const txs = [];
 
-    // Map deposits
+    // Map deposits (Cộng tiền)
     for (const dep of userDeposits) {
+      const amt = dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0') || dep.amount || 0;
       txs.push({
-        id: `tx_dep_${dep.deposit_id}`,
+        id: `tx_dep_${dep.deposit_id || dep._id}`,
         userId: String(dep.user_id),
         type: 'deposit',
-        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
+        direction: 'PLUS',
+        amount: amt,
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
-        createdAt: dep.created_at || new Date().toISOString(),
+        createdAt: dep.created_at || (dep._id ? dep._id.getTimestamp().toISOString() : new Date().toISOString()),
         txHash: dep.txHash || dep.tx_hash || '',
         walletAddress: dep.walletAddress || '',
         exchangeRate: dep.exchangeRate || null,
         network: dep.network || '',
-        amountETH: dep.amountETH || ''
+        amountETH: dep.amountETH || '',
+        description: dep.txHash && dep.txHash.startsWith('0x') ? `Nạp tiền MetaMask (${dep.network || 'Sepolia'})` : 'Nạp tiền vào tài khoản'
+      });
+    }
+
+    // Map subscriptions (Trừ tiền: Mua gói / Gia hạn)
+    for (const sub of userSubs) {
+      const pkg = pkgMap.get(sub.packageId);
+      const pkgName = pkg ? (pkg.ten || pkg.ma_goi) : `Gói cước ID ${sub.packageId}`;
+      const pkgCode = pkg ? (pkg.ma_goi || pkg.ten) : `PKG_${sub.packageId}`;
+      const pkgPrice = pkg ? (pkg.gia || 0) : 0;
+      const subTime = sub.activatedAt || sub.registeredAt || sub.createdAt || new Date();
+
+      txs.push({
+        id: `tx_sub_${sub._id}`,
+        userId: String(sub.userId),
+        type: 'purchase',
+        direction: 'MINUS',
+        amount: pkgPrice,
+        packageName: pkgName,
+        paymentMethod: 'Số dư tài khoản',
+        status: sub.status === 'CANCELLED' ? 'cancelled' : 'success',
+        createdAt: typeof subTime === 'string' ? subTime : new Date(subTime).toISOString(),
+        txHash: pkgCode.toUpperCase(),
+        description: `Thanh toán gói cước ${pkgName} (${pkgCode.toUpperCase()})`
       });
     }
 
     // Sort by Date descending
     txs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return txs;
+  },
+
+  // Soft delete all transaction records for user
+  clearAllTransactions: async (userId) => {
+    const now = new Date();
+    await Deposit.updateMany(
+      { user_id: userId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, deletedAt: now } }
+    );
+    await UserSubscription.updateMany(
+      { userId: userId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, deletedAt: now } }
+    );
+    return true;
   },
 
   // 5. Statistics for Admin Dashboard

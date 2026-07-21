@@ -75,9 +75,24 @@ export default function DevTimeWidget() {
     fetchVirtualTime();
   }, []);
 
-  const triggerAppRefresh = () => {
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
+  const triggerAppRefresh = (updatedBalance?: number) => {
     useAuthStore.getState().fetchActiveSubscriptions().catch(() => {});
     useAuthStore.getState().fetchSubscriptionHistory().catch(() => {});
+    useAuthStore.getState().fetchMe().catch(() => {});
+    if (updatedBalance !== undefined) {
+      useAuthStore.setState((state) => ({
+        currentUser: state.currentUser ? { ...state.currentUser, balance: updatedBalance } : null
+      }));
+    }
     window.dispatchEvent(new CustomEvent('virtualTimeChanged'));
   };
 
@@ -89,7 +104,7 @@ export default function DevTimeWidget() {
       const isoString = new Date(inputVal).toISOString();
       const response = await fetch('/api/subscriptions/dev/set-virtual-time', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ customTime: isoString })
       });
       const data = await response.json();
@@ -97,7 +112,7 @@ export default function DevTimeWidget() {
         setVirtualTime(data.virtualTime);
         setIsCustom(data.isCustom);
         setMessage({ type: 'success', text: 'Đã áp dụng mốc giờ ảo mới!' });
-        triggerAppRefresh();
+        triggerAppRefresh(data.updatedBalance);
       } else {
         setMessage({ type: 'error', text: data.message || 'Cập nhật thất bại' });
       }
@@ -114,7 +129,7 @@ export default function DevTimeWidget() {
     try {
       const response = await fetch('/api/subscriptions/dev/set-virtual-time', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ days })
       });
       const data = await response.json();
@@ -123,7 +138,7 @@ export default function DevTimeWidget() {
         setIsCustom(data.isCustom);
         setInputVal(formatForInput(data.virtualTime));
         setMessage({ type: 'success', text: `Đã tua nhanh +${days} ngày!` });
-        triggerAppRefresh();
+        triggerAppRefresh(data.updatedBalance);
       } else {
         setMessage({ type: 'error', text: data.message || 'Tua nhanh thất bại' });
       }
@@ -140,7 +155,7 @@ export default function DevTimeWidget() {
     try {
       const response = await fetch('/api/subscriptions/dev/reset-virtual-time', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: getAuthHeaders(),
       });
       const data = await response.json();
       if (data.success) {
@@ -148,7 +163,7 @@ export default function DevTimeWidget() {
         setIsCustom(false);
         setInputVal(formatForInput(data.virtualTime));
         setMessage({ type: 'success', text: 'Đã khôi phục thời gian thực!' });
-        triggerAppRefresh();
+        triggerAppRefresh(data.updatedBalance);
       } else {
         setMessage({ type: 'error', text: data.message || 'Khôi phục thất bại' });
       }

@@ -64,17 +64,19 @@ export interface User {
 export interface Transaction {
   id: string;
   userId: string;
-  type: 'deposit' | 'subscribe';
+  type: 'deposit' | 'subscribe' | 'purchase' | string;
+  direction?: 'PLUS' | 'MINUS';
   amount: number;
   packageName?: string;
   paymentMethod?: string; // e.g. "VietQR", "Momo", "ATM Card"
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed' | 'cancelled' | string;
   createdAt: string;
   txHash?: string;
   walletAddress?: string;
   exchangeRate?: number;
   network?: string;
   amountETH?: string;
+  description?: string;
 }
 
 export interface FAQ {

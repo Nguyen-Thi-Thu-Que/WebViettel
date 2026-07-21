@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ethers } from 'ethers';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { User, CreditCard, History, Check, Eye, EyeOff, Copy, ExternalLink, Clock, KeyRound, RotateCcw } from 'lucide-react';
+import { User, CreditCard, History, Check, Eye, EyeOff, Copy, ExternalLink, Clock, KeyRound, RotateCcw, X } from 'lucide-react';
 import { useAuthStore } from '../store';
 import SEO from '../components/SEO';
 import { useWeb3 } from '../hooks/useWeb3';
@@ -71,6 +71,7 @@ export default function Profile() {
     currentUser,
     authChecked,
     transactions,
+    fetchTransactions,
     updateProfile,
     changePassword,
     depositBlockchain,
@@ -78,7 +79,10 @@ export default function Profile() {
     subscriptionHistory,
     cancelSubscription,
     toggleAutoRenew,
-    clearSubscriptionHistory
+    clearSubscriptionHistory,
+    clearTransactionsHistory,
+    createPendingDeposit,
+    cancelPendingDeposit
   } = useAuthStore();
 
   const getActiveTab = () => {
@@ -125,6 +129,59 @@ export default function Profile() {
   const [selectedRegisterPkg, setSelectedRegisterPkg] = useState<Package | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [historyStatusFilter, setHistoryStatusFilter] = useState<'ALL' | 'CANCELLED' | 'EXPIRED' | 'REPLACED'>('ALL');
+
+  // Transaction History Filter & Soft Delete States
+  const [txFilter, setTxFilter] = useState<'all' | 'deposit' | 'purchase' | 'cancelled'>('all');
+  const [showClearTxModal, setShowClearTxModal] = useState(false);
+  const [isClearingTx, setIsClearingTx] = useState(false);
+
+  const handleConfirmClearTxHistory = async () => {
+    setIsClearingTx(true);
+    try {
+      const success = await clearTransactionsHistory();
+      if (success) {
+        showToast('success', 'Xóa tất cả lịch sử giao dịch thành công.');
+        await fetchTransactions().catch(() => {});
+      } else {
+        showToast('error', 'Xóa lịch sử giao dịch thất bại.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', 'Xóa lịch sử giao dịch thất bại.');
+    } finally {
+      setIsClearingTx(false);
+      setShowClearTxModal(false);
+    }
+  };
+
+  const handleCancelPendingTransaction = async (tx: Transaction) => {
+    try {
+      const success = await cancelPendingDeposit(tx.id, tx.txHash);
+      if (success) {
+        showToast('success', 'Đã hủy lệnh nạp tiền thành công.');
+        await fetchTransactions().catch(() => {});
+      } else {
+        showToast('error', 'Hủy lệnh nạp tiền thất bại.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Hủy lệnh nạp tiền thất bại.');
+    }
+  };
+
+  const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
+    if (txFilter === 'cancelled') {
+      return transactions.filter(t => t.status === 'cancelled' || t.status === 'failed');
+    }
+    const activeOrPending = transactions.filter(t => t.status !== 'cancelled' && t.status !== 'failed');
+    if (txFilter === 'deposit') {
+      return activeOrPending.filter(t => t.type === 'deposit' || t.direction === 'PLUS');
+    }
+    if (txFilter === 'purchase') {
+      return activeOrPending.filter(t => t.type === 'purchase' || t.type === 'subscribe' || t.direction === 'MINUS');
+    }
+    return activeOrPending;
+  }, [transactions, txFilter]);
 
   const handleReRegisterClick = async (sub: any) => {
     try {
@@ -285,6 +342,7 @@ export default function Profile() {
     }
 
     setIsDepositing(true);
+    await createPendingDeposit(vndAmount, 'Sepolia', walletAddress).catch(() => {});
     try {
       const config = getBlockchainConfig();
       const provider = new ethers.BrowserProvider((window as any).ethereum);
@@ -381,6 +439,7 @@ export default function Profile() {
       }
     } catch (err: any) {
       console.error('Deposit error:', err);
+      await cancelPendingDeposit().catch(() => {});
       if (err.code === 4001 || err.message?.includes('rejected') || err.message?.includes('User denied')) {
         showToast('error', 'Giao dịch đã bị hủy bởi người dùng.');
       } else {
@@ -575,8 +634,8 @@ export default function Profile() {
       const success = await clearSubscriptionHistory();
       if (success) {
         showToast('success', 'Xóa lịch sử đăng ký thành công.');
-        await useAuthStore.getState().fetchSubscriptionHistory().catch(() => {});
-        await useAuthStore.getState().fetchActiveSubscriptions().catch(() => {});
+        await useAuthStore.getState().fetchSubscriptionHistory().catch(() => { });
+        await useAuthStore.getState().fetchActiveSubscriptions().catch(() => { });
       } else {
         showToast('error', 'Xóa lịch sử đăng ký thất bại.');
       }
@@ -854,8 +913,8 @@ export default function Profile() {
                         type="button"
                         onClick={() => handlePresetSelect(preset)}
                         className={`py-2.5 px-2 text-center rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer ${selectedPreset === preset
-                            ? 'bg-red-50 border-primary text-primary shadow-sm'
-                            : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                          ? 'bg-red-50 border-primary text-primary shadow-sm'
+                          : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                           }`}
                       >
                         {preset.toLocaleString('vi-VN')} VNĐ
@@ -1030,7 +1089,7 @@ export default function Profile() {
                   <div className="flex items-center space-x-2">
                     <span className="text-base">📜</span>
                     <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-                      Lịch sử giao dịch gói cước
+                      Lịch sử đăng ký gói cước
                     </h3>
                   </div>
 
@@ -1067,11 +1126,10 @@ export default function Profile() {
                         key={f.key}
                         type="button"
                         onClick={() => setHistoryStatusFilter(f.key as any)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                          historyStatusFilter === f.key
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${historyStatusFilter === f.key
                             ? 'bg-red-600 text-white font-medium shadow-sm'
                             : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         {f.label}
                       </button>
@@ -1257,11 +1315,47 @@ export default function Profile() {
           {/* Tab 4: Transaction Ledger History */}
           {activeTab === 'history' && (
             <div className="space-y-6 text-left">
-              <div className="border-b border-slate-50 pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Lịch sử giao dịch</h2>
-                <p className="text-slate-400 text-xs mt-0.5 font-medium">
-                  Xem lại nhật ký các giao dịch nạp tiền của bạn.
-                </p>
+              {/* Header row */}
+              <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-50">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Lịch sử giao dịch</h2>
+                  <p className="text-slate-400 text-xs mt-0.5 font-medium">
+                    Xem lại nhật ký các biến động nạp tiền và thanh toán gói cước của bạn.
+                  </p>
+                </div>
+
+                {transactions && transactions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowClearTxModal(true)}
+                    className="px-3.5 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-xs"
+                  >
+                    Xóa tất cả lịch sử giao dịch
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Chips / Bar */}
+              <div className="flex items-center space-x-2">
+                {[
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'deposit', label: 'Nạp tiền (+)' },
+                  { key: 'purchase', label: 'Trừ tiền (-)' },
+                  { key: 'cancelled', label: 'Đã hủy' }
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setTxFilter(f.key as any)}
+                    className={`px-3.5 py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer border ${
+                      txFilter === f.key
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
 
               {historyLoading ? (
@@ -1269,28 +1363,22 @@ export default function Profile() {
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
-                        <th className="p-4">Thời gian</th>
-                        <th className="p-4">Số tiền</th>
-                        <th className="p-4">Trạng thái</th>
-                        <th className="p-4">Mã giao dịch</th>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-4 whitespace-nowrap">Thời gian</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Loại giao dịch</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Mô tả</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Số tiền</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Trạng thái</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {[1, 2, 3].map((i) => (
                         <tr key={i} className="animate-pulse">
-                          <td className="p-4">
-                            <div className="h-4 bg-slate-100 rounded w-24"></div>
-                          </td>
-                          <td className="p-4">
-                            <div className="h-4 bg-slate-100 rounded w-16"></div>
-                          </td>
-                          <td className="p-4">
-                            <div className="h-5 bg-slate-100 rounded-full w-20"></div>
-                          </td>
-                          <td className="p-4">
-                            <div className="h-4 bg-slate-100 rounded w-48"></div>
-                          </td>
+                          <td className="p-4"><div className="h-4 bg-slate-100 rounded w-24"></div></td>
+                          <td className="p-4"><div className="h-4 bg-slate-100 rounded w-20"></div></td>
+                          <td className="p-4"><div className="h-4 bg-slate-100 rounded w-40"></div></td>
+                          <td className="p-4"><div className="h-4 bg-slate-100 rounded w-20"></div></td>
+                          <td className="p-4"><div className="h-5 bg-slate-100 rounded-full w-16"></div></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1301,59 +1389,85 @@ export default function Profile() {
                 <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-xs flex items-center space-x-2 font-medium">
                   <span>⚠️ Lỗi tải dữ liệu: {historyError}</span>
                 </div>
-              ) : transactions.length > 0 ? (
+              ) : filteredTransactions.length > 0 ? (
                 /* Data State */
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
-                        <th className="p-4">Thời gian</th>
-                        <th className="p-4">Số tiền</th>
-                        <th className="p-4">Trạng thái</th>
-                        <th className="p-4">Mã giao dịch</th>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-4 whitespace-nowrap">Thời gian</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Loại giao dịch</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Mô tả</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Số tiền</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">Trạng thái</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-slate-700">
-                      {transactions.map((tx) => (
-                        <tr
-                          key={tx.id}
-                          onClick={() => setSelectedTxDetail(tx)}
-                          className="hover:bg-slate-50/40 transition-colors cursor-pointer"
-                        >
-                          <td className="p-4 text-slate-550 font-semibold">
-                            {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : 'Không rõ'}
-                          </td>
-                          <td className="p-4 font-bold text-slate-800">
-                            {tx.type === 'deposit' ? '+' : '-'}
-                            {tx.amount.toLocaleString()} VNĐ
-                          </td>
-                          <td className="p-4">
-                            {tx.status === 'success' ? (
-                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                Thành công
-                              </span>
-                            ) : tx.status === 'pending' ? (
-                              <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold animate-pulse">
-                                Đang xử lý
-                              </span>
-                            ) : (
-                              <span className="bg-red-50 text-red-700 border border-red-100 text-[9px] px-2.5 py-0.5 rounded-full font-bold">
-                                Thất bại
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-4 font-mono text-[10px] text-slate-550 font-bold break-all select-all">
-                            {formatHash(tx.txHash || tx.id)}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredTransactions.map((tx) => {
+                        const isPlus = tx.type === 'deposit' || tx.direction === 'PLUS';
+                        const isCancelled = tx.status === 'cancelled' || tx.status === 'failed';
+                        const isPending = tx.status === 'pending';
+
+                        return (
+                          <tr
+                            key={tx.id}
+                            onClick={() => setSelectedTxDetail(tx)}
+                            className="cursor-pointer hover:bg-gray-50/80 transition-colors"
+                          >
+                            <td className="py-2.5 px-4 text-slate-500 font-semibold whitespace-nowrap text-xs">
+                              {formatDateTime(tx.createdAt)}
+                            </td>
+                            <td className="py-2.5 px-4 font-bold whitespace-nowrap text-xs">
+                              {isPlus ? (
+                                <span className="text-emerald-700 font-extrabold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded text-[10px]">
+                                  💰 Nạp tiền
+                                </span>
+                              ) : (
+                                <span className="text-rose-700 font-extrabold bg-rose-50 border border-rose-100 px-2 py-0.5 rounded text-[10px]">
+                                  📱 Mua gói
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-4 whitespace-nowrap text-xs font-bold text-slate-900">
+                              {tx.packageName || tx.description || (isPlus ? 'Nạp tiền vào tài khoản' : 'Thanh toán gói cước')}
+                            </td>
+                            <td className={`py-2.5 px-4 font-bold text-xs whitespace-nowrap ${
+                              isCancelled
+                                ? 'text-slate-400 line-through font-semibold'
+                                : isPlus
+                                ? 'text-emerald-600'
+                                : 'text-red-600'
+                            }`}>
+                              {isCancelled ? '' : isPlus ? '+' : '-'}
+                              {tx.amount ? tx.amount.toLocaleString('vi-VN') : 0} VNĐ
+                            </td>
+                            <td className="py-2.5 px-4 whitespace-nowrap text-xs">
+                              {tx.status === 'success' ? (
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                                  Thành công
+                                </span>
+                              ) : isPending ? (
+                                <span className="bg-amber-50 text-amber-600 border border-amber-200 text-[9px] px-2 py-0.5 rounded-full font-bold animate-pulse">
+                                  Đang xử lý
+                                </span>
+                              ) : (
+                                <span className="bg-gray-100 text-gray-500 border border-gray-200 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                                  Đã hủy
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               ) : (
                 /* Empty State */
-                <div className="bg-slate-50 border border-slate-200/50 p-10 rounded-2xl text-center max-w-sm mx-auto space-y-2">
-                  <p className="text-slate-500 text-xs font-semibold">Chưa ghi nhận giao dịch nào.</p>
+                <div className="text-center py-12 bg-slate-50/50 rounded-2xl border border-slate-100">
+                  <div className="text-2xl mb-2">💳</div>
+                  <p className="text-xs font-bold text-slate-700">Chưa có lịch sử giao dịch nào</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Các giao dịch nạp tiền hoặc thanh toán gói cước sẽ hiển thị tại đây.</p>
                 </div>
               )}
             </div>
@@ -1461,92 +1575,176 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Transaction Detail Modal */}
+      {/* Clear All Transactions Confirmation Modal */}
+      {showClearTxModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-sm w-full shadow-md animate-scale-up z-50 text-left">
+            <h4 className="text-base font-extrabold text-slate-900 mb-2">Xóa lịch sử giao dịch</h4>
+            <div className="text-xs text-slate-500 mb-5 leading-relaxed font-semibold space-y-2">
+              <p>Bạn có chắc chắn muốn xóa toàn bộ lịch sử giao dịch không?</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-amber-700 text-[10px] space-y-1">
+                <p>Lưu ý:</p>
+                <ul className="list-disc pl-3 space-y-0.5">
+                  <li>Thao tác này chỉ ẩn lịch sử hiển thị của bạn.</li>
+                  <li>Không ảnh hưởng đến số dư tài khoản hiện tại.</li>
+                  <li>Không ảnh hưởng đến trạng thái các gói cước đang dùng.</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                disabled={isClearingTx}
+                onClick={() => setShowClearTxModal(false)}
+                className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-xl text-xs transition-colors font-bold focus:outline-none disabled:opacity-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                disabled={isClearingTx}
+                onClick={handleConfirmClearTxHistory}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer disabled:opacity-50"
+              >
+                {isClearingTx ? 'Đang xóa...' : 'Xóa tất cả'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDetailModal && selectedTxDetail && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-md w-full shadow-md animate-scale-up z-50 text-left">
-            <h3 className="text-base font-extrabold text-slate-900 mb-4">Chi tiết giao dịch</h3>
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-md w-full shadow-xl animate-scale-up z-50 text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-extrabold text-slate-900">Chi Tiết Giao Dịch</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedTxDetail(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-            <div className="space-y-3 text-xs text-slate-600 font-medium">
-              <div className="flex justify-between py-1 border-b border-slate-50">
+            <div className="py-4 space-y-3 text-xs text-slate-700 font-medium">
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trạng thái</span>
-                <span className="font-bold text-slate-800">
+                <span>
                   {selectedTxDetail.status === 'success' ? (
-                    <span className="text-emerald-600">Thành công</span>
+                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
+                      Thành công
+                    </span>
                   ) : selectedTxDetail.status === 'pending' ? (
-                    <span className="text-amber-600">Đang xử lý</span>
+                    <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full font-bold text-[10px] animate-pulse">
+                      Đang xử lý
+                    </span>
                   ) : (
-                    <span className="text-red-600">Thất bại</span>
+                    <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
+                      Thất bại / Đã hủy
+                    </span>
                   )}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền nạp (VNĐ)</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.amount.toLocaleString()} VNĐ
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian giao dịch</span>
-                <span className="font-bold text-slate-800">
-                  {selectedTxDetail.createdAt ? new Date(selectedTxDetail.createdAt).toLocaleString('vi-VN') : '—'}
-                </span>
-              </div>
+
               <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch</span>
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Số tiền giao dịch</span>
+                <span className={`font-extrabold text-sm ${
+                  (selectedTxDetail.type === 'deposit' || selectedTxDetail.direction === 'PLUS')
+                    ? 'text-emerald-600'
+                    : 'text-red-600'
+                }`}>
+                  {(selectedTxDetail.type === 'deposit' || selectedTxDetail.direction === 'PLUS') ? '+' : '-'}
+                  {selectedTxDetail.amount ? selectedTxDetail.amount.toLocaleString('vi-VN') : 0} VNĐ
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mô tả / Nội dung</span>
+                <span className="font-bold text-slate-900 text-right">
+                  {selectedTxDetail.packageName || selectedTxDetail.description || ((selectedTxDetail.type === 'deposit' || selectedTxDetail.direction === 'PLUS') ? 'Nạp tiền vào tài khoản' : 'Thanh toán gói cước')}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Thời gian chi tiết</span>
+                <span className="font-bold text-slate-800 font-mono text-[11px]">
+                  {formatDateTime(selectedTxDetail.createdAt)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã giao dịch / TxHash</span>
                 <div className="flex items-center space-x-1.5">
-                  <span className="font-mono font-bold text-slate-800">
+                  <span className="font-mono font-bold text-slate-800 text-[11px] select-all">
                     {formatHash(selectedTxDetail.txHash || selectedTxDetail.id)}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyHash(selectedTxDetail.txHash || '')}
-                    disabled={!selectedTxDetail.txHash}
-                    aria-label="Sao chép mã giao dịch"
-                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed rounded-md transition-colors cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
+                  {selectedTxDetail.txHash && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyHash(selectedTxDetail.txHash || '')}
+                      title="Sao chép mã giao dịch"
+                      className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-md transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
-                <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {selectedTxDetail.walletAddress ? formatHash(selectedTxDetail.walletAddress) : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví nhận</span>
-                <span className="font-mono font-bold text-slate-800 break-all select-all">
-                  {selectedTxDetail.type === 'deposit' ? formatHash(import.meta.env.VITE_RECEIVER_WALLET || '') : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mạng Blockchain</span>
+
+              {selectedTxDetail.walletAddress && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví gửi</span>
+                  <span className="font-mono font-bold text-slate-800 text-[11px] select-all">
+                    {formatHash(selectedTxDetail.walletAddress)}
+                  </span>
+                </div>
+              )}
+
+              {(selectedTxDetail.type === 'deposit' || selectedTxDetail.direction === 'PLUS') && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ví nhận</span>
+                  <span className="font-mono font-bold text-slate-800 text-[11px] select-all">
+                    {formatHash(import.meta.env.VITE_RECEIVER_WALLET || '0x4f3e...5e89')}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Phương thức / Mạng</span>
                 <span className="font-bold text-slate-800">
-                  {selectedTxDetail.network || 'Sepolia'}
+                  {selectedTxDetail.network || selectedTxDetail.paymentMethod || 'Hệ thống'}
                 </span>
               </div>
             </div>
 
-            <div className="mt-6 flex space-x-3">
+            <div className="mt-5 flex space-x-3">
+              {selectedTxDetail.status === 'pending' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleCancelPendingTransaction(selectedTxDetail);
+                    setSelectedTxDetail(null);
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                >
+                  Hủy lệnh nạp này
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedTxDetail(null)}
-                className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-605 hover:text-slate-950 font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer"
               >
                 Đóng
               </button>
-              <button
-                type="button"
-                onClick={() => handleOpenExplorer(selectedTxDetail.txHash || '')}
-                disabled={!selectedTxDetail.txHash || !selectedTxDetail.txHash.startsWith('0x')}
-                aria-label="Xem giao dịch trên Sepolia Etherscan Explorer"
-                className="flex-1 py-2.5 bg-primary hover:bg-primary-hover disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer flex items-center justify-center space-x-1.5"
-              >
-                <span>Xem Explorer</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
+              {selectedTxDetail.txHash && selectedTxDetail.txHash.startsWith('0x') && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenExplorer(selectedTxDetail.txHash || '')}
+                  className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors focus:outline-none cursor-pointer flex items-center justify-center space-x-1.5"
+                >
+                  <span>Xem Explorer</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1561,8 +1759,9 @@ export default function Profile() {
         }}
         onSuccess={(msg) => {
           showToast('success', msg || 'Đăng ký lại gói cước thành công!');
-          useAuthStore.getState().fetchActiveSubscriptions().catch(() => {});
-          useAuthStore.getState().fetchSubscriptionHistory().catch(() => {});
+          useAuthStore.getState().fetchActiveSubscriptions().catch(() => { });
+          useAuthStore.getState().fetchSubscriptionHistory().catch(() => { });
+          useAuthStore.getState().fetchMe().catch(() => { });
         }}
         onError={(msg) => {
           showToast('error', msg || 'Đăng ký lại thất bại.');

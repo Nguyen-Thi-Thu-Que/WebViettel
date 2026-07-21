@@ -323,6 +323,21 @@ export const transactionApi = {
     return response.data.data;
   },
 
+  createPendingDeposit: async (amount: number, network?: string, walletAddress?: string, txHash?: string): Promise<any> => {
+    const response = await axiosInstance.post('/api/transactions/deposit/pending', { amount, network, walletAddress, txHash });
+    return response.data;
+  },
+
+  cancelPendingDeposit: async (depositId?: string, txHash?: string): Promise<any> => {
+    const response = await axiosInstance.post('/api/transactions/deposit/cancel', { depositId, txHash });
+    return response.data;
+  },
+
+  clearAllTransactions: async (): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>('/api/transactions');
+    return response.data.success;
+  },
+
   fetchAdminStats: async (): Promise<{
     totalUsersCount: number;
     totalPackagesCount: number;

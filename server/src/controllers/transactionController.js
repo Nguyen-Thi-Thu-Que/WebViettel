@@ -100,6 +100,61 @@ const transactionController = {
     }
   },
 
+  createPendingDeposit: async (req, res, next) => {
+    try {
+      const { amount, network, walletAddress, txHash } = req.body;
+      const dep = await transactionService.createPendingDeposit(
+        req.user.user_id,
+        amount,
+        network,
+        walletAddress,
+        txHash
+      );
+      return res.status(200).json({
+        success: true,
+        message: 'Đã tạo lệnh nạp tiền chờ xử lý.',
+        data: dep
+      });
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+  cancelDeposit: async (req, res, next) => {
+    try {
+      const { depositId, txHash } = req.body;
+      const result = await transactionService.cancelPendingDeposit(
+        req.user.user_id,
+        depositId || txHash
+      );
+      return res.status(200).json({
+        success: true,
+        message: 'Đã hủy lệnh nạp tiền.',
+        data: result
+      });
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+  clearTransactions: async (req, res, next) => {
+    try {
+      await transactionService.clearAllTransactions(req.user.user_id);
+      return res.status(200).json({
+        success: true,
+        message: 'Đã xóa tất cả lịch sử giao dịch thành công.'
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   getAdminStats: async (req, res, next) => {
     try {
       const stats = await transactionService.getAdminDashboardStats();

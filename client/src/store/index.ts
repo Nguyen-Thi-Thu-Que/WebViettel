@@ -38,6 +38,9 @@ interface AuthState {
   toggleAutoRenew: (subscriptionId: string, autoRenew: boolean) => Promise<boolean>;
   cancelSubscription: (subscriptionId: string) => Promise<boolean>;
   clearSubscriptionHistory: () => Promise<boolean>;
+  clearTransactionsHistory: () => Promise<boolean>;
+  createPendingDeposit: (amount: number, network?: string, walletAddress?: string, txHash?: string) => Promise<any>;
+  cancelPendingDeposit: (depositId?: string, txHash?: string) => Promise<boolean>;
   linkWalletAddress: (walletAddress: string) => Promise<{ success: boolean; message: string }>;
   activeSubscriptions: any[];
   subscriptionHistory: any[];
@@ -326,6 +329,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return true;
     } catch (err) {
       console.error("Error clearing subscription history:", err);
+      return false;
+    }
+  },
+
+  clearTransactionsHistory: async () => {
+    try {
+      await transactionApi.clearAllTransactions();
+      await get().fetchTransactions().catch(() => { });
+      return true;
+    } catch (err) {
+      console.error("Error clearing transactions history:", err);
+      return false;
+    }
+  },
+
+  createPendingDeposit: async (amount: number, network?: string, walletAddress?: string, txHash?: string) => {
+    try {
+      const res = await transactionApi.createPendingDeposit(amount, network, walletAddress, txHash);
+      await get().fetchTransactions().catch(() => { });
+      return res;
+    } catch (err) {
+      console.error("Error creating pending deposit:", err);
+      return null;
+    }
+  },
+
+  cancelPendingDeposit: async (depositId?: string, txHash?: string) => {
+    try {
+      await transactionApi.cancelPendingDeposit(depositId, txHash);
+      await get().fetchTransactions().catch(() => { });
+      return true;
+    } catch (err) {
+      console.error("Error cancelling pending deposit:", err);
       return false;
     }
   },

@@ -233,11 +233,19 @@ module.exports = {
 
       await subscriptionService.processAutoRenewals();
 
+      let updatedBalance;
+      if (req.user && req.user.user_id) {
+        const Account = require('../models/Account');
+        const acc = await Account.findOne({ user_id: req.user.user_id });
+        if (acc) updatedBalance = acc.balance;
+      }
+
       res.status(200).json({
         success: true,
         message: 'Đã cập nhật thời gian ảo hệ thống thành công!',
         virtualTime: getVirtualDate().toISOString(),
-        isCustom: isCustomTime()
+        isCustom: isCustomTime(),
+        updatedBalance
       });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
@@ -251,11 +259,19 @@ module.exports = {
 
       await subscriptionService.processAutoRenewals();
 
+      let updatedBalance;
+      if (req.user && req.user.user_id) {
+        const Account = require('../models/Account');
+        const acc = await Account.findOne({ user_id: req.user.user_id });
+        if (acc) updatedBalance = acc.balance;
+      }
+
       res.status(200).json({
         success: true,
         message: 'Đã cài lại thời gian thực hệ thống!',
         virtualTime: getVirtualDate().toISOString(),
-        isCustom: isCustomTime()
+        isCustom: isCustomTime(),
+        updatedBalance
       });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
