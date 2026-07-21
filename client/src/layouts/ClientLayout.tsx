@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CompareDrawer from '../components/CompareDrawer';
+import DevTimeWidget from '../components/DevTimeWidget';
 
 export default function ClientLayout() {
   return (
@@ -12,6 +13,7 @@ export default function ClientLayout() {
       </main>
       <Footer />
       <CompareDrawer />
+      <DevTimeWidget />
     </div>
   );
 }

@@ -2,6 +2,7 @@ const UserSubscription = require('../models/UserSubscription');
 const Package = require('../models/Package');
 const Account = require('../models/Account');
 const mongoose = require('mongoose');
+const { getVirtualDate } = require('../utils/virtualTime');
 
 // Auto-migrate package metadata if not present
 (async () => {
@@ -161,7 +162,7 @@ const subscriptionService = {
       throw new Error('Gói cước không tồn tại.');
     }
 
-    const now = new Date();
+    const now = getVirtualDate();
     const activeSubs = await UserSubscription.find({
       userId: userId,
       status: 'ACTIVE',
@@ -400,7 +401,7 @@ const subscriptionService = {
         throw new Error('Số dư tài khoản không đủ.');
       }
 
-      const now = new Date();
+      const now = getVirtualDate();
       const metadata = getPkgMetadata(pkg);
       const expiresAt = calculateExpiryDate(
         now,
@@ -499,7 +500,7 @@ const subscriptionService = {
 
   getActiveSubscriptions: async (userId) => {
     await processAutoRenewals().catch(err => console.error("Real-time auto renewal process failed:", err));
-    const now = new Date();
+    const now = getVirtualDate();
     return await UserSubscription.find({
       userId: userId,
       status: 'ACTIVE',
@@ -525,7 +526,7 @@ const subscriptionService = {
 
     sub.status = 'CANCELLED';
     sub.autoRenew = false;
-    sub.cancelledAt = new Date();
+    sub.cancelledAt = getVirtualDate();
     await sub.save();
     return sub;
   },
@@ -547,7 +548,7 @@ const subscriptionService = {
   },
 
   clearSubscriptionHistory: async (userId) => {
-    const now = new Date();
+    const now = getVirtualDate();
     return await UserSubscription.deleteMany({
       userId: userId,
       $or: [
@@ -559,7 +560,7 @@ const subscriptionService = {
 };
 
 const processAutoRenewals = async () => {
-  const now = new Date();
+  const now = getVirtualDate();
   const activeSubs = await UserSubscription.find({ status: 'ACTIVE' });
   
   for (const sub of activeSubs) {
@@ -622,5 +623,6 @@ module.exports = {
   calculateExpiryDate,
   getPkgMetadata,
   processAutoRenewals,
+  checkAndUpdateSubscriptions: processAutoRenewals,
   ...subscriptionService
 };

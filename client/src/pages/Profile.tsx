@@ -60,6 +60,8 @@ const passwordSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
+
+
 export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -885,78 +887,78 @@ export default function Profile() {
                         className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-4 relative overflow-hidden"
                       >
                         <div className="space-y-1.5 flex-1">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-base font-extrabold text-slate-900 uppercase">{ap.packageName || ap.packageId.toUpperCase()}</h4>
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                              ĐANG HOẠT ĐỘNG
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.activatedAt)}</span></p>
-                            <p>Hết hạn: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.expiresAt)}</span></p>
-                            <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{cycleText}</span></p>
-                            {ap.support_auto_renew !== false && (
-                              ap.autoRenew !== false ? (
-                                <p>Gia hạn: <span className="text-primary font-extrabold">TỰ ĐỘNG</span></p>
-                              ) : (
-                                <p>Gia hạn: <span className="text-amber-600 font-extrabold">ĐÃ TẮT GIA HẠN TỰ ĐỘNG</span></p>
-                              )
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-base font-extrabold text-slate-900 uppercase">{ap.packageName || ap.packageId.toUpperCase()}</h4>
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                ĐANG HOẠT ĐỘNG
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                              <p>Kích hoạt: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.activatedAt)}</span></p>
+                              <p>Hết hạn: <span className="text-slate-800 font-extrabold">{formatDateTime(ap.expiresAt)}</span></p>
+                              <p>Chu kỳ: <span className="text-slate-800 font-extrabold">{cycleText}</span></p>
+                              {ap.support_auto_renew !== false && (
+                                ap.autoRenew !== false ? (
+                                  <p>Gia hạn: <span className="text-primary font-extrabold">TỰ ĐỘNG</span></p>
+                                ) : (
+                                  <p>Gia hạn: <span className="text-amber-600 font-extrabold">ĐÃ TẮT GIA HẠN TỰ ĐỘNG</span></p>
+                                )
+                              )}
+                            </div>
+                            {ap.support_auto_renew !== false && ap.autoRenew === false && (
+                              <div className="mt-2 flex items-center space-x-1.5 text-[10px] text-amber-600 font-bold uppercase tracking-wider">
+                                <span>🟠 Sẽ ngừng sử dụng khi hết hạn</span>
+                              </div>
                             )}
                           </div>
-                          {ap.support_auto_renew !== false && ap.autoRenew === false && (
-                            <div className="mt-2 flex items-center space-x-1.5 text-[10px] text-amber-600 font-bold uppercase tracking-wider">
-                              <span>🟠 Sẽ ngừng sử dụng khi hết hạn</span>
-                            </div>
-                          )}
-                        </div>
 
-                        <div className="flex flex-wrap gap-2 shrink-0 md:items-center">
-                          {ap.support_auto_renew !== false ? (
-                            ap.autoRenew !== false ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => setCancellingAutoRenewPkgId(ap.subscriptionId)}
-                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                                >
-                                  Hủy gia hạn
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setCancellingPkgId(ap.subscriptionId)}
-                                  className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                                >
-                                  Hủy đăng ký
-                                </button>
-                              </>
+                          <div className="flex flex-wrap gap-2 shrink-0 md:items-center">
+                            {ap.support_auto_renew !== false ? (
+                              ap.autoRenew !== false ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCancellingAutoRenewPkgId(ap.subscriptionId)}
+                                    className="text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                  >
+                                    Hủy gia hạn
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                                    className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                  >
+                                    Hủy đăng ký
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleAutoRenew(ap.subscriptionId, true)}
+                                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                  >
+                                    Gia hạn lại
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                                    className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                                  >
+                                    Hủy đăng ký
+                                  </button>
+                                </>
+                              )
                             ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleAutoRenew(ap.subscriptionId, true)}
-                                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                                >
-                                  Gia hạn lại
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setCancellingPkgId(ap.subscriptionId)}
-                                  className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                                >
+                              <button
+                                type="button"
+                                onClick={() => setCancellingPkgId(ap.subscriptionId)}
+                                className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
+                              >
                                   Hủy đăng ký
-                                </button>
-                              </>
-                            )
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setCancellingPkgId(ap.subscriptionId)}
-                              className="text-xs font-bold text-primary hover:bg-red-50 border border-red-150 px-4 py-2.5 rounded-xl transition-all text-center focus:outline-none cursor-pointer"
-                            >
-                                Hủy đăng ký
-                            </button>
-                          )}
-                        </div>
+                              </button>
+                            )}
+                          </div>
                       </div>
                     );
                   })}

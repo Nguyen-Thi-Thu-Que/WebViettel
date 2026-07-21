@@ -187,5 +187,61 @@ module.exports = {
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
     }
+  },
+
+  getVirtualTime: async (req, res, next) => {
+    try {
+      const { getVirtualDate, isCustomTime } = require('../utils/virtualTime');
+      res.status(200).json({
+        success: true,
+        virtualTime: getVirtualDate().toISOString(),
+        isCustom: isCustomTime()
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
+  setVirtualTime: async (req, res, next) => {
+    try {
+      const { setVirtualDate, advanceVirtualTime, getVirtualDate, isCustomTime } = require('../utils/virtualTime');
+      const { customTime, days, hours } = req.body;
+
+      if (customTime) {
+        setVirtualDate(customTime);
+      } else if (days !== undefined || hours !== undefined) {
+        const msToAdd = ((Number(days) || 0) * 24 * 3600 * 1000) + ((Number(hours) || 0) * 3600 * 1000);
+        advanceVirtualTime(msToAdd);
+      }
+
+      await subscriptionService.processAutoRenewals();
+
+      res.status(200).json({
+        success: true,
+        message: 'Đã cập nhật thời gian ảo hệ thống thành công!',
+        virtualTime: getVirtualDate().toISOString(),
+        isCustom: isCustomTime()
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  },
+
+  resetVirtualTime: async (req, res, next) => {
+    try {
+      const { resetVirtualTime, getVirtualDate, isCustomTime } = require('../utils/virtualTime');
+      resetVirtualTime();
+
+      await subscriptionService.processAutoRenewals();
+
+      res.status(200).json({
+        success: true,
+        message: 'Đã cài lại thời gian thực hệ thống!',
+        virtualTime: getVirtualDate().toISOString(),
+        isCustom: isCustomTime()
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
   }
 };
