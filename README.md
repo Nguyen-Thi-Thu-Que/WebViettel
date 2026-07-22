@@ -107,6 +107,7 @@ WebViettel/
 │   │   │   ├── compareController.js
 │   │   │   ├── contactController.js
 │   │   │   ├── faqController.js
+│   │   │   ├── notificationController.js
 │   │   │   ├── packageController.js
 │   │   │   ├── subscriptionController.js
 │   │   │   ├── surveyController.js
@@ -123,6 +124,7 @@ WebViettel/
 │   │   │   ├── Contact.js
 │   │   │   ├── Deposit.js
 │   │   │   ├── FAQ.js
+│   │   │   ├── Notification.js
 │   │   │   ├── Package.js
 │   │   │   ├── PackageFeature.js
 │   │   │   ├── SurveyConfig.js
@@ -134,6 +136,7 @@ WebViettel/
 │   │   │   ├── compareRoutes.js
 │   │   │   ├── contactRoutes.js
 │   │   │   ├── faqRoutes.js
+│   │   │   ├── notificationRoutes.js
 │   │   │   ├── packageRoutes.js
 │   │   │   ├── subscriptionRoutes.js
 │   │   │   ├── surveyRoutes.js
@@ -155,6 +158,7 @@ WebViettel/
 │   │   │   ├── chatbotService.js
 │   │   │   ├── contactService.js
 │   │   │   ├── faqService.js
+│   │   │   ├── notificationService.js
 │   │   │   ├── subscriptionService.js
 │   │   │   ├── surveyService.js
 │   │   │   ├── transactionService.js
@@ -235,7 +239,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - **Nạp tiền tài khoản**: Cổng kết nối MetaMask, nạp số dư ví ảo và quản lý ô nhập số tiền phân cách hàng nghìn chuẩn.
   - **Lịch sử đăng ký gói cước**: Tab gộp quản lý duy nhất phân làm 2 phần từ trên xuống:
     - *⚡ GÓI CƯỚC ĐANG SỬ DỤNG*: Danh sách gói active, nút bật/tắt tự động gia hạn, hủy gói cước và bộ công cụ Dev Test chỉnh sửa thời gian hết hạn (`expiresAt`) qua ô chọn lịch `datetime-local`.
-    - *📜 LỊCH SỬ GIAO DỊCH GÓI CƯỚC*: Bảng lịch sử các lượt đăng ký cùng nút "Xóa tất cả lịch sử đã hủy/hết hạn" (Xóa mềm).
+    - *📜 LỊCH SỬ GIAO DỊCH GÓI CƯỚC*: Bảng lịch sử các lượt đăng ký cùng nút "Xóa tất cả lịch sử đã hủy/hết hạn" (Xóa mềm). **Bảng lịch sử được cấu hình khung chứa cuộn giới hạn chiều cao tối đa `485px` (tương đương 10 dòng bản ghi đầu), hỗ trợ thanh cuộn dọc tùy chỉnh siêu mảnh (`custom-scrollbar`) và cố định tiêu đề bảng (`sticky top-0 z-10 bg-gray-50`) có nền xám để tránh lộ chữ khi trượt.**
   - **Lịch sử giao dịch**: Bảng tổng hợp siêu gọn gàng 5 cột (`Thời gian`, `Loại giao dịch`, `Mô tả`, `Số tiền`, `Trạng thái`), chống rớt dòng (`whitespace-nowrap`). Hỗ trợ bộ lọc chip (*Tất cả*, *Nạp tiền (+)*, *Trừ tiền (-)*, *Đã hủy*). Click trực tiếp vào dòng mở Modal xem đầy đủ chi tiết giao dịch kèm nút **"Hủy lệnh nạp này"** cho giao dịch đang xử lý (`PENDING`). Bổ sung nút "Xóa tất cả lịch sử giao dịch" (Xóa mềm).
   - **Đổi mật khẩu**: Thay đổi mật khẩu tài khoản trực tiếp (xác thực mật khẩu cũ).
 - **Trang Liên hệ hỗ trợ (Contact.tsx)**: Giao diện Layout 2 cột truyền thống cân đối (`grid grid-cols-1 md:grid-cols-2 gap-8`):
@@ -255,13 +259,15 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 ### Các thành phần giao diện chính (Components):
 
 - `Navbar`: Thanh điều hướng đầu trang, hiển thị logo Viettel, các liên kết trang chủ, gói cước, so sánh, khảo sát, tư vấn AI, liên hệ, và góc hiển thị số dư ví ảo kèm nút trang cá nhân hoặc đăng nhập. Dropdown menu cá nhân điều hướng trực tiếp về tab quản lý gói cước duy nhất `/profile?tab=subscriptions`.
+  - **Hệ thống Thông báo (Notification Popover)**: Tích hợp nút hình quả chuông hiển thị thông báo thời gian thực với Badge đếm số lượng tin chưa đọc (định dạng `9+`). Khi click sẽ mở Popover Dropdown hiển thị danh sách thông báo phân loại theo HSL màu sắc đặc trưng, hỗ trợ nút "Đánh dấu tất cả là đã đọc", "Xóa lịch sử thông báo" (xóa mềm), và chuyển hướng chi tiết khi nhấp từng tin.
 - `Footer`: Chứa các thông tin liên hệ, liên kết nhanh bản quyền dự án.
 - `DevTimeWidget`: Widget nổi góc dưới bên phải màn hình (Global Virtual Time Controller) phục vụ việc tua nhanh thời gian hệ thống, đặt mốc thời gian ảo cố định hoặc khôi phục thời gian thực.
 - `PackageCard`: Thẻ hiển thị tóm tắt thông tin gói cước (tên, giá, dung lượng data, cuộc gọi, nút đăng ký nhanh, nút so sánh).
 - `AdvancedFilter`: Bộ lọc nâng cao trên trang duyệt gói cước (lọc theo loại gói, chu kỳ, giá cước, công nghệ mạng, dịch vụ...).
 - `Chatbot`: Hộp thoại bong bóng chat nhỏ cố định ở góc màn hình phục vụ chat nhanh với trợ lý ảo từ mọi trang.
 - `CompareAI`: Panel hiển thị phân tích nhận xét thông minh (client-side) cho trang so sánh gói cước, gồm tóm tắt sự khác biệt, gợi ý lựa chọn và highlight ưu điểm từng gói.
-- `RegisterModal`: Modal xác nhận và xử lý đăng ký gói cước cho người dùng di động.
+- `RegisterModal`: Modal xác nhận và xử lý đăng ký gói cước cho người dùng di động. 
+  - **Đồng bộ UX & Khóa số dư (Freeze UI State)**: Khi modal mở ra, thông tin số dư hiện tại và dự kiến được khóa cố định, cách ly hoàn toàn khỏi các cập nhật sớm trong khi gọi API. Nút đăng ký hiển thị loading và khóa backdrop click/ESC. Khi đăng ký thành công, modal lập tức đóng để nhường chỗ hiển thị Toast thông báo và cập nhật số dư mới vào Store toàn cục. Nếu thất bại, tắt loading và in dòng lỗi `⚠️ [Nội dung lỗi]` trực quan dưới dạng alert bên trong Modal mà không đóng.
 - `CompareDrawer`: Khay trượt chứa danh sách các gói cước đang chọn so sánh nằm cố định bên dưới màn hình.
 - `SEO`: Thành phần cấu hình thẻ tiêu đề, mô tả và cấu trúc Schema JSON-LD hỗ trợ chuẩn hóa SEO cho từng trang.
 - `Breadcrumb`: Thanh dẫn hướng đường dẫn giúp xác định vị trí trang hiện tại.
@@ -296,9 +302,8 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - Kết nối ví MetaMask trực tiếp từ giao diện Profile, tự động liên kết ví vào tài khoản DB MongoDB.
    - Tự động kiểm tra mạng và yêu cầu chuyển đổi mạng sang Sepolia Testnet (Chain ID `11155111`).
    - Chọn các mệnh giá nạp từ 10.000đ đến 500.000đ, tự động quy đổi ra lượng ETH tương ứng dựa trên tỷ giá cấu hình.
-   - Khi mở quy trình nạp tiền, hệ thống tạo bản ghi `Deposit` với trạng thái `pending` (Đang xử lý).
-   - Nếu từ chối trên MetaMask hoặc bấm Hủy trong Modal: Chuyển trạng thái giao dịch sang `cancelled` (Đã hủy).
-   - Khi hoàn tất trên Blockchain (Receipt status 1): Chuyển trạng thái sang `success`, tự động cộng tiền VND vào tài khoản và trả về `updatedBalance` làm mới số dư trên Navbar và Profile thời gian thực.
+   - **Xử lý duy nhất 1 bản ghi**: Khắc phục lỗi tạo trùng bản ghi. Khi người dùng mở giao dịch nạp tiền, hệ thống tạo bản ghi `Deposit` với trạng thái `pending`. Mọi cập nhật trạng thái blockchain thành công/hủy bỏ sau đó đều ghi trực tiếp lên chính bản ghi này thông qua `depositId`, tuyệt đối không tạo thêm bản ghi mới.
+   - Khi hoàn tất trên Blockchain (Receipt status 1): Chuyển trạng thái sang `success`, tự động cộng tiền VND vào tài khoản và làm mới số dư trên Navbar và Profile thời gian thực.
 5. **Đăng ký và hủy gói cước di động (Conflict Engine)**:
    - Sử dụng số dư ví ảo VND để đăng ký mua gói cước di động trực tiếp.
    - Xử lý xung đột gói cước (Conflict Engine) ở backend qua 5 bước nghiêm ngặt theo thứ tự:
@@ -308,24 +313,34 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
      4. *Trùng nhóm ưu đãi (benefit_group)*: Reject nếu đăng ký 2 gói cùng `benefit_group` và cả hai đều dài hạn (>= 30 ngày). Cho phép nếu gói mới là ngắn ngày hoặc khác hệ ưu đãi.
      5. *Registration Policy*: Áp dụng trường `registration_policy` cấu hình trên gói (`REPLACE` để tự động chấm dứt và thay thế gói cũ cùng hệ, `REJECT` để từ chối đăng ký song song, `ALLOW` để chạy song song).
    - Cho phép người dùng bật/tắt tính năng Tự động gia hạn gói cước, hoặc bấm Hủy gói cước ngay lập tức trên giao diện.
-6. **Cơ chế Xóa Mềm (Soft Delete) Lịch Sử**:
+6. **Hệ thống thông báo tự động (Notification System)**:
+   - **Nhắc nhở gia hạn trước 24h - 48h (Bước 1)**: Quét Virtual Time định kỳ tìm kiếm các gói `ACTIVE` bật `autoRenew`. So sánh số dư thực tế sau khi ép kiểu dữ liệu:
+     - *Đủ tiền (`balance >= price`)*: Gửi thông báo `"Nhắc nhở gia hạn gói cước"` báo đủ điều kiện duy trì dịch vụ.
+     - *Thiếu tiền (`balance < price`)*: Gửi thông báo `"Cảnh báo số dư không đủ gia hạn"` nhắc nạp thêm tiền.
+     - *Chống gửi trùng*: Thực hiện kiểm tra tra cứu theo ID lượt đăng ký (`subscriptionId`) của chu kỳ hiện tại, đảm bảo chỉ gửi duy nhất 1 thông báo/chu kỳ. Sử dụng hàm quét dọn dẹp (`cleanDuplicateNotifications`) làm sạch dữ liệu cũ lỗi.
+   - **Kết quả gia hạn tại thời điểm hết hạn (Bước 2)**:
+     - *Thành công*: Trừ tiền số dư, cộng chu kỳ gia hạn mới, gửi thông báo `"Gia hạn gói cước thành công"` kèm ngày hết hạn mới và mô tả ưu đãi được khôi phục.
+     - *Thất bại*: Chuyển trạng thái gói sang `EXPIRED`, tắt tự động gia hạn, gửi thông báo `"Gia hạn gói cước thất bại"` nhắc nạp tiền đăng ký lại.
+   - **Bật/Tắt gia hạn tự động từ người dùng (Bước 3)**: Gửi thông báo `"Đã bật tự động gia hạn"` hoặc `"Đã tắt tự động gia hạn"` tương ứng kèm mốc ngày hết hạn dự kiến.
+   - **Các thông báo nạp tiền/đăng ký khác**: Tự động thông báo khi có giao dịch blockchain thành công/bị hủy, hoặc đăng ký gói thành công/thất bại từ API.
+7. **Cơ chế Xóa Mềm (Soft Delete) Lịch Sử**:
    - Tất cả các thao tác xóa lịch sử gói cước (`DELETE /api/subscriptions/history`) và xóa lịch sử giao dịch (`DELETE /api/transactions`) đều áp dụng cơ chế Xóa Mềm (Soft Delete): cập nhật `isDeleted: true` và `deletedAt: Date` trong DB MongoDB, tuyệt đối không xóa cứng bản ghi. Các API truy vấn chỉ trả về dữ liệu `{ isDeleted: { $ne: true } }`.
-7. **Trình Điều Khiển Thời Gian Hệ Thống Toàn Cục (Global Virtual Time Controller)**:
+8. **Trình Điều Khiển Thời Gian Hệ Thống Toàn Cục (Global Virtual Time Controller)**:
    - Toàn bộ backend sử dụng mô-đun `server/src/utils/virtualTime.js` (`getVirtualDate()`) cho mọi tính toán mốc thời gian (hết hạn gói, tự động gia hạn, tua thời gian).
-   - Widget nổi `DevTimeWidget.tsx` cho phép admin/dev nhảy thời gian (+1 ngày, +7 ngày, +30 ngày, +90 ngày), nhập ngày tùy chọn hoặc reset thời gian. Khi tua thời gian khiến tự động gia hạn phát sinh, backend tự động trừ tiền và trả về số dư mới để frontend làm mới tức thì.
-8. **AI Chatbot tư vấn gói cước thông minh**:
+   - Widget nổi `DevTimeWidget.tsx` cho phép admin/dev nhảy thời gian (+1 ngày, +7 ngày, +30 ngày, +90 ngày), nhập ngày tùy chọn hoặc reset thời gian. Khi tua thời gian, hệ thống tự động chạy **Tiến trình quét hai giai đoạn (Phase 1: Reminder Sweep và Phase 2: Renewal Execution Sweep)** để đảm bảo tạo thông báo nhắc nhở gia hạn trước (Bước 1), sau đó mới thực hiện gia hạn/hủy gói và tạo thông báo kết quả (Bước 2) theo đúng thứ tự thời gian.
+9. **AI Chatbot tư vấn gói cước thông minh**:
    - Chatbot tự động trả lời câu hỏi của người dùng thời gian thực dựa trên API Backend kết nối Groq Cloud API (mô hình `llama-3.1-8b-instant`) và Ollama API (`qwen2.5:3b`) dự phòng.
    - Tích hợp luồng xử lý RAG kết hợp NLP: Phân tích intent người dùng (trích xuất khoảng giá, nhu cầu data/thoại, ứng dụng), áp dụng bộ lọc cứng (Hard Filters) để lọc bớt gói cước và tính điểm ưu tiên (Scoring), sau đó biên dịch gói cước thành khối XML sạch để nhúng vào Prompt gửi AI sinh phản hồi.
    - Tự động gắn các nút hành động đề xuất (`suggestedAction`) ở cuối câu trả lời chatbot.
    - Lưu trữ lịch sử trò chuyện vào MongoDB và hỗ trợ xóa lịch sử chat của tài khoản.
-9. **Khảo sát chọn gói cước AI (Survey.tsx)**:
-   - Câu hỏi khảo sát hiển thị động theo thuật toán Decision Tree từ backend.
-   - Kết quả đề xuất gói cước (tối đa 3) được tính toán và khớp tại Backend thông qua `surveyService`.
-   - Lưu trữ lịch sử khảo sát và kết quả vào MongoDB (collection `survey_histories`).
-10. **Trang Liên hệ hỗ trợ (Contact.tsx)**:
+10. **Khảo sát chọn gói cước AI (Survey.tsx)**:
+    - Câu hỏi khảo sát hiển thị động theo thuật toán Decision Tree từ backend.
+    - Kết quả đề xuất gói cước (tối đa 3) được tính toán và khớp tại Backend thông qua `surveyService`.
+    - Lưu trữ lịch sử khảo sát và kết quả vào MongoDB (collection `survey_histories`).
+11. **Trang Liên hệ hỗ trợ (Contact.tsx)**:
     - Form nhập thông tin liên hệ (Họ tên, Số điện thoại, Dropdown Chủ đề hỗ trợ, Nội dung) kết nối trực tiếp API Backend `/api/contact`.
     - Tự động điền thông tin họ tên và số điện thoại nếu người dùng đã đăng nhập.
-11. **Bảng điều khiển Quản trị (Admin Panel)**:
+12. **Bảng điều khiển Quản trị (Admin Panel)**:
     - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
     - Quản lý gói cước: CRUD gói cước di động trong MongoDB.
     - Quản lý câu hỏi thường gặp: CRUD danh mục câu hỏi FAQ.
@@ -350,13 +365,13 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 
 ## 5. Cơ Sở Dữ Liệu Hiện Có (Database Schema & Collections)
 
-Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
+Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
 
 1. **`accounts` (Thông tin tài khoản)**:
    - `user_id` (Number, unique): ID định danh người dùng.
    - `fullname` (String): Họ và tên đầy đủ.
    - `phone_number` (String, unique, index): Số điện thoại dùng làm tài khoản đăng nhập.
-   - `password` (String): Mật khẩu đã mã hóa bcrypt.
+   - `password` (String): Mật khẩu (lưu trữ dưới dạng văn bản gốc/Plaintext phục vụ phát triển/thử nghiệm).
    - `balance` (Number): Số dư ví ảo VND.
    - `role` (String, enum: `['user', 'admin']`): Vai trò phân quyền.
    - `subscription_type` (String, enum: `['tra_truoc', 'tra_sau']`): Loại thuê bao.
@@ -463,6 +478,16 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
     - `title`, `description`, `field`, `component`, `order`, `multiple`, `options`.
 12. **`survey_histories` (Lịch sử khảo sát người dùng)**:
     - `userId`, `answers`, `filters`, `recommendedPackages`, `isEarlyTerminated`, `deleted`, `deletedAt`.
+13. **`notifications` (Thông báo người dùng)**:
+    - `userId` (Number, index): ID người dùng nhận thông báo.
+    - `title` (String): Tiêu đề thông báo.
+    - `content` (String): Nội dung chi tiết thông báo.
+    - `type` (String, enum: `['SUBSCRIPTION', 'TRANSACTION', 'SYSTEM']`): Phân loại thông báo.
+    - `status` (String, enum: `['UNREAD', 'READ']`): Trạng thái đã đọc/chưa đọc.
+    - `link` (String): Đường dẫn điều hướng khi click (ví dụ: `/profile?tab=subscriptions`).
+    - `subscriptionId` (ObjectId, ref: `UserSubscription`): ID lượt đăng ký gói tương ứng.
+    - `isDeleted` (Boolean, default `false`): Đánh dấu xóa mềm.
+    - `createdAt` (Date): Thời điểm tạo thông báo (mặc định lấy theo Virtual Time).
 
 ---
 
