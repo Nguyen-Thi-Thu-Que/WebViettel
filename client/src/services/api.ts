@@ -344,9 +344,62 @@ export const transactionApi = {
     totalRevenueVal: number;
     totalSubscriptionsCount: number;
     recentTransactions: any[];
+    revenueTrends: { label: string; val: number }[];
   }> => {
-    const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/stats');
-    return response.data.data;
+    try {
+      const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/stats');
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
+  },
+
+  fetchAdminStatsCards: async (): Promise<{
+    totalUsersCount: number;
+    totalPackagesCount: number;
+    totalRevenueVal: number;
+    totalSubscriptionsCount: number;
+  }> => {
+    try {
+      const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/stats-cards');
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
+  },
+
+  fetchAdminRevenueChart: async (): Promise<{ label: string; val: number }[]> => {
+    try {
+      const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/revenue-chart');
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
+  },
+
+  fetchAdminRecentTransactions: async (): Promise<any[]> => {
+    try {
+      const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/recent-transactions');
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
   }
 };
 
@@ -505,8 +558,16 @@ export const compareApi = {
     return response.data.data;
   },
   fetchAnalytics: async (): Promise<any> => {
-    const response = await axiosInstance.get('/api/compare/analytics');
-    return response.data.data;
+    try {
+      const response = await axiosInstance.get('/api/compare/analytics');
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
   }
 };
 

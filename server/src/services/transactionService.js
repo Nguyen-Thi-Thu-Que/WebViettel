@@ -520,18 +520,37 @@ const transactionService = {
 
   // 5. Statistics for Admin Dashboard
   getAdminDashboardStats: async () => {
-    const totalUsersCount = await Account.countDocuments();
-    const totalPackagesCount = await Package.countDocuments();
-    const allDeposits = await Deposit.find({ status: 'success' });
-    const totalRevenueVal = allDeposits.reduce((sum, curr) => {
-      const fiat = curr.amountVND || parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0');
-      return sum + fiat;
-    }, 0);
-    const totalSubscriptionsCount = await UserSubscription.countDocuments();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString();
 
-    // Fetch and merge 10 most recent transactions across all users
-    const latestDeposits = await Deposit.find().sort({ deposit_id: -1 }).limit(10);
-    const latestSubs = await UserSubscription.find().sort({ createdAt: -1 }).limit(10);
+    const [
+      totalUsersCount,
+      totalPackagesCount,
+      revenueAgg,
+      totalSubscriptionsCount,
+      latestDeposits,
+      latestSubs,
+      recentDepositsForChart
+    ] = await Promise.all([
+      Account.countDocuments(),
+      Package.countDocuments(),
+      Deposit.aggregate([
+        { $match: { status: 'success', isDeleted: { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$amountVND' } } }
+      ]),
+      UserSubscription.countDocuments(),
+      Deposit.find().sort({ deposit_id: -1 }).limit(10),
+      UserSubscription.find().sort({ createdAt: -1 }).limit(10),
+      Deposit.find({
+        status: 'success',
+        isDeleted: { $ne: true },
+        created_at: { $gte: sevenDaysAgoStr }
+      })
+    ]);
+
+    const totalRevenueVal = revenueAgg[0] ? revenueAgg[0].total : 0;
 
     const merged = [];
 
@@ -540,8 +559,9 @@ const transactionService = {
       merged.push({
         id: `tx_dep_${dep.deposit_id}`,
         type: 'deposit',
-        phoneNumber: user ? user.phone_number : '09xxxxxxxx',
-        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0'),
+        phoneNumber: user ? user.phone_number : '',
+        fullname: user ? user.fullname : '',
+        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0') || 0,
         paymentMethod: dep.network || 'VietQR',
         status: dep.status || 'success',
         createdAt: dep.created_at,
@@ -555,7 +575,8 @@ const transactionService = {
       merged.push({
         id: `tx_sub_${sub._id}`,
         type: 'subscribe',
-        phoneNumber: user ? user.phone_number : '09xxxxxxxx',
+        phoneNumber: user ? user.phone_number : '',
+        fullname: user ? user.fullname : '',
         amount: pkg ? pkg.gia : 0,
         packageName: pkg ? pkg.ten : 'Gói cước',
         status: 'success',
@@ -567,13 +588,139 @@ const transactionService = {
     merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const recentTransactions = merged.slice(0, 10);
 
+    // Calculate revenue trends for the last 7 days (including today)
+    const revenueTrends = [];
+    const weekdayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const label = weekdayNames[d.getDay()];
+      const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+      const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+      const dayRevenue = recentDepositsForChart.reduce((sum, curr) => {
+        if (!curr.created_at) return sum;
+        const depDate = new Date(curr.created_at);
+        if (depDate >= startOfDay && depDate <= endOfDay) {
+          const fiat = curr.amountVND || parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0') || 0;
+          return sum + fiat;
+        }
+        return sum;
+      }, 0);
+
+      revenueTrends.push({ label, val: dayRevenue });
+    }
+
     return {
       totalUsersCount,
       totalPackagesCount,
       totalRevenueVal,
       totalSubscriptionsCount,
-      recentTransactions
+      recentTransactions,
+      revenueTrends
     };
+  },
+
+  getAdminStatsCards: async () => {
+    const [
+      totalUsersCount,
+      totalPackagesCount,
+      revenueAgg,
+      totalSubscriptionsCount
+    ] = await Promise.all([
+      Account.countDocuments(),
+      Package.countDocuments(),
+      Deposit.aggregate([
+        { $match: { status: 'success', isDeleted: { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$amountVND' } } }
+      ]),
+      UserSubscription.countDocuments()
+    ]);
+    const totalRevenueVal = revenueAgg[0] ? revenueAgg[0].total : 0;
+    return {
+      totalUsersCount,
+      totalPackagesCount,
+      totalRevenueVal,
+      totalSubscriptionsCount
+    };
+  },
+
+  getAdminRevenueTrends: async () => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString();
+
+    const recentDepositsForChart = await Deposit.find({
+      status: 'success',
+      isDeleted: { $ne: true },
+      created_at: { $gte: sevenDaysAgoStr }
+    });
+
+    const revenueTrends = [];
+    const weekdayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const label = weekdayNames[d.getDay()];
+      const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+      const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+      const dayRevenue = recentDepositsForChart.reduce((sum, curr) => {
+        if (!curr.created_at) return sum;
+        const depDate = new Date(curr.created_at);
+        if (depDate >= startOfDay && depDate <= endOfDay) {
+          const fiat = curr.amountVND || parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0') || 0;
+          return sum + fiat;
+        }
+        return sum;
+      }, 0);
+
+      revenueTrends.push({ label, val: dayRevenue });
+    }
+    return revenueTrends;
+  },
+
+  getAdminRecentTransactions: async () => {
+    const [latestDeposits, latestSubs] = await Promise.all([
+      Deposit.find().sort({ deposit_id: -1 }).limit(10),
+      UserSubscription.find().sort({ createdAt: -1 }).limit(10)
+    ]);
+
+    const merged = [];
+
+    for (const dep of latestDeposits) {
+      const user = await Account.findOne({ user_id: dep.user_id });
+      merged.push({
+        id: `tx_dep_${dep.deposit_id}`,
+        type: 'deposit',
+        phoneNumber: user ? user.phone_number : '',
+        fullname: user ? user.fullname : '',
+        amount: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0') || 0,
+        paymentMethod: dep.network || 'VietQR',
+        status: dep.status || 'success',
+        createdAt: dep.created_at,
+        txHash: dep.txHash || dep.tx_hash || ''
+      });
+    }
+
+    for (const sub of latestSubs) {
+      const user = await Account.findOne({ user_id: sub.userId });
+      const pkg = await Package.findOne({ $or: [{ package_id: sub.packageId }, { id: sub.packageId }] });
+      merged.push({
+        id: `tx_sub_${sub._id}`,
+        type: 'subscribe',
+        phoneNumber: user ? user.phone_number : '',
+        fullname: user ? user.fullname : '',
+        amount: pkg ? pkg.gia : 0,
+        packageName: pkg ? pkg.ten : 'Gói cước',
+        status: 'success',
+        createdAt: sub.activatedAt || sub.createdAt || new Date()
+      });
+    }
+
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return merged.slice(0, 10);
   }
 };
 

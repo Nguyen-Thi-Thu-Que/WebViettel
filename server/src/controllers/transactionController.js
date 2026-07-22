@@ -167,6 +167,42 @@ const transactionController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  getAdminStatsCards: async (req, res, next) => {
+    try {
+      const stats = await transactionService.getAdminStatsCards();
+      return res.status(200).json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getAdminRevenueTrends: async (req, res, next) => {
+    try {
+      const trends = await transactionService.getAdminRevenueTrends();
+      return res.status(200).json({
+        success: true,
+        data: trends
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getAdminRecentTransactions: async (req, res, next) => {
+    try {
+      const txs = await transactionService.getAdminRecentTransactions();
+      return res.status(200).json({
+        success: true,
+        data: txs
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 

@@ -322,7 +322,7 @@ export default function Navbar() {
                   <div className="py-1">
                     {currentUser.role === 'admin' && (
                       <Link
-                        to="/admin/users"
+                        to="/admin"
                         onClick={() => setIsProfileOpen(false)}
                         className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors text-primary font-bold"
                       >

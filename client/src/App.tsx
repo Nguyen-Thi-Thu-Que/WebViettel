@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from './store';
 import ClientLayout from './layouts/ClientLayout';
@@ -81,7 +81,8 @@ export default function App() {
 
           {/* Admin Routing */}
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="packages" element={<AdminPackages />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="faqs" element={<AdminFAQs />} />
