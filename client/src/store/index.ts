@@ -252,13 +252,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const result = await authApi.registerSubscription(packageId, cycle);
 
+      // Immediately update the balance in store to synchronize the state
+      if (result && result.balance !== undefined) {
+        set(state => ({
+          currentUser: state.currentUser ? {
+            ...state.currentUser,
+            balance: result.balance
+          } : null
+        }));
+      }
+
       // Reload entire state from server to synchronize after registration/replacement
       await get().fetchMe();
       await get().fetchActiveSubscriptions().catch(() => { });
       await get().fetchSubscriptionHistory().catch(() => { });
       await get().fetchTransactions().catch(() => { });
 
-      return { success: true, message: result?.message || 'Đăng ký gói cước thành công!' };
+      return { 
+        success: true, 
+        message: result?.message || 'Đăng ký gói cước thành công!',
+        balance: result?.balance
+      };
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Lỗi đăng ký gói cước.';
       return { success: false, message: msg };

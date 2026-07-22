@@ -633,17 +633,17 @@ const processAutoRenewals = async () => {
   for (const sub of activeSubs) {
     const expiresAt = sub.expiresAt;
     
-    // Check if package expires in less than 24 hours
+    // Check if package expires in less than 24 hours and has autoRenew active
     const msLeft = expiresAt.getTime() - now.getTime();
     const hoursLeft = msLeft / (1000 * 60 * 60);
-    if (hoursLeft > 0 && hoursLeft <= 24) {
+    if (hoursLeft > 0 && hoursLeft <= 24 && sub.autoRenew) {
       try {
         const Notification = require('../models/Notification');
         const warningExists = await Notification.findOne({
           userId: sub.userId,
           type: 'SUBSCRIPTION',
           createdAt: { $gte: sub.startedAt || sub.activatedAt },
-          title: 'Gói cước sắp hết hạn'
+          title: 'Nhắc nhở gia hạn gói cước'
         });
 
         if (!warningExists) {
@@ -655,10 +655,10 @@ const processAutoRenewals = async () => {
             const notificationService = require('./notificationService');
             await notificationService.createNotification({
               userId: sub.userId,
-              title: 'Gói cước sắp hết hạn',
-              content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) của bạn sẽ hết hạn vào lúc ${expiresAt.toLocaleString('vi-VN')}. Vui lòng nạp thêm tiền nếu số dư không đủ để hệ thống tự động gia hạn.`,
+              title: 'Nhắc nhở gia hạn gói cước',
+              content: `Gói cước ${pkg.ma_goi} của bạn sẽ hết hạn trong 24h tới (vào ${expiresAt.toLocaleString('vi-VN')}). Hãy đảm bảo số dư ví tối thiểu ${pkg.gia.toLocaleString('vi-VN')}đ để hệ thống tự động gia hạn.`,
               type: 'SUBSCRIPTION',
-              link: '/profile/subscriptions'
+              link: '/profile?tab=subscriptions'
             });
           }
         }
@@ -710,7 +710,7 @@ const processAutoRenewals = async () => {
               title: 'Gia hạn gói cước thành công',
               content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) đã được gia hạn tự động thành công. Tài khoản của bạn đã bị trừ ${pkg.gia.toLocaleString('vi-VN')} VNĐ.`,
               type: 'SUBSCRIPTION',
-              link: '/profile/subscriptions'
+              link: '/profile?tab=subscriptions'
             });
           } catch (notifErr) {
             console.error("Failed to create auto-renewal success notification:", notifErr);
@@ -728,9 +728,9 @@ const processAutoRenewals = async () => {
               await notificationService.createNotification({
                 userId: sub.userId,
                 title: 'Gia hạn gói cước thất bại',
-                content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) gia hạn thất bại do số dư tài khoản không đủ. Số dư hiện tại của bạn là ${account.balance.toLocaleString('vi-VN')} VNĐ. Cần nạp thêm ${(pkg.gia - account.balance).toLocaleString('vi-VN')} VNĐ để thực hiện gia hạn.`,
+                content: `Gói cước ${pkg.ma_goi} đã bị hủy do số dư ví của bạn không đủ (${account.balance.toLocaleString('vi-VN')}đ / ${pkg.gia.toLocaleString('vi-VN')}đ). Vui lòng nạp thêm tiền để tiếp tục đăng ký lại.`,
                 type: 'SUBSCRIPTION',
-                link: '/profile/subscriptions'
+                link: '/profile?tab=subscriptions'
               });
             } catch (notifErr) {
               console.error("Failed to create auto-renewal failed notification:", notifErr);

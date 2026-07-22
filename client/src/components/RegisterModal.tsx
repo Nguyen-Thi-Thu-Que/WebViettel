@@ -65,6 +65,8 @@ export default function RegisterModal({
   const { currentUser, registerSubscription, checkSubscription } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkLoading, setCheckLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [frozenBalance, setFrozenBalance] = useState<number | null>(null);
   const [checkResult, setCheckResult] = useState<{
     action: 'ALLOW' | 'REPLACE' | 'REJECT' | 'RENEW_SHORT';
     message: string;
@@ -78,19 +80,33 @@ export default function RegisterModal({
     conflictSubscriptions?: any[];
   } | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      if (frozenBalance === null && currentUser) {
+        setFrozenBalance(currentUser.balance);
+      }
+    } else {
+      setFrozenBalance(null);
+    }
+  }, [isOpen, currentUser, frozenBalance]);
+
+  const currentDisplayBalance = frozenBalance !== null ? frozenBalance : (currentUser?.balance || 0);
+
   // ESC keypress handler
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (!isSubmitting && !checkLoading) {
+          onClose();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isSubmitting, checkLoading]);
 
   // Scroll lock when modal is open
   useEffect(() => {
@@ -110,6 +126,7 @@ export default function RegisterModal({
       setCheckResult(null);
       setIsSubmitting(false);
       setCheckLoading(false);
+      setLocalError(null);
     }
   }, [isOpen]);
 
@@ -122,8 +139,8 @@ export default function RegisterModal({
       return;
     }
 
-    if (currentUser.balance < pkg.gia) {
-      onClose();
+    if (currentDisplayBalance < pkg.gia) {
+      setLocalError('Số dư tài khoản không đủ để đăng ký gói cước này.');
       if (onError) onError('Số dư tài khoản không đủ để đăng ký gói cước này.');
       return;
     }
@@ -136,55 +153,51 @@ export default function RegisterModal({
       cycle = 'YEAR';
     }
 
+    setLocalError(null);
+
+    const executeRegistration = async () => {
+      setIsSubmitting(true);
+      try {
+        const regRes = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
+        if (regRes.success) {
+          const msg = regRes.message || 'Đăng ký gói cước thành công!';
+          if (onSuccess) onSuccess(msg);
+          onClose();
+        } else {
+          setLocalError(regRes.message);
+          if (onError) onError(regRes.message);
+        }
+      } catch (err: any) {
+        const errMsg = err.message || 'Lỗi đăng ký gói cước.';
+        setLocalError(errMsg);
+        if (onError) onError(errMsg);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
     if (!checkResult) {
       // Step 1: Run check API
       setCheckLoading(true);
       try {
         const res = await checkSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
         if (res.hasActive === false) {
-          // If no active subscriptions, register immediately!
-          setIsSubmitting(true);
-          try {
-            const regRes = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
-            onClose();
-            if (regRes.success) {
-              if (onSuccess) onSuccess(regRes.message);
-            } else {
-              if (onError) onError(regRes.message);
-            }
-          } catch (err: any) {
-            if (onError) onError(err.message || 'Lỗi đăng ký gói cước.');
-            onClose();
-          } finally {
-            setIsSubmitting(false);
-          }
+          setCheckLoading(false);
+          await executeRegistration();
         } else {
           setCheckResult(res);
+          setCheckLoading(false);
         }
       } catch (err: any) {
-        if (onError) onError(err.message || 'Lỗi kiểm tra xung đột gói cước.');
-        onClose();
-      } finally {
+        const errMsg = err.message || 'Lỗi kiểm tra xung đột gói cước.';
+        setLocalError(errMsg);
+        if (onError) onError(errMsg);
         setCheckLoading(false);
       }
     } else {
       // Step 2: User confirmed check warnings, call register API
       if (checkResult.action === 'ALLOW' || checkResult.action === 'REPLACE' || checkResult.action === 'RENEW_SHORT') {
-        setIsSubmitting(true);
-        try {
-          const res = await registerSubscription(pkg.numericId || Number(pkg.id) || 0, cycle);
-          onClose();
-          if (res.success) {
-            if (onSuccess) onSuccess(res.message);
-          } else {
-            if (onError) onError(res.message);
-          }
-        } catch (err: any) {
-          if (onError) onError(err.message || 'Lỗi đăng ký gói cước.');
-          onClose();
-        } finally {
-          setIsSubmitting(false);
-        }
+        await executeRegistration();
       }
     }
   };
@@ -198,7 +211,7 @@ export default function RegisterModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          onClick={onClose}
+          onClick={isSubmitting || checkLoading ? undefined : onClose}
           className="absolute inset-0 bg-black/45 backdrop-blur-sm pointer-events-auto"
         />
 
@@ -249,12 +262,12 @@ export default function RegisterModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-semibold">Số dư hiện tại:</span>
-                <span className="font-bold text-slate-900">{(currentUser?.balance || 0).toLocaleString()} VNĐ</span>
+                <span className="font-bold text-slate-900">{currentDisplayBalance.toLocaleString()} VNĐ</span>
               </div>
-              {currentUser && currentUser.balance >= pkg.gia ? (
+              {currentDisplayBalance >= pkg.gia ? (
                 <div className="flex justify-between border-t border-slate-100/50 pt-1.5 mt-1.5">
                   <span className="text-slate-500 font-semibold">Số dư dự kiến:</span>
-                  <span className="font-bold text-emerald-600">{(currentUser.balance - pkg.gia).toLocaleString()} VNĐ</span>
+                  <span className="font-bold text-emerald-600">{(currentDisplayBalance - pkg.gia).toLocaleString()} VNĐ</span>
                 </div>
               ) : (
                 <div className="text-[10px] text-red-650 bg-red-50/60 border border-red-100 rounded-lg p-2 leading-relaxed font-semibold">
@@ -335,6 +348,13 @@ export default function RegisterModal({
             </div>
           )}
 
+          {/* Error Alert */}
+          {localError && (
+            <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-650 text-[10px] leading-relaxed font-semibold">
+              ⚠️ {localError}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex space-x-3 pt-2">
             <button
@@ -352,7 +372,15 @@ export default function RegisterModal({
                 className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-2 focus:outline-none cursor-pointer disabled:opacity-50 shadow-sm"
                 type="button"
               >
-                {checkLoading ? 'Đang kiểm tra...' : isSubmitting ? 'Đang xử lý...' : checkResult ? 'Xác nhận' : 'Xác nhận đăng ký'}
+                {(checkLoading || isSubmitting) && (
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
+                <span>
+                  {checkLoading ? 'Đang kiểm tra...' : isSubmitting ? 'Đang xử lý...' : checkResult ? 'Xác nhận' : 'Xác nhận đăng ký'}
+                </span>
               </button>
             )}
           </div>
