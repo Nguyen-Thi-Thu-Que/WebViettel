@@ -1151,28 +1151,49 @@ export default function Profile() {
 
                 {/* Table Data */}
                 {(() => {
-                  const historyList = (subscriptionHistory || []).filter(sub => {
-                    const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
-                    const subStatus = isExpired ? 'EXPIRED' : sub.status;
+                  const historyList = (subscriptionHistory || [])
+                    .filter(sub => {
+                      const isExpired = sub.status === 'ACTIVE' && new Date(sub.expiresAt) <= new Date();
+                      const subStatus = isExpired ? 'EXPIRED' : sub.status;
 
-                    if (!['CANCELLED', 'EXPIRED', 'REPLACED'].includes(subStatus)) return false;
+                      if (!['CANCELLED', 'EXPIRED', 'REPLACED'].includes(subStatus)) return false;
 
-                    if (historyStatusFilter === 'ALL') return true;
-                    return subStatus === historyStatusFilter;
-                  });
+                      if (historyStatusFilter === 'ALL') return true;
+                      return subStatus === historyStatusFilter;
+                    })
+                    .sort((a, b) => new Date(b.activatedAt || b.registeredAt || 0).getTime() - new Date(a.activatedAt || a.registeredAt || 0).getTime());
 
                   if (historyList.length > 0) {
                     return (
-                      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+                      <div 
+                        className="overflow-x-auto overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-sm custom-scrollbar" 
+                        style={{ maxHeight: '485px' }}
+                      >
+                        <style>{`
+                          .custom-scrollbar::-webkit-scrollbar {
+                            width: 6px;
+                            height: 6px;
+                          }
+                          .custom-scrollbar::-webkit-scrollbar-track {
+                            background: transparent;
+                          }
+                          .custom-scrollbar::-webkit-scrollbar-thumb {
+                            background: #cbd5e1;
+                            border-radius: 3px;
+                          }
+                          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                            background: #94a3b8;
+                          }
+                        `}</style>
                         <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-semibold text-xs uppercase tracking-wider">
-                              <th className="py-3.5 px-4 text-left">Tên gói</th>
-                              <th className="py-3.5 px-4 text-left">Ngày đăng ký</th>
-                              <th className="py-3.5 px-4 text-left">Ngày hết hạn</th>
-                              <th className="py-3.5 px-4 text-left">Chu kỳ</th>
-                              <th className="py-3.5 px-4 text-center">Trạng thái</th>
-                              <th className="py-3.5 px-4 text-center">Hành động</th>
+                          <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(229,231,235,1)]">
+                            <tr className="text-gray-500 font-semibold text-xs uppercase tracking-wider">
+                              <th className="py-3.5 px-4 text-left bg-gray-50">Tên gói</th>
+                              <th className="py-3.5 px-4 text-left bg-gray-50">Ngày đăng ký</th>
+                              <th className="py-3.5 px-4 text-left bg-gray-50">Ngày hết hạn</th>
+                              <th className="py-3.5 px-4 text-left bg-gray-50">Chu kỳ</th>
+                              <th className="py-3.5 px-4 text-center bg-gray-50">Trạng thái</th>
+                              <th className="py-3.5 px-4 text-center bg-gray-50">Hành động</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50 text-slate-700 font-semibold">
