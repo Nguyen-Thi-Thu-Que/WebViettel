@@ -29,6 +29,12 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  subscriptionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UserSubscription',
+    default: null,
+    index: true
+  },
   isDeleted: {
     type: Boolean,
     default: false,

@@ -2,7 +2,7 @@ const Notification = require('../models/Notification');
 const { getVirtualDate } = require('../utils/virtualTime');
 
 const notificationService = {
-  createNotification: async ({ userId, title, content, type, link }) => {
+  createNotification: async ({ userId, title, content, type, link, subscriptionId }) => {
     try {
       const notification = new Notification({
         userId,
@@ -12,7 +12,8 @@ const notificationService = {
         link: link || '',
         status: 'UNREAD',
         isDeleted: false,
-        createdAt: getVirtualDate()
+        createdAt: getVirtualDate(),
+        subscriptionId: subscriptionId || null
       });
       return await notification.save();
     } catch (error) {

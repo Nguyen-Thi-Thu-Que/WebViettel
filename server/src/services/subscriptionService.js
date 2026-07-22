@@ -613,7 +613,8 @@ const subscriptionService = {
             title: 'Đã tắt tự động gia hạn',
             content: `Bạn đã TẮT tính năng tự động gia hạn cho gói ${pkg.ma_goi}. Gói cước sẽ tự động hủy khi hết hạn vào ${formattedDate}.`,
             type: 'SUBSCRIPTION',
-            link: '/profile?tab=subscriptions'
+            link: '/profile?tab=subscriptions',
+            subscriptionId: sub._id
           });
         } else {
           await notificationService.createNotification({
@@ -621,7 +622,8 @@ const subscriptionService = {
             title: 'Đã bật tự động gia hạn',
             content: `Bạn đã BẬT lại tự động gia hạn cho gói ${pkg.ma_goi}. Hệ thống sẽ tự động gia hạn vào ${formattedDate} nếu số dư đủ ${pkg.gia.toLocaleString('vi-VN')}đ.`,
             type: 'SUBSCRIPTION',
-            link: '/profile?tab=subscriptions'
+            link: '/profile?tab=subscriptions',
+            subscriptionId: sub._id
           });
         }
       }
@@ -669,42 +671,80 @@ const subscriptionService = {
   }
 };
 
+const cleanDuplicateNotifications = async () => {
+  try {
+    const Notification = require('../models/Notification');
+    const notifications = await Notification.find({
+      type: 'SUBSCRIPTION',
+      title: { $in: ['Nhắc nhở gia hạn gói cước', 'Cảnh báo số dư không đủ gia hạn'] }
+    });
+
+    const seen = new Set();
+    const toDelete = [];
+
+    for (const notif of notifications) {
+      const match = notif.content.match(/Gói cước\s+([A-Z0-9_]+)/i);
+      const pkgCode = match ? match[1].toUpperCase() : '';
+      const key = notif.subscriptionId 
+        ? `${notif.subscriptionId}_${notif.title}` 
+        : `${notif.userId}_${pkgCode}_${notif.title}`;
+      if (seen.has(key)) {
+        toDelete.push(notif._id);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await Notification.deleteMany({ _id: { $in: toDelete } });
+      console.log(`Cleaned up ${toDelete.length} duplicate warning/reminder notifications from database.`);
+    }
+  } catch (err) {
+    console.error("Failed to clean duplicate notifications:", err);
+  }
+};
+
 const processAutoRenewals = async () => {
+  await cleanDuplicateNotifications().catch(() => {});
   const now = getVirtualDate();
   const activeSubs = await UserSubscription.find({ status: 'ACTIVE', isDeleted: { $ne: true } });
 
+  // Phase 1: Reminder Sweep (Bước 1)
   for (const sub of activeSubs) {
     const expiresAt = sub.expiresAt;
-    
-    // Check if package expires in 24 to 48 hours and has autoRenew active
     const msLeft = expiresAt.getTime() - now.getTime();
     const hoursLeft = msLeft / (1000 * 60 * 60);
-    if (hoursLeft >= 24 && hoursLeft <= 48 && sub.autoRenew) {
-      try {
-        const Notification = require('../models/Notification');
-        const warningExists = await Notification.findOne({
-          userId: sub.userId,
-          type: 'SUBSCRIPTION',
-          createdAt: { $gte: sub.startedAt || sub.activatedAt },
-          title: { $in: ['Nhắc nhở gia hạn gói cước', 'Cảnh báo số dư không đủ gia hạn'] }
-        });
 
-        if (!warningExists) {
-          let pkg = await Package.findOne({ package_id: sub.packageId });
-          if (!pkg) {
-            pkg = await Package.findOne({ $or: [{ package_id: Number(sub.packageId) }, { id: Number(sub.packageId) }] });
-          }
-          const account = await Account.findOne({ user_id: sub.userId });
-          if (pkg && account) {
+    if (hoursLeft <= 48 && sub.autoRenew) {
+      try {
+        let pkg = await Package.findOne({ package_id: sub.packageId });
+        if (!pkg) {
+          pkg = await Package.findOne({ $or: [{ package_id: Number(sub.packageId) }, { id: Number(sub.packageId) }] });
+        }
+        const account = await Account.findOne({ user_id: sub.userId });
+
+        if (pkg && account) {
+          const Notification = require('../models/Notification');
+          const warningExists = await Notification.findOne({
+            subscriptionId: sub._id,
+            type: 'SUBSCRIPTION',
+            createdAt: { $gte: sub.startedAt || sub.activatedAt },
+            title: { $in: ['Nhắc nhở gia hạn gói cước', 'Cảnh báo số dư không đủ gia hạn'] }
+          });
+
+          if (!warningExists) {
             const notificationService = require('./notificationService');
             const formattedDate = formatNotificationDate(expiresAt);
-            if (account.balance >= pkg.gia) {
+            const balanceNum = Number(account.balance);
+            const priceNum = Number(pkg.gia);
+            if (balanceNum >= priceNum) {
               await notificationService.createNotification({
                 userId: sub.userId,
                 title: 'Nhắc nhở gia hạn gói cước',
                 content: `Gói cước ${pkg.ma_goi} của bạn sẽ tự động gia hạn vào ${formattedDate}. Số dư hiện tại (${account.balance.toLocaleString('vi-VN')}đ) đủ điều kiện duy trì dịch vụ.`,
                 type: 'SUBSCRIPTION',
-                link: '/profile?tab=subscriptions'
+                link: '/profile?tab=subscriptions',
+                subscriptionId: sub._id
               });
             } else {
               await notificationService.createNotification({
@@ -712,16 +752,21 @@ const processAutoRenewals = async () => {
                 title: 'Cảnh báo số dư không đủ gia hạn',
                 content: `Gói cước ${pkg.ma_goi} của bạn sẽ gia hạn vào ${formattedDate} (Cần ${pkg.gia.toLocaleString('vi-VN')}đ). Số dư hiện tại chỉ còn ${account.balance.toLocaleString('vi-VN')}đ. Vui lòng nạp thêm tiền để không bị ngắt kết nối.`,
                 type: 'SUBSCRIPTION',
-                link: '/profile?tab=subscriptions'
+                link: '/profile?tab=subscriptions',
+                subscriptionId: sub._id
               });
             }
           }
         }
       } catch (err) {
-        console.error("Error creating expiry warning notification:", err);
+        console.error("Error creating expiry warning notification in sweep:", err);
       }
     }
+  }
 
+  // Phase 2: Renewal Execution Sweep (Bước 2)
+  for (const sub of activeSubs) {
+    const expiresAt = sub.expiresAt;
     const expiresAtLocal = new Date(expiresAt.getTime() + 7 * 60 * 60 * 1000);
     const nextDayLocal = new Date(expiresAtLocal);
     nextDayLocal.setUTCHours(0, 0, 0, 0);
@@ -736,7 +781,7 @@ const processAutoRenewals = async () => {
         }
         const account = await Account.findOne({ user_id: sub.userId });
 
-        if (pkg && account && account.balance >= pkg.gia) {
+        if (pkg && account && Number(account.balance) >= Number(pkg.gia)) {
           account.balance -= pkg.gia;
           await account.save();
 
@@ -765,7 +810,8 @@ const processAutoRenewals = async () => {
               title: 'Gia hạn gói cước thành công',
               content: `Gia hạn thành công gói cước ${pkg.ma_goi}! Tài khoản đã trừ ${pkg.gia.toLocaleString('vi-VN')}đ. Ưu đãi ${pkg.uudaitrong || pkg.ten} đã được khôi phục, hạn sử dụng đến ${formatNotificationDate(newExpiresAt)}.`,
               type: 'SUBSCRIPTION',
-              link: '/profile?tab=subscriptions'
+              link: '/profile?tab=subscriptions',
+              subscriptionId: sub._id
             });
           } catch (notifErr) {
             console.error("Failed to create auto-renewal success notification:", notifErr);
@@ -785,7 +831,8 @@ const processAutoRenewals = async () => {
                 title: 'Gia hạn gói cước thất bại',
                 content: `Gia hạn gói cước ${pkg.ma_goi} thất bại do số dư ví không đủ (${account.balance.toLocaleString('vi-VN')}đ / ${pkg.gia.toLocaleString('vi-VN')}đ). Gói cước đã bị tạm dừng/hủy. Nạp tiền ngay để đăng ký lại.`,
                 type: 'SUBSCRIPTION',
-                link: '/profile?tab=subscriptions'
+                link: '/profile?tab=subscriptions',
+                subscriptionId: sub._id
               });
             } catch (notifErr) {
               console.error("Failed to create auto-renewal failed notification:", notifErr);
