@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage, Contact } from '../types';
+import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage, Contact, Notification } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -254,8 +254,8 @@ export const authApi = {
     return response.data.data;
   },
 
-  depositBlockchain: async (amount: number, txHash: string, walletAddress: string, network: string): Promise<{ balance: number }> => {
-    const response = await axiosInstance.post<{ success: boolean; data: { balance: number } }>('/api/auth/deposit', { amount, txHash, walletAddress, network });
+  depositBlockchain: async (amount: number, txHash: string, walletAddress: string, network: string, depositId?: string | number): Promise<{ balance: number }> => {
+    const response = await axiosInstance.post<{ success: boolean; data: { balance: number } }>('/api/auth/deposit', { amount, txHash, walletAddress, network, depositId });
     return response.data.data;
   },
 
@@ -535,6 +535,34 @@ export const contactApi = {
   updateContactNote: async (id: string, note: string): Promise<Contact> => {
     const response = await axiosInstance.patch<{ success: boolean; data: Contact }>(`/api/contact/${id}/note`, { admin_note: note });
     return response.data.data;
+  }
+};
+
+// 10. Notification APIs
+export const notificationApi = {
+  fetchNotifications: async (): Promise<Notification[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Notification[] }>('/api/notifications');
+    return response.data.data;
+  },
+
+  fetchUnreadCount: async (): Promise<number> => {
+    const response = await axiosInstance.get<{ success: boolean; data: number }>('/api/notifications/unread/count');
+    return response.data.data;
+  },
+
+  markAllAsRead: async (): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>('/api/notifications/read');
+    return response.data.success;
+  },
+
+  markAsRead: async (id: string): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>(`/api/notifications/${id}/read`);
+    return response.data.success;
+  },
+
+  softDeleteAll: async (): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>('/api/notifications');
+    return response.data.success;
   }
 };
 

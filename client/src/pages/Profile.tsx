@@ -342,7 +342,15 @@ export default function Profile() {
     }
 
     setIsDepositing(true);
-    await createPendingDeposit(vndAmount, 'Sepolia', walletAddress).catch(() => {});
+    let pendingDepId: any = undefined;
+    try {
+      const pendingRes = await createPendingDeposit(vndAmount, 'Sepolia', walletAddress);
+      if (pendingRes && pendingRes.success && pendingRes.data) {
+        pendingDepId = pendingRes.data.deposit_id || pendingRes.data._id;
+      }
+    } catch (pendingErr) {
+      console.warn("Failed to create pending deposit:", pendingErr);
+    }
     try {
       const config = getBlockchainConfig();
       const provider = new ethers.BrowserProvider((window as any).ethereum);
@@ -428,7 +436,7 @@ export default function Profile() {
         throw new Error('Giao dịch Blockchain thất bại hoặc không được xác nhận.');
       }
 
-      const res = await depositBlockchain(vndAmount, receipt.hash, walletAddress, config.networkName);
+      const res = await depositBlockchain(vndAmount, receipt.hash, walletAddress, config.networkName, pendingDepId);
 
       if (res.success) {
         showToast('success', `Nạp tiền thành công! Đã cộng ${vndAmount.toLocaleString('vi-VN')} VNĐ vào số dư tài khoản.`);
@@ -439,7 +447,11 @@ export default function Profile() {
       }
     } catch (err: any) {
       console.error('Deposit error:', err);
-      await cancelPendingDeposit().catch(() => {});
+      if (pendingDepId) {
+        await cancelPendingDeposit(pendingDepId.toString()).catch(() => {});
+      } else {
+        await cancelPendingDeposit().catch(() => {});
+      }
       if (err.code === 4001 || err.message?.includes('rejected') || err.message?.includes('User denied')) {
         showToast('error', 'Giao dịch đã bị hủy bởi người dùng.');
       } else {

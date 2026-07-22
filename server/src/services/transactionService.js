@@ -78,7 +78,7 @@ const verifyBlockchainTx = async (txHash, expectedReceiver, expectedEthAmount, r
 
 const transactionService = {
   // Process Blockchain deposit
-  depositBlockchain: async (userId, amount, network, txHash, walletAddress) => {
+  depositBlockchain: async (userId, amount, network, txHash, walletAddress, depositId) => {
     if (
       isNaN(Number(amount)) ||
       Number(amount) <= 0 ||
@@ -93,14 +93,31 @@ const transactionService = {
     session.startTransaction();
 
     try {
-      let existingDep = await Deposit.findOne({
-        $or: [
-          { txHash: txHash },
-          { tx_hash: txHash }
-        ]
-      }).session(session);
+      let existingDep = null;
+      if (depositId) {
+        let query = {};
+        if (typeof depositId === 'number' || !isNaN(Number(depositId))) {
+          query = { deposit_id: Number(depositId) };
+        } else {
+          query = { _id: mongoose.Types.ObjectId.isValid(depositId) ? depositId : null };
+        }
+        existingDep = await Deposit.findOne(query).session(session);
+      }
 
-      if (existingDep && existingDep.status === 'success') {
+      if (!existingDep) {
+        existingDep = await Deposit.findOne({
+          $or: [
+            { txHash: txHash },
+            { tx_hash: txHash }
+          ]
+        }).session(session);
+      }
+
+      if (!existingDep) {
+        throw new Error('Không tìm thấy yêu cầu nạp tiền chờ xử lý tương ứng.');
+      }
+
+      if (existingDep.status === 'success') {
         throw new Error('Giao dịch đã được xử lý.');
       }
 
@@ -121,6 +138,18 @@ const transactionService = {
       const isValidTx = await verifyBlockchainTx(txHash, expectedReceiver, expectedEthAmount, rpcUrl);
 
       if (!isValidTx) {
+        existingDep.status = 'failed';
+        await existingDep.save({ session });
+
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: userId,
+          title: 'Giao dịch nạp tiền thất bại',
+          content: `Xác minh giao dịch blockchain thất bại. Giao dịch nạp tiền qua MetaMask với hash ${txHash} đã thất bại.`,
+          type: 'TRANSACTION',
+          link: '/profile/history'
+        });
+
         throw new Error('Xác minh giao dịch blockchain thất bại. Vui lòng kiểm tra lại Hash hoặc số tiền.');
       }
 
@@ -128,35 +157,32 @@ const transactionService = {
       account.balance += numericAmount;
       await account.save({ session });
 
-      if (existingDep) {
-        existingDep.status = 'success';
-        existingDep.amountVND = numericAmount;
-        existingDep.walletAddress = walletAddress.toLowerCase();
-        existingDep.network = network;
-        await existingDep.save({ session });
-      } else {
-        const lastDep = await Deposit.findOne().sort({ deposit_id: -1 }).session(session);
-        const nextId = lastDep ? lastDep.deposit_id + 1 : 1;
-
-        await Deposit.create([{
-          deposit_id: nextId,
-          user_id: userId,
-          amountVND: numericAmount,
-          amountETH: expectedEthAmount.toString(),
-          exchangeRate: exchangeRate,
-          txHash: txHash,
-          walletAddress: walletAddress.toLowerCase(),
-          network: network,
-          status: 'success',
-
-          // legacy compatibility
-          amount: numericAmount,
-          fiat_equivalent: numericAmount,
-          tx_hash: txHash
-        }], { session });
-      }
+      existingDep.status = 'success';
+      existingDep.amountVND = numericAmount;
+      existingDep.walletAddress = walletAddress.toLowerCase();
+      existingDep.network = network;
+      existingDep.txHash = txHash;
+      existingDep.tx_hash = txHash; // legacy compatibility
+      existingDep.amount = numericAmount; // legacy compatibility
+      existingDep.fiat_equivalent = numericAmount; // legacy compatibility
+      await existingDep.save({ session });
 
       await session.commitTransaction();
+
+      // Create notification for successful MetaMask deposit
+      try {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: userId,
+          title: 'Nạp tiền MetaMask thành công',
+          content: `Đã nạp thành công ${numericAmount.toLocaleString('vi-VN')} VNĐ vào ví ảo của bạn thông qua MetaMask. Mã giao dịch (txHash): ${txHash}.`,
+          type: 'TRANSACTION',
+          link: '/profile/history'
+        });
+      } catch (err) {
+        console.error("Failed to create deposit success notification:", err);
+      }
+
       return {
         balance: account.balance
       };
@@ -216,6 +242,21 @@ const transactionService = {
     if (dep) {
       dep.status = 'cancelled';
       await dep.save();
+
+      // Create notification for MetaMask deposit cancellation
+      try {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: userId,
+          title: 'Giao dịch nạp tiền đã hủy',
+          content: `Yêu cầu nạp tiền ${dep.amountVND.toLocaleString('vi-VN')} VNĐ qua MetaMask đã bị hủy hoặc thất bại.`,
+          type: 'TRANSACTION',
+          link: '/profile/history'
+        });
+      } catch (err) {
+        console.error("Failed to create deposit cancel notification:", err);
+      }
+
       return dep;
     }
     return null;
@@ -262,6 +303,21 @@ const transactionService = {
       }], { session });
 
       await session.commitTransaction();
+
+      // Create notification for fiat deposit
+      try {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: userId,
+          title: 'Nạp tiền vào tài khoản thành công',
+          content: `Tài khoản của bạn đã được cộng ${amount.toLocaleString('vi-VN')} VNĐ từ giao dịch nạp tiền ảo.`,
+          type: 'TRANSACTION',
+          link: '/profile/history'
+        });
+      } catch (err) {
+        console.error("Failed to create fiat deposit notification:", err);
+      }
+
       return {
         balance: account.balance
       };
@@ -368,6 +424,21 @@ const transactionService = {
 
     sub.status = 'CANCELLED';
     await sub.save();
+
+    // Create notification for unsubscribe
+    try {
+      const notificationService = require('./notificationService');
+      await notificationService.createNotification({
+        userId: userId,
+        title: 'Hủy gói cước thành công',
+        content: `Bạn đã hủy thành công gói cước ${pkg.ten} (${pkg.ma_goi}).`,
+        type: 'SUBSCRIPTION',
+        link: '/profile/subscriptions'
+      });
+    } catch (err) {
+      console.error("Failed to create unsubscribe notification:", err);
+    }
+
     return true;
   },
 

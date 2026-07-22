@@ -4,24 +4,76 @@ import { Search, Bell, User, LogOut, Shield, CreditCard, Menu, X, ChevronDown, L
 import { useAuthStore } from '../store';
 
 export default function Navbar() {
-  const { currentUser, logout } = useAuthStore();
+  const { 
+    currentUser, 
+    logout,
+    notifications,
+    unreadCount,
+    fetchNotifications,
+    fetchUnreadCount,
+    markAllNotificationsAsRead,
+    markNotificationAsRead,
+    clearNotifications
+  } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications().catch(() => {});
+      fetchUnreadCount().catch(() => {});
+    }
+  }, [currentUser]);
+
+  const formatDateTime = (dateInput: string | Date | number): string => {
+    if (!dateInput) return '—';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '—';
+
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour12: false
+    };
+
+    const formatter = new Intl.DateTimeFormat('vi-VN', options);
+    const parts = formatter.formatToParts(d);
+
+    let hour = '00', minute = '00', day = '01', month = '01', year = '2026';
+    for (const part of parts) {
+      if (part.type === 'hour') hour = part.value;
+      else if (part.type === 'minute') minute = part.value;
+      else if (part.type === 'day') day = part.value;
+      else if (part.type === 'month') month = part.value;
+      else if (part.type === 'year') year = part.value;
+    }
+
+    return `${hour}:${minute} - ${day}/${month}/${year}`;
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -101,11 +153,128 @@ export default function Navbar() {
 
       {/* Right User Area */}
       <div className="flex items-center space-x-3">
-        {/* Notification Icon */}
-        <button className="p-2 bg-slate-55 hover:bg-slate-105 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 transition-colors relative focus:outline-none">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full" />
-        </button>
+        {/* Notification Icon & Popover */}
+        {currentUser && (
+          <div className="relative" ref={notificationRef}>
+            <button
+              onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+              className="p-2 bg-slate-55 hover:bg-slate-105 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 transition-colors relative focus:outline-none cursor-pointer"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[8px] font-extrabold text-white animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {isNotificationOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-[360px] bg-white border border-slate-200 rounded-xl shadow-lg animate-fade-in z-50 text-slate-705 divide-y divide-slate-100 overflow-hidden">
+                {/* Header */}
+                <div className="px-4 py-3 flex items-center justify-between bg-slate-50/50">
+                  <h3 className="text-xs font-bold text-slate-900 flex items-center space-x-1">
+                    <span>Thông báo</span>
+                    {unreadCount > 0 && (
+                      <span className="bg-red-100 text-primary text-[9px] px-1.5 py-0.5 rounded-full font-extrabold">
+                        {unreadCount} mới
+                      </span>
+                    )}
+                  </h3>
+                  <div className="flex space-x-2 text-[10px]">
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          await markAllNotificationsAsRead();
+                        }}
+                        className="text-primary hover:underline font-bold cursor-pointer"
+                      >
+                        Đọc tất cả
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={async () => {
+                          await clearNotifications();
+                        }}
+                        className="text-slate-405 hover:text-slate-650 hover:underline font-bold cursor-pointer"
+                      >
+                        Xóa lịch sử
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notifications List */}
+                <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-50">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 px-4 flex flex-col items-center justify-center text-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-350">
+                        <Bell className="w-5 h-5" />
+                      </div>
+                      <p className="text-[11px] font-bold text-slate-400">Không có thông báo nào</p>
+                    </div>
+                  ) : (
+                    notifications.map((n) => {
+                      const isUnread = n.status === 'UNREAD';
+                      return (
+                        <div
+                          key={n._id}
+                          onClick={async () => {
+                            if (isUnread) {
+                              await markNotificationAsRead(n._id);
+                            }
+                            setIsNotificationOpen(false);
+                            if (n.link) {
+                              navigate(n.link);
+                            }
+                          }}
+                          className={`px-4 py-3 flex items-start space-x-3 transition-all cursor-pointer hover:bg-slate-50/70 ${
+                            isUnread ? 'bg-red-50/10 font-semibold' : ''
+                          }`}
+                        >
+                          {/* Notification Type Icon */}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            n.type === 'TRANSACTION'
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : n.type === 'SUBSCRIPTION'
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'bg-amber-50 text-amber-600'
+                          }`}>
+                            {n.type === 'TRANSACTION' ? (
+                              <CreditCard className="w-4 h-4" />
+                            ) : n.type === 'SUBSCRIPTION' ? (
+                              <FileText className="w-4 h-4" />
+                            ) : (
+                              <Shield className="w-4 h-4" />
+                            )}
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className={`text-xs ${isUnread ? 'text-slate-900 font-extrabold' : 'text-slate-707 font-medium'}`}>
+                              {n.title}
+                            </p>
+                            <p className="text-[10px] text-slate-500 leading-normal mt-0.5 break-words font-medium">
+                              {n.content}
+                            </p>
+                            <p className="text-[8px] text-slate-450 mt-1 font-bold">
+                              {formatDateTime(n.createdAt)}
+                            </p>
+                          </div>
+
+                          {/* Unread dot indicator */}
+                          {isUnread && (
+                            <span className="w-1.5 h-1.5 bg-primary rounded-full shrink-0 mt-1.5" />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {currentUser ? (
           <div className="flex items-center space-x-3">

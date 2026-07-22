@@ -27,9 +27,10 @@ const contactService = {
   },
 
   updateContactStatus: async (contactId, status, adminUserId) => {
+    // Validate status value
     const validStatuses = ['NEW', 'READ', 'PROCESSING', 'DONE', 'CLOSED'];
     if (!validStatuses.includes(status)) {
-      throw new Error('Trạng thái không hợp lệ');
+      throw new Error('Trạng thái không hợp lệ.');
     }
 
     const contact = await Contact.findOne({ contact_id: contactId });
@@ -40,8 +41,25 @@ const contactService = {
     contact.status = status;
     contact.handled_by = adminUserId;
     contact.handled_at = new Date();
-    
-    return await contact.save();
+
+    const savedContact = await contact.save();
+
+    if (savedContact.user_id) {
+      try {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: savedContact.user_id,
+          title: 'Yêu cầu hỗ trợ được phản hồi',
+          content: `Yêu cầu liên hệ hỗ trợ mã ${contactId} của bạn đã được cập nhật trạng thái mới: ${status}. Vui lòng kiểm tra phản hồi từ quản trị viên.`,
+          type: 'SYSTEM',
+          link: '/contact'
+        });
+      } catch (err) {
+        console.error("Failed to create contact status update notification:", err);
+      }
+    }
+
+    return savedContact;
   },
 
   updateContactNote: async (contactId, adminNote, adminUserId) => {

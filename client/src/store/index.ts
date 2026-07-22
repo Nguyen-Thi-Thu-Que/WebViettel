@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers } from '../types';
-import { packageApi, authApi, transactionApi, faqApi, chatbotApi, surveyApi } from '../services/api';
+import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers, Notification } from '../types';
+import { packageApi, authApi, transactionApi, faqApi, chatbotApi, surveyApi, notificationApi } from '../services/api';
 
 export function isAllowedForUser(pkg: Package, user: any): boolean {
   // Hiện tại vẫn hiển thị bình thường.
@@ -31,7 +31,7 @@ interface AuthState {
   updateProfile: (name: string, email: string) => Promise<boolean>;
   changePassword: (oldPw: string, newPw: string) => Promise<boolean>;
   deposit: (amount: number, method: string) => Promise<boolean>;
-  depositBlockchain: (amount: number, txHash: string, walletAddress: string, network: string) => Promise<{ success: boolean; message: string; balance?: number }>;
+  depositBlockchain: (amount: number, txHash: string, walletAddress: string, network: string, depositId?: string | number) => Promise<{ success: boolean; message: string; balance?: number }>;
   subscribePackage: (pkg: Package) => Promise<{ success: boolean; message: string }>;
   registerSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<{ success: boolean; message: string }>;
   unsubscribePackage: (packageId: string) => Promise<boolean>;
@@ -47,6 +47,13 @@ interface AuthState {
   checkSubscription: (packageId: number, cycle: 'DAY' | 'MONTH' | 'YEAR') => Promise<any>;
   fetchActiveSubscriptions: () => Promise<void>;
   fetchSubscriptionHistory: () => Promise<void>;
+  notifications: Notification[];
+  unreadCount: number;
+  fetchNotifications: () => Promise<void>;
+  fetchUnreadCount: () => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<boolean>;
+  markNotificationAsRead: (id: string) => Promise<boolean>;
+  clearNotifications: () => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -55,6 +62,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   faqs: [],
   activeSubscriptions: [],
   subscriptionHistory: [],
+  notifications: [],
+  unreadCount: 0,
   loading: false,
   error: null,
   authChecked: typeof window !== 'undefined' ? !localStorage.getItem('token') : true,
@@ -74,6 +83,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Auto fetch other details
       get().fetchTransactions().catch(() => { });
       get().fetchFAQs().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
 
       // Automatically reset survey state to clean initial state
       useSurveyStore.getState().resetSurvey().catch(() => { });
@@ -98,6 +109,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Automatically fetch active subscriptions & history into global state
       await get().fetchActiveSubscriptions().catch(() => { });
       await get().fetchSubscriptionHistory().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
 
       // Automatically reset survey state to clean initial state
       useSurveyStore.getState().resetSurvey().catch(() => { });
@@ -114,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [] });
+    set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
     // Automatically reset survey state to clean initial state
     useSurveyStore.getState().resetSurvey().catch(() => { });
   },
@@ -122,7 +135,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   fetchMe: async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      set({ authChecked: true, currentUser: null, activeSubscriptions: [], subscriptionHistory: [] });
+      set({ authChecked: true, currentUser: null, activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
       return;
     }
     try {
@@ -134,11 +147,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         get().fetchActiveSubscriptions().catch((err) => console.error("fetchActiveSubscriptions error", err)),
         get().fetchSubscriptionHistory().catch((err) => console.error("fetchSubscriptionHistory error", err)),
         get().fetchTransactions().catch((err) => console.error("fetchTransactions error", err)),
-        get().fetchFAQs().catch((err) => console.error("fetchFAQs error", err))
+        get().fetchFAQs().catch((err) => console.error("fetchFAQs error", err)),
+        get().fetchNotifications().catch((err) => console.error("fetchNotifications error", err)),
+        get().fetchUnreadCount().catch((err) => console.error("fetchUnreadCount error", err))
       ]);
     } catch (err) {
       console.error("Error fetching current user profile:", err);
-      set({ currentUser: null, authChecked: true, activeSubscriptions: [], subscriptionHistory: [] });
+      set({ currentUser: null, authChecked: true, activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
     }
   },
 
@@ -191,6 +206,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } : null
       }));
       get().fetchTransactions().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error depositing wallet:", err);
@@ -198,10 +215,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  depositBlockchain: async (amount, txHash, walletAddress, network) => {
+  depositBlockchain: async (amount, txHash, walletAddress, network, depositId) => {
     set({ loading: true, error: null });
     try {
-      const result = await authApi.depositBlockchain(amount, txHash, walletAddress, network);
+      const result = await authApi.depositBlockchain(amount, txHash, walletAddress, network, depositId);
       set(state => ({
         currentUser: state.currentUser ? {
           ...state.currentUser,
@@ -210,6 +227,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         loading: false
       }));
       get().fetchTransactions().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
       return { success: true, message: 'Nạp tiền qua blockchain thành công!', balance: result.balance };
     } catch (err: any) {
       const errMsg = err.response?.data?.message || 'Nạp tiền qua blockchain thất bại.';
@@ -289,6 +308,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await get().fetchActiveSubscriptions().catch(() => { });
         await get().fetchSubscriptionHistory().catch(() => { });
         get().fetchTransactions().catch(() => { });
+        get().fetchNotifications().catch(() => { });
+        get().fetchUnreadCount().catch(() => { });
         return true;
       }
       return false;
@@ -303,6 +324,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authApi.toggleAutoRenew(subscriptionId, autoRenew);
       await get().fetchActiveSubscriptions().catch(() => { });
       await get().fetchSubscriptionHistory().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error toggling auto renew:", err);
@@ -315,6 +338,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authApi.cancelSubscription(subscriptionId);
       await get().fetchActiveSubscriptions().catch(() => { });
       await get().fetchSubscriptionHistory().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error cancelling subscription:", err);
@@ -359,6 +384,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await transactionApi.cancelPendingDeposit(depositId, txHash);
       await get().fetchTransactions().catch(() => { });
+      get().fetchNotifications().catch(() => { });
+      get().fetchUnreadCount().catch(() => { });
       return true;
     } catch (err) {
       console.error("Error cancelling pending deposit:", err);
@@ -376,6 +403,72 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const errMsg = err.response?.data?.message || 'Liên kết địa chỉ ví thất bại.';
       set({ error: errMsg, loading: false });
       return { success: false, message: errMsg };
+    }
+  },
+
+  fetchNotifications: async () => {
+    try {
+      const list = await notificationApi.fetchNotifications();
+      set({ notifications: list });
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  },
+
+  fetchUnreadCount: async () => {
+    try {
+      const count = await notificationApi.fetchUnreadCount();
+      set({ unreadCount: count });
+    } catch (err) {
+      console.error("Error fetching unread count:", err);
+    }
+  },
+
+  markAllNotificationsAsRead: async () => {
+    try {
+      const success = await notificationApi.markAllAsRead();
+      if (success) {
+        set(state => ({
+          unreadCount: 0,
+          notifications: state.notifications.map(n => ({ ...n, status: 'READ' }))
+        }));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Error marking all as read:", err);
+      return false;
+    }
+  },
+
+  markNotificationAsRead: async (id) => {
+    try {
+      const success = await notificationApi.markAsRead(id);
+      if (success) {
+        set(state => ({
+          unreadCount: Math.max(0, state.unreadCount - 1),
+          notifications: state.notifications.map(n => n._id === id ? { ...n, status: 'READ' } : n)
+        }));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Error marking single as read:", err);
+      return false;
+    }
+  },
+
+  clearNotifications: async () => {
+    try {
+      const success = await notificationApi.softDeleteAll();
+      if (success) {
+        set({ notifications: [], unreadCount: 0 });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Error clearing notifications:", err);
+      return false;
     }
   }
 }));

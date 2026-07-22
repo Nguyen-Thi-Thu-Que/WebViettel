@@ -152,3 +152,15 @@ export interface Contact {
   handled_at?: string | null;
   admin_note?: string;
 }
+
+export interface Notification {
+  _id: string;
+  userId: number;
+  title: string;
+  content: string;
+  type: 'SUBSCRIPTION' | 'TRANSACTION' | 'SYSTEM';
+  status: 'UNREAD' | 'READ';
+  link?: string;
+  isDeleted: boolean;
+  createdAt: string;
+}

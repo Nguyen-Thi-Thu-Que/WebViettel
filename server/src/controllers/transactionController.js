@@ -3,7 +3,7 @@ const transactionService = require('../services/transactionService');
 const transactionController = {
   deposit: async (req, res, next) => {
     try {
-      const { amount, method, txHash, walletAddress, network } = req.body;
+      const { amount, method, txHash, walletAddress, network, depositId } = req.body;
       if (amount === undefined || amount === null || amount === '') {
         return res.status(400).json({
           success: false,
@@ -18,7 +18,8 @@ const transactionController = {
           amount,
           network,
           txHash,
-          walletAddress
+          walletAddress,
+          depositId
         );
       } else {
         result = await transactionService.depositFiat(

@@ -470,6 +470,34 @@ const subscriptionService = {
 
       await session.commitTransaction();
 
+      // Create notification after successful registration/replacement
+      try {
+        const notificationService = require('./notificationService');
+        if (conflictResult.action === 'REPLACE' && conflictResult.replaceSubscriptions) {
+          const replacedCodes = conflictResult.replaceSubscriptions.map(s => s.packageCode).join(', ');
+          await notificationService.createNotification({
+            userId: userId,
+            title: 'Chuyển đổi gói cước thành công',
+            content: `Bạn đã chuyển đổi thành công sang gói cước mới ${pkg.ten} (${pkg.ma_goi}) thay thế cho gói cước cũ (${replacedCodes}). Phí đăng ký ${pkg.gia.toLocaleString('vi-VN')} VNĐ.`,
+            type: 'SUBSCRIPTION',
+            link: '/profile/subscriptions'
+          });
+        } else {
+          const isRenew = conflictResult.action === 'RENEW_SHORT';
+          await notificationService.createNotification({
+            userId: userId,
+            title: isRenew ? 'Gia hạn gói cước thành công' : 'Đăng ký gói cước thành công',
+            content: isRenew 
+              ? `Bạn đã gia hạn thành công gói cước ${pkg.ten} (${pkg.ma_goi}). Phí gia hạn ${pkg.gia.toLocaleString('vi-VN')} VNĐ.` 
+              : `Bạn đã đăng ký thành công gói cước ${pkg.ten} (${pkg.ma_goi}). Phí đăng ký ${pkg.gia.toLocaleString('vi-VN')} VNĐ.`,
+            type: 'SUBSCRIPTION',
+            link: '/profile/subscriptions'
+          });
+        }
+      } catch (notifErr) {
+        console.error("Failed to create registration/replacement notification:", notifErr);
+      }
+
       const subObj = returnedSub.toObject();
       if (conflictResult.action === 'RENEW_SHORT') {
         subObj.message = 'Đăng ký lại thành công. Ưu đãi và thời gian sử dụng đã được cấp mới.';
@@ -520,6 +548,27 @@ const subscriptionService = {
     sub.autoRenew = false;
     sub.cancelledAt = getVirtualDate();
     await sub.save();
+
+    // Create cancel notification
+    try {
+      let pkg = await Package.findOne({ package_id: sub.packageId });
+      if (!pkg) {
+        pkg = await Package.findOne({ $or: [{ package_id: Number(sub.packageId) }, { id: Number(sub.packageId) }] });
+      }
+      if (pkg) {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: userId,
+          title: 'Hủy gói cước thành công',
+          content: `Bạn đã hủy thành công gói cước ${pkg.ten} (${pkg.ma_goi}).`,
+          type: 'SUBSCRIPTION',
+          link: '/profile/subscriptions'
+        });
+      }
+    } catch (err) {
+      console.error("Failed to create cancel subscription notification:", err);
+    }
+
     return sub;
   },
 
@@ -583,6 +632,41 @@ const processAutoRenewals = async () => {
 
   for (const sub of activeSubs) {
     const expiresAt = sub.expiresAt;
+    
+    // Check if package expires in less than 24 hours
+    const msLeft = expiresAt.getTime() - now.getTime();
+    const hoursLeft = msLeft / (1000 * 60 * 60);
+    if (hoursLeft > 0 && hoursLeft <= 24) {
+      try {
+        const Notification = require('../models/Notification');
+        const warningExists = await Notification.findOne({
+          userId: sub.userId,
+          type: 'SUBSCRIPTION',
+          createdAt: { $gte: sub.startedAt || sub.activatedAt },
+          title: 'Gói cước sắp hết hạn'
+        });
+
+        if (!warningExists) {
+          let pkg = await Package.findOne({ package_id: sub.packageId });
+          if (!pkg) {
+            pkg = await Package.findOne({ $or: [{ package_id: Number(sub.packageId) }, { id: Number(sub.packageId) }] });
+          }
+          if (pkg) {
+            const notificationService = require('./notificationService');
+            await notificationService.createNotification({
+              userId: sub.userId,
+              title: 'Gói cước sắp hết hạn',
+              content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) của bạn sẽ hết hạn vào lúc ${expiresAt.toLocaleString('vi-VN')}. Vui lòng nạp thêm tiền nếu số dư không đủ để hệ thống tự động gia hạn.`,
+              type: 'SUBSCRIPTION',
+              link: '/profile/subscriptions'
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error creating expiry warning notification:", err);
+      }
+    }
+
     const expiresAtLocal = new Date(expiresAt.getTime() + 7 * 60 * 60 * 1000);
     const nextDayLocal = new Date(expiresAtLocal);
     nextDayLocal.setUTCHours(0, 0, 0, 0);
@@ -617,11 +701,41 @@ const processAutoRenewals = async () => {
           sub.cycleType = metadata.cycle_type;
           await sub.save();
           console.log(`Auto-renewed sub ${sub._id} for user ${sub.userId} pkg ${pkg.ma_goi}`);
+
+          // Create auto-renewal success notification
+          try {
+            const notificationService = require('./notificationService');
+            await notificationService.createNotification({
+              userId: sub.userId,
+              title: 'Gia hạn gói cước thành công',
+              content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) đã được gia hạn tự động thành công. Tài khoản của bạn đã bị trừ ${pkg.gia.toLocaleString('vi-VN')} VNĐ.`,
+              type: 'SUBSCRIPTION',
+              link: '/profile/subscriptions'
+            });
+          } catch (notifErr) {
+            console.error("Failed to create auto-renewal success notification:", notifErr);
+          }
         } else {
           sub.status = 'EXPIRED';
           sub.autoRenew = false;
           await sub.save();
           console.log(`Auto-renewal failed/insufficient funds for sub ${sub._id} user ${sub.userId}`);
+
+          // Create auto-renewal failed notification
+          if (pkg && account) {
+            try {
+              const notificationService = require('./notificationService');
+              await notificationService.createNotification({
+                userId: sub.userId,
+                title: 'Gia hạn gói cước thất bại',
+                content: `Gói cước ${pkg.ten} (${pkg.ma_goi}) gia hạn thất bại do số dư tài khoản không đủ. Số dư hiện tại của bạn là ${account.balance.toLocaleString('vi-VN')} VNĐ. Cần nạp thêm ${(pkg.gia - account.balance).toLocaleString('vi-VN')} VNĐ để thực hiện gia hạn.`,
+                type: 'SUBSCRIPTION',
+                link: '/profile/subscriptions'
+              });
+            } catch (notifErr) {
+              console.error("Failed to create auto-renewal failed notification:", notifErr);
+            }
+          }
         }
       } else {
         sub.status = 'EXPIRED';
