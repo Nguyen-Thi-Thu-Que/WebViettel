@@ -100,6 +100,19 @@ module.exports = {
     } catch (error) {
       next(error);
     }
+  },
+
+  getAdminHistory: async (req, res, next) => {
+    try {
+      const { search } = req.query;
+      const history = await surveyService.getAllSurveys({ search });
+      res.status(200).json({
+        success: true,
+        data: history
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 

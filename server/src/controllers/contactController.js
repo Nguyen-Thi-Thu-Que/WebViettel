@@ -59,7 +59,8 @@ const contactController = {
 
   getContacts: async (req, res, next) => {
     try {
-      const contacts = await contactService.getAllContacts();
+      const { status, search } = req.query;
+      const contacts = await contactService.getAllContacts({ status, search });
       return res.status(200).json({
         success: true,
         message: 'Lấy danh sách liên hệ thành công.',

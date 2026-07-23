@@ -28,7 +28,8 @@ const AdminDashboard = lazy(() => import('./pages/Admin/Dashboard'));
 const AdminPackages = lazy(() => import('./pages/Admin/Packages'));
 const AdminUsers = lazy(() => import('./pages/Admin/Users'));
 const AdminDeposits = lazy(() => import('./pages/Admin/Deposits'));
-const AdminChatbot = lazy(() => import('./pages/Admin/Chatbot'));
+const AdminContacts = lazy(() => import('./pages/Admin/Contacts'));
+const AdminSurveys = lazy(() => import('./pages/Admin/Surveys'));
 
 const PageLoader = () => (
   <div className="flex flex-col items-center justify-center min-h-[300px] text-xs font-semibold text-slate-500 space-y-4">
@@ -86,7 +87,8 @@ export default function App() {
             <Route path="packages" element={<AdminPackages />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="deposits" element={<AdminDeposits />} />
-            <Route path="chatbot" element={<AdminChatbot />} />
+            <Route path="contacts" element={<AdminContacts />} />
+            <Route path="surveys" element={<AdminSurveys />} />
           </Route>
 
           {/* Fallback 404 Route */}

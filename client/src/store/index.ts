@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, Package, Transaction, ChatMessage, ChatbotConfig, SurveyAnswers, Notification } from '../types';
+import type { User, Package, Transaction, ChatMessage, SurveyAnswers, Notification } from '../types';
 import { packageApi, authApi, transactionApi, chatbotApi, surveyApi, notificationApi } from '../services/api';
 
 export function isAllowedForUser(pkg: Package, user: any): boolean {
@@ -746,11 +746,8 @@ export const usePackageStore = create<PackageState>((set, get) => ({
 interface ChatbotState {
   messages: ChatMessage[];
   isOpen: boolean;
-  config: ChatbotConfig | null;
   setIsOpen: (isOpen: boolean) => void;
   sendMessage: (text: string) => Promise<void>;
-  fetchConfig: () => Promise<void>;
-  updateConfig: (config: ChatbotConfig) => Promise<boolean>;
   clearHistory: () => Promise<void>;
   hydrateHistory: () => Promise<void>;
 }
@@ -765,7 +762,6 @@ const INITIAL_WELCOME_MSG: ChatMessage = {
 export const useChatbotStore = create<ChatbotState>((set) => ({
   messages: [INITIAL_WELCOME_MSG],
   isOpen: false,
-  config: null,
 
   setIsOpen: (isOpen) => set({ isOpen }),
 
@@ -803,25 +799,6 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
     }
   },
 
-  fetchConfig: async () => {
-    try {
-      const data = await chatbotApi.fetchConfig();
-      set({ config: data });
-    } catch (err) {
-      console.error("Error fetching chatbot config:", err);
-    }
-  },
-
-  updateConfig: async (newConfig) => {
-    try {
-      const data = await chatbotApi.updateConfig(newConfig);
-      set({ config: data });
-      return true;
-    } catch (err) {
-      console.error("Error updating chatbot config:", err);
-      return false;
-    }
-  },
 
   clearHistory: async () => {
     const currentUser = useAuthStore.getState().currentUser;

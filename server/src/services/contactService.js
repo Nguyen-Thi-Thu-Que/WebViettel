@@ -14,8 +14,20 @@ const contactService = {
     return await contact.save();
   },
 
-  getAllContacts: async () => {
-    return await Contact.find().sort({ created_at: -1 });
+  getAllContacts: async ({ status = '', search = '' } = {}) => {
+    const mongoQuery = {};
+    if (status) {
+      mongoQuery.status = status;
+    }
+    if (search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      mongoQuery.$or = [
+        { full_name: searchRegex },
+        { phone: searchRegex },
+        { contact_id: searchRegex }
+      ];
+    }
+    return await Contact.find(mongoQuery).sort({ created_at: -1 });
   },
 
   getContactById: async (contactId) => {

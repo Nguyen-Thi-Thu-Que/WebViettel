@@ -141,6 +141,7 @@ export interface Contact {
   full_name: string;
   phone: string;
   message: string;
+  topic?: string;
   status: 'NEW' | 'READ' | 'PROCESSING' | 'DONE' | 'CLOSED';
   source: 'guest' | 'user';
   created_at?: string;

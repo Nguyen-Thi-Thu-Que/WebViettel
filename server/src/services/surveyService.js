@@ -587,6 +587,51 @@ const surveyService = {
     return result.modifiedCount > 0;
   },
 
+  getAllSurveys: async ({ search = '' } = {}) => {
+    let mongoQuery = { deleted: { $ne: true } };
+
+    if (search.trim()) {
+      const searchKeyword = search.trim();
+      
+      if (/^[0-9+]+$/.test(searchKeyword)) {
+        const matchingAccounts = await Account.find({
+          phone_number: new RegExp(searchKeyword, 'i')
+        }).select('user_id').lean();
+        
+        const userIds = matchingAccounts.map(acc => acc.user_id);
+        mongoQuery.userId = { $in: userIds };
+      }
+    }
+
+    const rawHistory = await SurveyHistory.find(mongoQuery)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const result = [];
+    for (const hist of rawHistory) {
+      let phoneNumber = 'Khách vãng lai';
+      if (hist.userId) {
+        const user = await Account.findOne({ user_id: hist.userId }).select('phone_number').lean();
+        if (user) {
+          phoneNumber = user.phone_number;
+        }
+      }
+
+      result.push({
+        _id: hist._id,
+        userId: hist.userId,
+        phoneNumber,
+        answers: hist.answers || {},
+        filters: hist.filters || {},
+        recommendedPackages: hist.recommendedPackages || [],
+        isEarlyTerminated: hist.isEarlyTerminated || false,
+        createdAt: hist.createdAt
+      });
+    }
+
+    return result;
+  },
+
   checkAndSeedSurveyConfigs: async () => {
     try {
       await syncPackageFeatures();

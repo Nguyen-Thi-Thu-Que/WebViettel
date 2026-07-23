@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { Package, User, Transaction, ChatbotConfig, ChatMessage, Contact, Notification } from '../types';
+import type { Package, User, Transaction, ChatMessage, Contact, Notification } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -460,15 +460,6 @@ export const chatbotApi = {
     return { text: String(rawData ?? '') };
   },
 
-  fetchConfig: async (): Promise<ChatbotConfig> => {
-    const response = await axiosInstance.get<{ success: boolean; data: ChatbotConfig }>('/api/chatbot/config');
-    return response.data.data;
-  },
-
-  updateConfig: async (config: ChatbotConfig): Promise<ChatbotConfig> => {
-    const response = await axiosInstance.put<{ success: boolean; data: ChatbotConfig }>('/api/chatbot/config', config);
-    return response.data.data;
-  },
 
   fetchHistory: async (): Promise<ChatMessage[]> => {
     const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/chatbot/history');
@@ -554,6 +545,11 @@ export const surveyApi = {
   deleteHistory: async (): Promise<boolean> => {
     const response = await axiosInstance.delete<{ success: boolean }>('/api/survey/history');
     return response.data.success;
+  },
+
+  getAdminSurveys: async (params?: { search?: string }): Promise<any[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/survey/admin/history', { params });
+    return response.data.data;
   }
 };
 
@@ -609,6 +605,11 @@ export const contactApi = {
 
   updateContactNote: async (id: string, note: string): Promise<Contact> => {
     const response = await axiosInstance.patch<{ success: boolean; data: Contact }>(`/api/contact/${id}/note`, { admin_note: note });
+    return response.data.data;
+  },
+
+  getAdminContacts: async (params?: { status?: string; search?: string }): Promise<Contact[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact', { params });
     return response.data.data;
   }
 };
