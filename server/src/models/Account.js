@@ -17,4 +17,8 @@ const accountSchema = new mongoose.Schema({
   timestamps: false
 });
 
+accountSchema.index({ status: 1 });
+accountSchema.index({ role: 1 });
+accountSchema.index({ created_at: 1 });
+
 module.exports = mongoose.model('Account', accountSchema);

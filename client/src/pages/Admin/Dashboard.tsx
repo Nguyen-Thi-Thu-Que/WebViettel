@@ -23,6 +23,11 @@ export default function Dashboard() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [recentError, setRecentError] = useState<string | null>(null);
+  const [txPage, setTxPage] = useState(1);
+  const [txTotalPages, setTxTotalPages] = useState(1);
+  const [txTotalItems, setTxTotalItems] = useState(0);
+  const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
+  const [txCache, setTxCache] = useState<Record<number, { transactions: any[], totalPages: number, totalItems: number }>>({});
 
   const [compareStats, setCompareStats] = useState<any>(null);
   const [compareLoading, setCompareLoading] = useState(true);
@@ -74,17 +79,49 @@ export default function Dashboard() {
     }
   };
 
-  const loadRecent = async () => {
-    setRecentLoading(true);
+  const loadRecent = async (page: number = 1) => {
+    // 1. Check local cache
+    if (txCache[page]) {
+      setRecentActivities(txCache[page].transactions);
+      setTxTotalPages(txCache[page].totalPages);
+      setTxTotalItems(txCache[page].totalItems);
+      setRecentLoading(false);
+      setIsTransactionsLoading(false);
+      return;
+    }
+
+    if (page === 1) {
+      setRecentLoading(true);
+    } else {
+      setIsTransactionsLoading(true);
+    }
     setRecentError(null);
     try {
-      const data = await transactionApi.fetchAdminRecentTransactions();
-      setRecentActivities(data || []);
+      // Pass txTotalItems as the third parameter to avoid count calculation on backend if page > 1
+      const data = await transactionApi.fetchAdminRecentTransactions(page, 5, page > 1 ? txTotalItems : undefined);
+      const newTransactions = data.transactions || [];
+      const newTotalPages = data.pagination?.totalPages || 1;
+      const newTotalItems = data.pagination?.totalItems || 0;
+
+      setRecentActivities(newTransactions);
+      setTxTotalPages(newTotalPages);
+      setTxTotalItems(newTotalItems);
+
+      // Cache the result
+      setTxCache(prev => ({
+        ...prev,
+        [page]: {
+          transactions: newTransactions,
+          totalPages: newTotalPages,
+          totalItems: newTotalItems
+        }
+      }));
     } catch (err: any) {
       console.error("Lỗi khi tải giao dịch gần đây:", err);
       setRecentError(err.message || "Lỗi tải giao dịch");
     } finally {
       setRecentLoading(false);
+      setIsTransactionsLoading(false);
     }
   };
 
@@ -105,9 +142,12 @@ export default function Dashboard() {
   useEffect(() => {
     loadStats();
     loadChart();
-    loadRecent();
     loadCompare();
   }, []);
+
+  useEffect(() => {
+    loadRecent(txPage);
+  }, [txPage]);
 
   // Format short money values (e.g. 1.12M VNĐ or 120k VNĐ)
   const formatShortValue = (val: number) => {
@@ -545,7 +585,7 @@ export default function Dashboard() {
               </span>
               <p className="text-[10px] text-slate-405 max-w-[300px]">{recentError}</p>
               <button 
-                onClick={loadRecent}
+                onClick={() => loadRecent(txPage)}
                 className="flex items-center space-x-1 text-slate-600 hover:text-slate-800 border border-slate-350 bg-white px-2.5 py-1 rounded-md text-[9px] font-extrabold transition-all"
               >
                 <RefreshCw className="w-2.5 h-2.5" />
@@ -553,64 +593,114 @@ export default function Dashboard() {
               </button>
             </div>
           ) : recentActivities.length > 0 ? (
-            <div className="overflow-y-auto rounded-xl border border-slate-200 max-h-[320px] custom-scrollbar relative w-full">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-bold z-10">
-                  <tr>
-                    <th className="p-3">Giao dịch</th>
-                    <th className="p-3">Người dùng / SĐT</th>
-                    <th className="p-3">Số tiền</th>
-                    <th className="p-3">Mô tả</th>
-                    <th className="p-3">Ngày thực hiện</th>
-                    <th className="p-3">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold">
-                  {recentActivities.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-3 font-bold text-slate-800">
-                        {tx.type === 'deposit' ? (
-                          <span className="text-emerald-600">Nạp ví ảo</span>
-                        ) : (
-                          <span className="text-primary">Đăng ký gói</span>
-                        )}
-                      </td>
-                      <td className="p-3 font-mono font-medium">
-                        {tx.phoneNumber && tx.phoneNumber !== '09xxxxxxxx' ? tx.phoneNumber : ((tx as any).fullname || 'Người dùng ẩn danh')}
-                      </td>
-                      <td className="p-3 font-bold text-slate-900">
-                        {tx.type === 'deposit' ? '+' : '-'}
-                        {(tx.amount || 0).toLocaleString('vi-VN')} VNĐ
-                      </td>
-                      <td className="p-3 text-slate-500 font-medium">
-                        {tx.type === 'deposit' ? `Qua cổng ${tx.paymentMethod || 'VietQR'}` : `Đăng ký gói ${tx.packageName || 'Gói cước'}`}
-                      </td>
-                      <td className="p-3 text-slate-500 font-medium">
-                        {tx.createdAt && !isNaN(new Date(tx.createdAt).getTime()) ? (
-                          <>
-                            {new Date(tx.createdAt).toLocaleDateString('vi-VN')} {new Date(tx.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                          </>
-                        ) : '---'}
-                      </td>
-                      <td className="p-3">
-                        {tx.status?.toUpperCase() === 'SUCCESS' ? (
-                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
-                            Thành công
-                          </span>
-                        ) : tx.status?.toUpperCase() === 'PENDING' ? (
-                          <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
-                            Đang xử lý
-                          </span>
-                        ) : (
-                          <span className="bg-rose-50 text-rose-700 border border-rose-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
-                            {tx.status?.toUpperCase() === 'CANCELLED' ? 'Đã hủy' : (tx.status || 'Đã hủy')}
-                          </span>
-                        )}
-                      </td>
+            <div className="w-full space-y-4">
+              <div className={`rounded-xl border border-slate-200 relative overflow-hidden transition-opacity duration-200 ${isTransactionsLoading ? 'opacity-55 pointer-events-none' : 'opacity-100'}`}>
+                {isTransactionsLoading && (
+                  <div className="absolute inset-0 bg-slate-50/40 flex items-center justify-center z-20">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                )}
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <tr>
+                      <th className="p-3">Giao dịch</th>
+                      <th className="p-3">Người dùng / SĐT</th>
+                      <th className="p-3">Số tiền</th>
+                      <th className="p-3">Mô tả</th>
+                      <th className="p-3">Ngày thực hiện</th>
+                      <th className="p-3">Trạng thái</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold">
+                    {recentActivities.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-3 font-bold text-slate-800">
+                          {tx.type === 'deposit' ? (
+                            <span className="text-emerald-600">Nạp ví ảo</span>
+                          ) : (
+                            <span className="text-primary">Đăng ký gói</span>
+                          )}
+                        </td>
+                        <td className="p-3 font-mono font-medium">
+                          {tx.phoneNumber && tx.phoneNumber !== '09xxxxxxxx' ? tx.phoneNumber : ((tx as any).fullname || 'Người dùng ẩn danh')}
+                        </td>
+                        <td className="p-3 font-bold text-slate-900">
+                          {tx.type === 'deposit' ? '+' : '-'}
+                          {(tx.amount || 0).toLocaleString('vi-VN')} VNĐ
+                        </td>
+                        <td className="p-3 text-slate-500 font-medium">
+                          {tx.type === 'deposit' ? `Qua cổng ${tx.paymentMethod || 'VietQR'}` : `Đăng ký gói ${tx.packageName || 'Gói cước'}`}
+                        </td>
+                        <td className="p-3 text-slate-500 font-medium">
+                          {tx.createdAt && !isNaN(new Date(tx.createdAt).getTime()) ? (
+                            <>
+                              {new Date(tx.createdAt).toLocaleDateString('vi-VN')} {new Date(tx.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                            </>
+                          ) : '---'}
+                        </td>
+                        <td className="p-3">
+                          {tx.status?.toUpperCase() === 'SUCCESS' ? (
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
+                              Thành công
+                            </span>
+                          ) : tx.status?.toUpperCase() === 'PENDING' ? (
+                            <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
+                              Đang xử lý
+                            </span>
+                          ) : (
+                            <span className="bg-rose-50 text-rose-700 border border-rose-100 text-[9px] px-2 py-0.5 rounded font-bold uppercase">
+                              {tx.status?.toUpperCase() === 'CANCELLED' ? 'Đã hủy' : (tx.status || 'Đã hủy')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Control Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-extrabold space-y-3 sm:space-y-0">
+                <div>
+                  HIỂN THỊ TRANG <span className="text-slate-800">{txPage}</span> / <span className="text-slate-800">{txTotalPages}</span> (TỔNG <span className="text-slate-800">{txTotalItems}</span> GIAO DỊCH)
+                </div>
+
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setTxPage(prev => Math.max(1, prev - 1))}
+                    disabled={txPage === 1 || isTransactionsLoading}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:text-slate-700 font-extrabold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Trang trước
+                  </button>
+
+                  {Array.from({ length: txTotalPages }, (_, i) => i + 1)
+                    .filter(p => Math.abs(p - txPage) <= 1 || p === 1 || p === txTotalPages)
+                    .map((p, idx, arr) => {
+                      const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
+                      return (
+                        <div key={p} className="flex items-center">
+                          {showEllipsis && <span className="px-1.5 text-slate-400 font-bold">...</span>}
+                          <button
+                            onClick={() => setTxPage(p)}
+                            disabled={isTransactionsLoading}
+                            className={`w-7 h-7 rounded-lg font-extrabold transition-all ${txPage === p ? 'bg-primary text-white shadow-sm' : 'border border-slate-200 bg-white hover:bg-slate-50 hover:text-slate-700'}`}
+                          >
+                            {p}
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                  <button
+                    onClick={() => setTxPage(prev => Math.min(txTotalPages, prev + 1))}
+                    disabled={txPage === txTotalPages || isTransactionsLoading}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:text-slate-700 font-extrabold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Trang sau
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2 w-full">

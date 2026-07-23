@@ -651,10 +651,40 @@ const transactionService = {
     sevenDaysAgo.setHours(0, 0, 0, 0);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString();
 
-    const recentDepositsForChart = await Deposit.find({
-      status: 'success',
-      isDeleted: { $ne: true },
-      created_at: { $gte: sevenDaysAgoStr }
+    const trendsAgg = await Deposit.aggregate([
+      {
+        $match: {
+          status: 'success',
+          isDeleted: { $ne: true },
+          created_at: { $gte: sevenDaysAgoStr }
+        }
+      },
+      {
+        $project: {
+          amountVND: 1,
+          fiat_equivalent: 1,
+          dateStr: { $substr: ['$created_at', 0, 10] }
+        }
+      },
+      {
+        $group: {
+          _id: '$dateStr',
+          total: { 
+            $sum: {
+              $cond: [
+                { $gt: ['$amountVND', 0] },
+                '$amountVND',
+                { $toDouble: '$fiat_equivalent' }
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    const trendsMap = new Map();
+    trendsAgg.forEach(t => {
+      trendsMap.set(t._id, t.total);
     });
 
     const revenueTrends = [];
@@ -663,34 +693,49 @@ const transactionService = {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const label = weekdayNames[d.getDay()];
-      const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-      const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+      
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${date}`;
 
-      const dayRevenue = recentDepositsForChart.reduce((sum, curr) => {
-        if (!curr.created_at) return sum;
-        const depDate = new Date(curr.created_at);
-        if (depDate >= startOfDay && depDate <= endOfDay) {
-          const fiat = curr.amountVND || parseFloat(curr.fiat_equivalent ? curr.fiat_equivalent.toString() : '0') || 0;
-          return sum + fiat;
-        }
-        return sum;
-      }, 0);
-
+      const dayRevenue = trendsMap.get(dateKey) || 0;
       revenueTrends.push({ label, val: dayRevenue });
     }
     return revenueTrends;
   },
 
-  getAdminRecentTransactions: async () => {
+  getAdminRecentTransactions: async (page = 1, limit = 5, clientTotalItems = null) => {
+    const queryLimit = page * limit;
+    let totalDeposits = 0;
+    let totalSubs = 0;
+
+    if (clientTotalItems === null || clientTotalItems === undefined || page === 1) {
+      const [countD, countS] = await Promise.all([
+        Deposit.countDocuments({ isDeleted: { $ne: true } }),
+        UserSubscription.countDocuments({ isDeleted: { $ne: true } })
+      ]);
+      totalDeposits = countD;
+      totalSubs = countS;
+    }
+
     const [latestDeposits, latestSubs] = await Promise.all([
-      Deposit.find().sort({ deposit_id: -1 }).limit(10),
-      UserSubscription.find().sort({ createdAt: -1 }).limit(10)
+      Deposit.find({ isDeleted: { $ne: true } })
+        .select('deposit_id user_id amountVND fiat_equivalent network status created_at txHash tx_hash')
+        .sort({ deposit_id: -1 })
+        .limit(queryLimit)
+        .lean(),
+      UserSubscription.find({ isDeleted: { $ne: true } })
+        .select('userId packageId status activatedAt createdAt')
+        .sort({ createdAt: -1 })
+        .limit(queryLimit)
+        .lean()
     ]);
 
     const merged = [];
 
     for (const dep of latestDeposits) {
-      const user = await Account.findOne({ user_id: dep.user_id });
+      const user = await Account.findOne({ user_id: dep.user_id }).select('phone_number fullname').lean();
       merged.push({
         id: `tx_dep_${dep.deposit_id}`,
         type: 'deposit',
@@ -705,8 +750,8 @@ const transactionService = {
     }
 
     for (const sub of latestSubs) {
-      const user = await Account.findOne({ user_id: sub.userId });
-      const pkg = await Package.findOne({ $or: [{ package_id: sub.packageId }, { id: sub.packageId }] });
+      const user = await Account.findOne({ user_id: sub.userId }).select('phone_number fullname').lean();
+      const pkg = await Package.findOne({ $or: [{ package_id: sub.packageId }, { id: sub.packageId }] }).select('gia ten').lean();
       merged.push({
         id: `tx_sub_${sub._id}`,
         type: 'subscribe',
@@ -720,7 +765,88 @@ const transactionService = {
     }
 
     merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return merged.slice(0, 10);
+
+    const startIdx = (page - 1) * limit;
+    const paginatedTransactions = merged.slice(startIdx, startIdx + limit);
+    const totalItems = clientTotalItems !== null && clientTotalItems !== undefined ? parseInt(clientTotalItems) : (totalDeposits + totalSubs);
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      transactions: paginatedTransactions,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        limit
+      }
+    };
+  },
+
+  getAdminDeposits: async ({ page = 1, limit = 10, status = '', search = '' }) => {
+    const skip = (page - 1) * limit;
+
+    const mongoQuery = {};
+    
+    if (status) {
+      mongoQuery.status = status;
+    }
+
+    if (search.trim()) {
+      const searchKeyword = search.trim();
+      
+      if (/^[0-9+]+$/.test(searchKeyword)) {
+        const matchingAccounts = await Account.find({
+          phone_number: new RegExp(searchKeyword, 'i')
+        }).select('user_id').lean();
+        
+        const userIds = matchingAccounts.map(acc => acc.user_id);
+        mongoQuery.$or = [
+          { user_id: { $in: userIds } },
+          { txHash: new RegExp(searchKeyword, 'i') }
+        ];
+      } else {
+        mongoQuery.txHash = new RegExp(searchKeyword, 'i');
+      }
+    }
+
+    const [totalItems, rawDeposits] = await Promise.all([
+      Deposit.countDocuments(mongoQuery),
+      Deposit.find(mongoQuery)
+        .sort({ deposit_id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    const deposits = [];
+    for (const dep of rawDeposits) {
+      const user = await Account.findOne({ user_id: dep.user_id }).select('phone_number fullname').lean();
+      deposits.push({
+        deposit_id: dep.deposit_id,
+        user_id: dep.user_id,
+        phoneNumber: user ? user.phone_number : 'Không rõ',
+        fullname: user ? user.fullname : 'Không rõ',
+        amountVND: dep.amountVND || parseFloat(dep.fiat_equivalent ? dep.fiat_equivalent.toString() : '0') || 0,
+        amountETH: dep.amountETH || (dep.amount ? dep.amount.toString() : '0'),
+        txHash: dep.txHash || dep.tx_hash || '',
+        network: dep.network || 'VietQR',
+        status: dep.status || 'success',
+        isDeleted: dep.isDeleted || false,
+        created_at: dep.created_at
+      });
+    }
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      deposits,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        limit
+      }
+    };
   }
 };
 

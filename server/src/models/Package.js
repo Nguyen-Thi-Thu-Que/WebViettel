@@ -71,4 +71,8 @@ const packageSchema = new mongoose.Schema({
   timestamps: true 
 });
 
+packageSchema.index({ ten: 1 });
+packageSchema.index({ phan_loai_goi: 1 });
+packageSchema.index({ system_type: 1 });
+
 module.exports = mongoose.model('Package', packageSchema);

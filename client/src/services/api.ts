@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { Package, User, FAQ, Transaction, ChatbotConfig, ChatMessage, Contact, Notification } from '../types';
+import type { Package, User, Transaction, ChatbotConfig, ChatMessage, Contact, Notification } from '../types';
 
 const API_BASE_URL = '/api/packages';
 
@@ -102,10 +102,12 @@ export function toVietnamesePackage(apiPkg: any): Package {
     is_addon: apiPkg.is_addon,
     is_long_term: apiPkg.is_long_term,
     requires_base_package: apiPkg.requires_base_package,
+    system_type: apiPkg.system_type || '',
+    allow_parallel_with: apiPkg.allow_parallel_with || [],
+    benefit_group: apiPkg.benefit_group || '',
     matchScore: apiPkg.matchScore,
     recommendationTag: apiPkg.recommendationTag
   };
-
 
   return vnPkg as Package;
 }
@@ -130,6 +132,7 @@ export function toEnglishPackage(vnPkg: Partial<Package>): any {
   return {
     id: vnPkg.id,
     name: vnPkg.ten,
+    ma_goi: vnPkg.ma_goi || vnPkg.ten || '',
     price,
     duration,
     durationDays,
@@ -149,7 +152,13 @@ export function toEnglishPackage(vnPkg: Partial<Package>): any {
     isPopular: vnPkg.dohot === 'Hot',
     category,
     tags: vnPkg.dohot === 'Hot' ? ['Hot'] : [],
-    loai_mang: vnPkg.loai_mang || ''
+    loai_mang: vnPkg.loai_mang || '',
+    is_addon: vnPkg.is_addon || false,
+    is_long_term: vnPkg.is_long_term || false,
+    requires_base_package: vnPkg.requires_base_package || false,
+    system_type: vnPkg.system_type || '',
+    allow_parallel_with: vnPkg.allow_parallel_with || [],
+    benefit_group: vnPkg.benefit_group || ''
   };
 }
 
@@ -389,10 +398,31 @@ export const transactionApi = {
     }
   },
 
-  fetchAdminRecentTransactions: async (): Promise<any[]> => {
+  fetchAdminRecentTransactions: async (page: number = 1, limit: number = 5, totalItems?: number): Promise<{ transactions: any[]; pagination: { currentPage: number; totalPages: number; totalItems: number; limit: number } }> => {
     try {
-      const response = await axiosInstance.get<{ success: boolean; data: any }>('/api/transactions/admin/recent-transactions');
-      return response.data.data;
+      const response = await axiosInstance.get<{ success: boolean; data: any; pagination: any }>('/api/transactions/admin/recent-transactions', {
+        params: { page, limit, totalItems }
+      });
+      return {
+        transactions: response.data.data || [],
+        pagination: response.data.pagination || { currentPage: page, totalPages: 1, totalItems: 0, limit }
+      };
+    } catch (error: any) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=unauthorized';
+      }
+      throw error;
+    }
+  },
+
+  fetchAdminDeposits: async (params?: Record<string, any>): Promise<{ data: any[]; pagination: { currentPage: number; totalPages: number; totalItems: number; limit: number } }> => {
+    try {
+      const response = await axiosInstance.get<{ success: boolean; data: any[]; pagination: any }>('/api/transactions/admin/deposits', { params });
+      return {
+        data: response.data.data || [],
+        pagination: response.data.pagination
+      };
     } catch (error: any) {
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         localStorage.removeItem('token');
@@ -403,28 +433,7 @@ export const transactionApi = {
   }
 };
 
-// 4. FAQ APIs
-export const faqApi = {
-  fetchFAQs: async (): Promise<FAQ[]> => {
-    const response = await axiosInstance.get<{ success: boolean; data: FAQ[] }>('/api/faqs');
-    return response.data.data;
-  },
 
-  createFAQ: async (faq: Omit<FAQ, 'id'>): Promise<FAQ> => {
-    const response = await axiosInstance.post<{ success: boolean; data: FAQ }>('/api/faqs', faq);
-    return response.data.data;
-  },
-
-  updateFAQ: async (id: string, faq: Partial<FAQ>): Promise<FAQ> => {
-    const response = await axiosInstance.put<{ success: boolean; data: FAQ }>(`/api/faqs/${id}`, faq);
-    return response.data.data;
-  },
-
-  deleteFAQ: async (id: string): Promise<boolean> => {
-    const response = await axiosInstance.delete<{ success: boolean }>(`/api/faqs/${id}`);
-    return response.data.success;
-  }
-};
 
 // 5. Chatbot APIs
 export const chatbotApi = {
@@ -478,13 +487,18 @@ export const chatbotApi = {
 
 // 6. User Management APIs (Admin)
 export const userApi = {
-  fetchUsers: async (): Promise<User[]> => {
-    const response = await axiosInstance.get<{ success: boolean; data: User[] }>('/api/users');
-    return response.data.data;
+  fetchUsers: async (params?: Record<string, any>): Promise<{ data: User[]; page: number; limit: number; totalPages: number; totalItems: number }> => {
+    const response = await axiosInstance.get<{ success: boolean; data: User[]; page: number; limit: number; totalPages: number; totalItems: number }>('/api/users', { params });
+    return response.data;
   },
 
   updateUserBalance: async (userId: string, balance: number): Promise<boolean> => {
     const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}/balance`, { balance });
+    return response.data.success;
+  },
+
+  updateUserStatus: async (userId: string, status: string): Promise<boolean> => {
+    const response = await axiosInstance.put<{ success: boolean }>(`/api/users/${userId}/status`, { status });
     return response.data.success;
   },
 
@@ -626,4 +640,6 @@ export const notificationApi = {
     return response.data.success;
   }
 };
+
+
 

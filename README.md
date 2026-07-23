@@ -45,7 +45,6 @@ WebViettel/
 │   │   │   ├── Admin/
 │   │   │   │   ├── Chatbot.tsx
 │   │   │   │   ├── Dashboard.tsx
-│   │   │   │   ├── FAQs.tsx
 │   │   │   │   ├── Packages.tsx
 │   │   │   │   └── Users.tsx
 │   │   │   ├── Auth/
@@ -84,7 +83,6 @@ WebViettel/
 │   ├── .oxlintrc.json
 │   ├── index.html
 │   ├── package.json
-│   ├── README.md
 │   ├── tsconfig.app.json
 │   ├── tsconfig.json
 │   ├── tsconfig.node.json
@@ -106,7 +104,6 @@ WebViettel/
 │   │   │   ├── chatbotController.js
 │   │   │   ├── compareController.js
 │   │   │   ├── contactController.js
-│   │   │   ├── faqController.js
 │   │   │   ├── notificationController.js
 │   │   │   ├── packageController.js
 │   │   │   ├── subscriptionController.js
@@ -123,7 +120,6 @@ WebViettel/
 │   │   │   ├── CompareHistory.js
 │   │   │   ├── Contact.js
 │   │   │   ├── Deposit.js
-│   │   │   ├── FAQ.js
 │   │   │   ├── Notification.js
 │   │   │   ├── Package.js
 │   │   │   ├── PackageFeature.js
@@ -135,7 +131,6 @@ WebViettel/
 │   │   │   ├── chatbotRoutes.js
 │   │   │   ├── compareRoutes.js
 │   │   │   ├── contactRoutes.js
-│   │   │   ├── faqRoutes.js
 │   │   │   ├── notificationRoutes.js
 │   │   │   ├── packageRoutes.js
 │   │   │   ├── subscriptionRoutes.js
@@ -156,13 +151,12 @@ WebViettel/
 │   │   │   │   └── scoring_config.json
 │   │   │   ├── authService.js
 │   │   │   ├── chatbotService.js
-│   │   │   ├── contactService.js
-│   │   │   ├── faqService.js
-│   │   │   ├── notificationService.js
-│   │   │   ├── subscriptionService.js
-│   │   │   ├── surveyService.js
-│   │   │   ├── transactionService.js
-│   │   │   └── userService.js
+161: │   │   │   ├── contactService.js
+162: │   │   │   ├── notificationService.js
+163: │   │   │   ├── subscriptionService.js
+164: │   │   │   ├── surveyService.js
+165: │   │   │   ├── transactionService.js
+166: │   │   │   └── userService.js
 │   │   ├── utils/
 │   │   │   ├── permission.js
 │   │   │   └── virtualTime.js
@@ -194,7 +188,6 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `.gitignore`: Cấu hình Git bỏ qua cho frontend.
   - `.env`: Chứa các biến môi trường cấu hình kết nối API và Blockchain của frontend.
   - `.oxlintrc.json`: Cấu hình linter Oxlint cho kiểm tra mã nguồn nhanh.
-  - `README.md`: Hướng dẫn riêng cho thư mục client.
 - **Thư mục Backend (`server/`)**:
   - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express. Gồm: `express`, `mongoose`, `bcryptjs`, `cors`, `dotenv`, `ethers`, `@google/generative-ai`, `csv-parser`.
   - `.env`: Chứa cấu hình cổng chạy, DB MongoDB, xác thực JWT, địa chỉ ví nhận, tỷ giá quy đổi ETH/VND, RPC URL và API key của AI chatbot.
@@ -250,11 +243,10 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - Đăng ký tài khoản (Register.tsx)
   - Quên mật khẩu (ForgotPassword.tsx)
 - **Trang Quản trị (Admin Pages)**:
-  - Báo cáo thống kê (Dashboard.tsx): Biểu thị số liệu tổng quan hệ thống và biểu đồ tăng trưởng doanh thu SVG.
-  - Quản lý gói cước (Packages.tsx): Giao diện CRUD gói cước di động.
-  - Quản lý câu hỏi thường gặp (FAQs.tsx): Giao diện CRUD danh mục câu hỏi FAQ.
-  - Quản lý người dùng di động (Users.tsx): Xem danh sách, cập nhật số dư, phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản.
-  - Cấu hình Chatbot AI (Chatbot.tsx): Điều chỉnh System Prompt và các từ khóa rule-based cho chatbot.
+  - Báo cáo thống kê (Dashboard.tsx): Biểu thị số liệu tổng quan hệ thống, doanh thu thực tế và biểu đồ xu hướng dạng đường.
+  - Quản lý gói cước (Packages.tsx): Giao diện CRUD gói cước di động với giao diện chia tab và giới hạn chiều cao Modal.
+  - Quản lý người dùng di động (Users.tsx): Xem danh sách, cập nhật số dư qua modal nạp tiền an toàn (validate số âm), phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản thông qua kết nối API thật.
+  - Cấu hình Chatbot AI (Chatbot.tsx): Điều chỉnh System Prompt và CRUD các từ khóa rule-based cho chatbot đồng bộ với backend.
 
 ### Các thành phần giao diện chính (Components):
 
@@ -343,9 +335,8 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 12. **Bảng điều khiển Quản trị (Admin Panel)**:
     - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
     - Quản lý gói cước: CRUD gói cước di động trong MongoDB.
-    - Quản lý câu hỏi thường gặp: CRUD danh mục câu hỏi FAQ.
-    - Quản lý người dùng di động: Xem danh sách, cập nhật số dư, phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản.
-    - Cấu hình Chatbot: Chỉnh sửa System Prompt chỉ dẫn AI và cấu hình các từ khóa NLP rule-based.
+    - Quản lý người dùng di động: Xem danh sách, cập nhật số dư, phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản thông qua API kết nối thật.
+    - Cấu hình Chatbot: Chỉnh sửa System Prompt chỉ dẫn AI và cấu hình các từ khóa NLP rule-based, kết nối API thật.
 
 ### 🟡 Các chức năng đang dùng dữ liệu giả lập (Mock Data) / Chưa kết nối Backend:
 
@@ -355,23 +346,20 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 2. **Phân tích nhận xét trang So sánh (CompareAI)**:
    - Panel "Gợi Ý Từ Trợ Lý Ảo" trên trang so sánh sử dụng logic phân tích quy tắc cứng được lập trình trực tiếp trong component `CompareAI.tsx` để hiển thị nhận xét về chi phí thấp nhất, data khủng nhất, gói nghe gọi nhiều, các tiện ích...
    - Chưa gửi thông tin so sánh lên AI ở backend để sinh nhận xét động.
-3. **Biểu đồ SVG xu hướng doanh thu Admin (Dashboard.tsx)**:
-   - Biểu đồ tăng trưởng doanh thu SVG dạng đường vẽ trên Dashboard lấy tổng doanh thu thực tế rồi tính tỷ lệ phần trăm tương đối giả định cho các ngày trong tuần để hiển thị đường biểu đồ.
-   - Chưa kết nối với API phân tích doanh thu theo chuỗi thời gian ngày/tháng thực tế.
-4. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
+3. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
    - Backend có API `depositFiat` (tạo giao dịch giả lập loại VietQR) nhưng frontend chưa mở rộng giao diện nạp tiền VietQR. Hiện tại frontend hỗ trợ cổng nạp MetaMask Web3.
 
 ---
 
 ## 5. Cơ Sở Dữ Liệu Hiện Có (Database Schema & Collections)
 
-Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
+Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
 
 1. **`accounts` (Thông tin tài khoản)**:
    - `user_id` (Number, unique): ID định danh người dùng.
    - `fullname` (String): Họ và tên đầy đủ.
    - `phone_number` (String, unique, index): Số điện thoại dùng làm tài khoản đăng nhập.
-   - `password` (String): Mật khẩu (lưu trữ dưới dạng văn bản gốc/Plaintext phục vụ phát triển/thử nghiệm).
+   - `password` (String): Mật khẩu (lưu trữ dưới dạng Plaintext).
    - `balance` (Number): Số dư ví ảo VND.
    - `role` (String, enum: `['user', 'admin']`): Vai trò phân quyền.
    - `subscription_type` (String, enum: `['tra_truoc', 'tra_sau']`): Loại thuê bao.
@@ -442,12 +430,7 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
    - `isDeleted` (Boolean, default `false`): Đánh dấu xóa mềm.
    - `deletedAt` (Date, default `null`): Thời điểm xóa mềm.
    - `created_at` (String): Thời gian giao dịch.
-7. **`faqs` (Danh mục câu hỏi thường gặp)**:
-   - `id` (String, unique): ID câu hỏi FAQ.
-   - `question` (String): Câu hỏi thường gặp.
-   - `answer` (String): Câu trả lời tương ứng.
-   - `category` (String): Phân mục chủ đề câu hỏi.
-8. **`compare_histories` (Lịch sử phiên so sánh gói cước)**:
+7. **`compare_histories` (Lịch sử phiên so sánh gói cước)**:
    - `session_id` (String, unique, index): ID phiên so sánh duy nhất.
    - `user_id` (Number): ID người dùng đã đăng nhập (null nếu là khách).
    - `guest_id` (String): ID định danh khách chưa đăng nhập.
@@ -459,7 +442,7 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
    - `compare_duration` (Number): Thời gian phiên so sánh (giây).
    - `status` (String): Trạng thái phiên (`ACTIVE`, `COMPLETED`, `ABANDONED`, `CLEARED`).
    - `created_at`, `updated_at` (Date): Timestamps.
-9. **`contacts` (Yêu cầu liên hệ hỗ trợ)**:
+8. **`contacts` (Yêu cầu liên hệ hỗ trợ)**:
    - `contact_id` (String, unique, index): ID yêu cầu liên hệ.
    - `user_id` (Number): ID người dùng gửi (null nếu là khách).
    - `full_name` (String): Họ và tên người gửi.
@@ -468,17 +451,17 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
    - `message` (String): Nội dung yêu cầu liên hệ.
    - `status` (String, enum: `['NEW', 'READ', 'PROCESSING', 'DONE', 'CLOSED']`): Trạng thái xử lý.
    - `created_at`, `updated_at` (Date): Timestamps.
-10. **`package_features` (Đặc trưng gói cước cho gợi ý khảo sát)**:
-    - `package_id` (Number, unique, index): ID gói cước tương ứng.
-    - `ma_goi` (String, index): Mã gói cước.
-    - Các trường boolean đặc trưng (`has_data`, `has_voice`, `is_combo`, `is_social`,...).
-    - `price_level`, `data_level`, `voice_level`, `sms_level`: Các mức phân loại.
-    - `searchable_tags` ([String]): Thẻ tìm kiếm tổng hợp.
-11. **`survey_configs` (Cấu hình câu hỏi khảo sát)**:
+9. **`package_features` (Đặc trưng gói cước cho gợi ý khảo sát)**:
+   - `package_id` (Number, unique, index): ID gói cước tương ứng.
+   - `ma_goi` (String, index): Mã gói cước.
+   - Các trường boolean đặc trưng (`has_data`, `has_voice`, `is_combo`, `is_social`,...).
+   - `price_level`, `data_level`, `voice_level`, `sms_level`: Các mức phân loại.
+   - `searchable_tags` ([String]): Thẻ tìm kiếm tổng hợp.
+10. **`survey_configs` (Cấu hình câu hỏi khảo sát)**:
     - `title`, `description`, `field`, `component`, `order`, `multiple`, `options`.
-12. **`survey_histories` (Lịch sử khảo sát người dùng)**:
+11. **`survey_histories` (Lịch sử khảo sát người dùng)**:
     - `userId`, `answers`, `filters`, `recommendedPackages`, `isEarlyTerminated`, `deleted`, `deletedAt`.
-13. **`notifications` (Thông báo người dùng)**:
+12. **`notifications` (Thông báo người dùng)**:
     - `userId` (Number, index): ID người dùng nhận thông báo.
     - `title` (String): Tiêu đề thông báo.
     - `content` (String): Nội dung chi tiết thông báo.
@@ -487,7 +470,7 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
     - `link` (String): Đường dẫn điều hướng khi click (ví dụ: `/profile?tab=subscriptions`).
     - `subscriptionId` (ObjectId, ref: `UserSubscription`): ID lượt đăng ký gói tương ứng.
     - `isDeleted` (Boolean, default `false`): Đánh dấu xóa mềm.
-    - `createdAt` (Date): Thời điểm tạo thông báo (mặc định lấy theo Virtual Time).
+    - `createdAt` (Date): Thời điểm tạo thông báo.
 
 ---
 

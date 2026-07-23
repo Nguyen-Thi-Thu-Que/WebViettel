@@ -38,6 +38,9 @@ export interface Package {
   is_addon?: boolean;
   is_long_term?: boolean;
   requires_base_package?: boolean;
+  system_type?: string;
+  allow_parallel_with?: string[];
+  benefit_group?: string;
   matchScore?: number;
   recommendationTag?: string;
 }
@@ -79,12 +82,6 @@ export interface Transaction {
   description?: string;
 }
 
-export interface FAQ {
-  id: string;
-  question: string;
-  answer: string;
-  category: string; // e.g. "Đăng ký", "Nạp tiền", "Hỗ trợ chung"
-}
 
 export interface ChatMessage {
   id: string;

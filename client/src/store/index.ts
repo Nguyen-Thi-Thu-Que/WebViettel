@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { User, Package, Transaction, FAQ, ChatMessage, ChatbotConfig, SurveyAnswers, Notification } from '../types';
-import { packageApi, authApi, transactionApi, faqApi, chatbotApi, surveyApi, notificationApi } from '../services/api';
+import type { User, Package, Transaction, ChatMessage, ChatbotConfig, SurveyAnswers, Notification } from '../types';
+import { packageApi, authApi, transactionApi, chatbotApi, surveyApi, notificationApi } from '../services/api';
 
 export function isAllowedForUser(pkg: Package, user: any): boolean {
   // Hiện tại vẫn hiển thị bình thường.
@@ -18,7 +18,6 @@ export function isAllowedForUser(pkg: Package, user: any): boolean {
 interface AuthState {
   currentUser: User | null;
   transactions: Transaction[];
-  faqs: FAQ[];
   loading: boolean;
   error: string | null;
   authChecked: boolean;
@@ -27,7 +26,6 @@ interface AuthState {
   logout: () => void;
   fetchMe: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
-  fetchFAQs: () => Promise<void>;
   updateProfile: (name: string, email: string) => Promise<boolean>;
   changePassword: (oldPw: string, newPw: string) => Promise<boolean>;
   deposit: (amount: number, method: string) => Promise<boolean>;
@@ -82,7 +80,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Auto fetch other details
       get().fetchTransactions().catch(() => { });
-      get().fetchFAQs().catch(() => { });
       get().fetchNotifications().catch(() => { });
       get().fetchUnreadCount().catch(() => { });
 
@@ -127,7 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ currentUser: null, authChecked: true, transactions: [], faqs: [], activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
+    set({ currentUser: null, authChecked: true, transactions: [], activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
     // Automatically reset survey state to clean initial state
     useSurveyStore.getState().resetSurvey().catch(() => { });
   },
@@ -147,7 +144,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         get().fetchActiveSubscriptions().catch((err) => console.error("fetchActiveSubscriptions error", err)),
         get().fetchSubscriptionHistory().catch((err) => console.error("fetchSubscriptionHistory error", err)),
         get().fetchTransactions().catch((err) => console.error("fetchTransactions error", err)),
-        get().fetchFAQs().catch((err) => console.error("fetchFAQs error", err)),
         get().fetchNotifications().catch((err) => console.error("fetchNotifications error", err)),
         get().fetchUnreadCount().catch((err) => console.error("fetchUnreadCount error", err))
       ]);
@@ -164,15 +160,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       console.error("Error fetching transactions:", err);
       throw err;
-    }
-  },
-
-  fetchFAQs: async () => {
-    try {
-      const list = await faqApi.fetchFAQs();
-      set({ faqs: list });
-    } catch (err) {
-      console.error("Error fetching FAQs:", err);
     }
   },
 
@@ -652,6 +639,8 @@ export const usePackageStore = create<PackageState>((set, get) => ({
 
       set({
         packages: data.packages || [],
+        totalPages: data.totalPages || 1,
+        totalItems: data.totalItems || 0,
         loading: false
       });
     } catch (err: any) {

@@ -195,10 +195,32 @@ const transactionController = {
 
   getAdminRecentTransactions: async (req, res, next) => {
     try {
-      const txs = await transactionService.getAdminRecentTransactions();
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 5;
+      const totalItems = req.query.totalItems ? parseInt(req.query.totalItems) : null;
+      const result = await transactionService.getAdminRecentTransactions(page, limit, totalItems);
       return res.status(200).json({
         success: true,
-        data: txs
+        data: result.transactions,
+        pagination: result.pagination
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getAdminDeposits: async (req, res, next) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const status = req.query.status || '';
+      const search = req.query.search || '';
+
+      const result = await transactionService.getAdminDeposits({ page, limit, status, search });
+      return res.status(200).json({
+        success: true,
+        data: result.deposits,
+        pagination: result.pagination
       });
     } catch (error) {
       next(error);

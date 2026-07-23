@@ -27,7 +27,7 @@ const ForgotPassword = lazy(() => import('./pages/Auth/ForgotPassword'));
 const AdminDashboard = lazy(() => import('./pages/Admin/Dashboard'));
 const AdminPackages = lazy(() => import('./pages/Admin/Packages'));
 const AdminUsers = lazy(() => import('./pages/Admin/Users'));
-const AdminFAQs = lazy(() => import('./pages/Admin/FAQs'));
+const AdminDeposits = lazy(() => import('./pages/Admin/Deposits'));
 const AdminChatbot = lazy(() => import('./pages/Admin/Chatbot'));
 
 const PageLoader = () => (
@@ -85,7 +85,7 @@ export default function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="packages" element={<AdminPackages />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="faqs" element={<AdminFAQs />} />
+            <Route path="deposits" element={<AdminDeposits />} />
             <Route path="chatbot" element={<AdminChatbot />} />
           </Route>
 

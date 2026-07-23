@@ -4,8 +4,8 @@ import { Search, Bell, User, LogOut, Shield, CreditCard, Menu, X, ChevronDown, L
 import { useAuthStore } from '../store';
 
 export default function Navbar() {
-  const { 
-    currentUser, 
+  const {
+    currentUser,
     logout,
     notifications,
     unreadCount,
@@ -40,8 +40,8 @@ export default function Navbar() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchNotifications().catch(() => {});
-      fetchUnreadCount().catch(() => {});
+      fetchNotifications().catch(() => { });
+      fetchUnreadCount().catch(() => { });
     }
   }, [currentUser]);
 
@@ -228,18 +228,16 @@ export default function Navbar() {
                               navigate(n.link);
                             }
                           }}
-                          className={`px-4 py-3 flex items-start space-x-3 transition-all cursor-pointer hover:bg-slate-50/70 ${
-                            isUnread ? 'bg-red-50/10 font-semibold' : ''
-                          }`}
+                          className={`px-4 py-3 flex items-start space-x-3 transition-all cursor-pointer hover:bg-slate-50/70 ${isUnread ? 'bg-red-50/10 font-semibold' : ''
+                            }`}
                         >
                           {/* Notification Type Icon */}
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            n.type === 'TRANSACTION'
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${n.type === 'TRANSACTION'
                               ? 'bg-emerald-50 text-emerald-600'
                               : n.type === 'SUBSCRIPTION'
-                              ? 'bg-blue-50 text-blue-600'
-                              : 'bg-amber-50 text-amber-600'
-                          }`}>
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-amber-50 text-amber-600'
+                            }`}>
                             {n.type === 'TRANSACTION' ? (
                               <CreditCard className="w-4 h-4" />
                             ) : n.type === 'SUBSCRIPTION' ? (
@@ -327,7 +325,7 @@ export default function Navbar() {
                         className="flex items-center px-4 py-2 text-xs hover:bg-slate-50 hover:text-slate-950 transition-colors text-primary font-bold"
                       >
                         <Shield className="w-4 h-4 mr-2" />
-                        Quản lý người dùng
+                        Quản trị Admin
                       </Link>
                     )}
                     <Link

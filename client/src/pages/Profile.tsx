@@ -470,7 +470,6 @@ export default function Profile() {
       navigate('/login');
     } else {
       useAuthStore.getState().fetchTransactions().catch(() => { });
-      useAuthStore.getState().fetchFAQs().catch(() => { });
     }
   }, [currentUser, authChecked, navigate]);
 

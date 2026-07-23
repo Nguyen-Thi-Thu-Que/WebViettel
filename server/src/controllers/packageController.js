@@ -194,12 +194,10 @@ exports.getPackages = async (req, res) => {
     // A. Keyword Search
     const searchVal = req.query.search || req.query.q;
     if (searchVal && searchVal.trim()) {
-      const searchRegex = new RegExp(searchVal.trim(), 'i');
+      const keyword = searchVal.trim();
       mongoQuery.$or = [
-        { ten: searchRegex },
-        { ma_goi: searchRegex },
-        { taggoiy: searchRegex },
-        { uudaitrong: searchRegex }
+        { ma_goi: { $regex: keyword, $options: 'i' } },
+        { ten: { $regex: keyword, $options: 'i' } }
       ];
     }
 

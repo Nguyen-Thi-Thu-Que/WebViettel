@@ -3,13 +3,33 @@ const UserSubscription = require('../models/UserSubscription');
 const Package = require('../models/Package');
 
 const userService = {
-  getAllUsers: async () => {
-    const accounts = await Account.find().sort({ user_id: 1 });
+  getAllUsers: async (options = {}) => {
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const search = options.search || '';
+    const skip = (page - 1) * limit;
+
+    const mongoQuery = {};
+    if (search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+      mongoQuery.$or = [
+        { fullname: regex },
+        { phone_number: regex },
+        { email: regex }
+      ];
+    }
+
+    const totalItems = await Account.countDocuments(mongoQuery);
+    const accounts = await Account.find(mongoQuery)
+      .sort({ user_id: 1 })
+      .skip(skip)
+      .limit(limit);
+
     const users = [];
+    const now = new Date();
 
     for (const acc of accounts) {
       // Find active subscriptions
-      const now = new Date();
       const activeSubs = await UserSubscription.find({ 
         userId: acc.user_id, 
         status: 'ACTIVE',
@@ -43,7 +63,11 @@ const userService = {
       });
     }
 
-    return users;
+    return {
+      users,
+      totalPages: Math.ceil(totalItems / limit),
+      totalItems
+    };
   },
 
   updateUser: async (userId, data) => {

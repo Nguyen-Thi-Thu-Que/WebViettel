@@ -11,5 +11,6 @@ router.get('/admin/stats', authenticateToken, requireRole(['admin']), transactio
 router.get('/admin/stats-cards', authenticateToken, requireRole(['admin']), transactionController.getAdminStatsCards);
 router.get('/admin/revenue-chart', authenticateToken, requireRole(['admin']), transactionController.getAdminRevenueTrends);
 router.get('/admin/recent-transactions', authenticateToken, requireRole(['admin']), transactionController.getAdminRecentTransactions);
+router.get('/admin/deposits', authenticateToken, requireRole(['admin']), transactionController.getAdminDeposits);
 
 module.exports = router;

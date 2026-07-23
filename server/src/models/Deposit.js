@@ -26,4 +26,7 @@ const depositSchema = new mongoose.Schema({
   timestamps: false
 });
 
+depositSchema.index({ status: 1 });
+depositSchema.index({ created_at: 1 });
+
 module.exports = mongoose.model('Deposit', depositSchema);

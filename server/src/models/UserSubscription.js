@@ -82,5 +82,8 @@ const userSubscriptionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+userSubscriptionSchema.index({ status: 1 });
+userSubscriptionSchema.index({ expiresAt: 1 });
+
 module.exports = mongoose.model('UserSubscription', userSubscriptionSchema);
 

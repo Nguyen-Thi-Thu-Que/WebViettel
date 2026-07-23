@@ -7,7 +7,6 @@ require('dotenv').config();
 const packageRoutes = require('./routes/packageRoutes');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-const faqRoutes = require('./routes/faqRoutes');
 const chatbotRoutes = require('./routes/chatbotRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
@@ -20,7 +19,6 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const globalErrorHandler = require('./middlewares/errorMiddleware');
 
 // Seed Services
-const faqService = require('./services/faqService');
 const chatbotService = require('./services/chatbotService');
 const surveyService = require('./services/surveyService');
 
@@ -85,7 +83,6 @@ mongoose.connect(mongoUri, { dbName: 'goicuocviettel' })
     console.log("Successfully connected to MongoDB database: goicuocviettel");
     
     // Auto-seed FAQs and Chatbot Configuration on server startup if collections are empty
-    faqService.checkAndSeedFAQs().catch(err => console.error("FAQ seed failed:", err));
     chatbotService.checkAndSeedChatbot().catch(err => console.error("Chatbot seed failed:", err));
     surveyService.checkAndSeedSurveyConfigs().catch(err => console.error("Survey config seed failed:", err));
   })
@@ -103,7 +100,6 @@ app.use((req, res, next) => {
 app.use('/api/packages', packageRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/faqs', faqRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
