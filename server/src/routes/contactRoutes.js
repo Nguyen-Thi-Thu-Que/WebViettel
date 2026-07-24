@@ -3,8 +3,10 @@ const router = express.Router();
 const contactController = require('../controllers/contactController');
 const { authenticateToken, requireRole, decodeTokenOptional } = require('../middlewares/authMiddleware');
 
-// Public route for contact submission
+// Public routes / member routes
 router.post('/', decodeTokenOptional, contactController.createContact);
+router.get('/my-requests', authenticateToken, contactController.getMyRequests);
+router.get('/lookup', contactController.lookupContacts);
 
 // Admin-only routes
 router.get('/', authenticateToken, requireRole(['admin']), contactController.getAdminContacts);

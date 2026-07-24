@@ -224,10 +224,14 @@ export default function Navbar() {
                               await markNotificationAsRead(n._id);
                             }
                             setIsNotificationOpen(false);
-                            if (n.link) {
-                              navigate(n.link);
-                            } else if (n.type === 'SUPPORT' || n.title.includes('CSKH Viettel')) {
-                              navigate('/contact');
+                            if (n.type === 'SUPPORT' || n.title.includes('CSKH Viettel')) {
+                              const contactId = (n as any).contact_id || (n.link && new URLSearchParams(n.link.split('?')[1]).get('id')) || '';
+                              navigate(contactId ? `/contact?tab=history&id=${contactId}` : '/contact?tab=history');
+                            } else if (n.link) {
+                              const targetLink = n.link === '/contact' ? '/contact?tab=history' : n.link;
+                              navigate(targetLink);
+                            } else {
+                              navigate('/contact?tab=history');
                             }
                           }}
                           className={`px-4 py-3 flex items-start space-x-3 transition-all cursor-pointer hover:bg-slate-50/70 ${isUnread ? 'bg-red-50/10 font-semibold' : ''

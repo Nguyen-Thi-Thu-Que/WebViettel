@@ -616,6 +616,18 @@ export const contactApi = {
   getAdminContacts: async (params?: { status?: string; search?: string }): Promise<Contact[]> => {
     const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact', { params });
     return response.data.data;
+  },
+
+  getMyRequests: async (): Promise<Contact[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact/my-requests');
+    return response.data.data;
+  },
+
+  lookupContacts: async (phone: string): Promise<Contact[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact/lookup', {
+      params: { phone }
+    });
+    return response.data.data;
   }
 };
 

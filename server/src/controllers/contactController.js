@@ -141,7 +141,7 @@ const contactController = {
             title: "CSKH Viettel phản hồi yêu cầu hỗ trợ",
             content: admin_note.trim(),
             type: "SUPPORT",
-            link: "/contact"
+            link: `/contact?tab=history&id=${updatedContact.contact_id}`
           });
         } catch (err) {
           console.error("Failed to create contact reply notification:", err);
@@ -152,6 +152,51 @@ const contactController = {
         success: true,
         message: "Phản hồi thành công",
         data: updatedContact
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getMyRequests: async (req, res, next) => {
+    try {
+      const userId = req.user.user_id;
+      const contacts = await Contact.find({ user_id: userId }).sort({ created_at: -1 });
+
+      const normalized = [];
+      for (const contact of contacts) {
+        normalized.push(await normalizeContact(contact));
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: normalized
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  lookupContacts: async (req, res, next) => {
+    try {
+      const { phone } = req.query;
+      if (!phone || !phone.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điện thoại tra cứu là bắt buộc.'
+        });
+      }
+
+      const contacts = await Contact.find({ phone: phone.trim() }).sort({ created_at: -1 });
+
+      const normalized = [];
+      for (const contact of contacts) {
+        normalized.push(await normalizeContact(contact));
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: normalized
       });
     } catch (error) {
       next(error);
