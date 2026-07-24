@@ -539,15 +539,20 @@ const surveyService = {
     };
   },
 
-  submitSurveyAnswers: async (userId, answers) => {
+  submitSurveyAnswers: async (userId, answers, phone = '', fullName = '') => {
     const userObj = userId ? await Account.findOne({ user_id: userId }) : null;
     const result = await surveyService.evaluateState(userObj, answers);
 
     let surveyHistory = null;
-    // CHỈ LƯU VÀO CSDL KHI KHẢO SÁT ĐÃ HOÀN THÀNH KẾT QUẢ (isCompleted === true) VÀ LÀ USER ĐÃ ĐĂNG NHẬP
-    if (result.isCompleted && userId) {
+    // Cả Thành viên và Khách vãng lai đều thực hiện lưu khi khảo sát hoàn thành (isCompleted === true)
+    if (result.isCompleted) {
+      const source = userId ? 'user' : 'guest';
       surveyHistory = await SurveyHistory.create({
-        userId,
+        userId: userId || null,
+        user_id: userId || null,
+        phone: phone || (userObj ? userObj.phone_number : ''),
+        full_name: fullName || (userObj ? userObj.name : ''),
+        source,
         answers,
         filters: { isCompleted: result.isCompleted, remainingCount: result.remainingCount },
         recommendedPackages: result.packages || [],
@@ -599,7 +604,22 @@ const surveyService = {
         }).select('user_id').lean();
         
         const userIds = matchingAccounts.map(acc => acc.user_id);
-        mongoQuery.userId = { $in: userIds };
+        mongoQuery.$or = [
+          { userId: { $in: userIds } },
+          { user_id: { $in: userIds } },
+          { phone: new RegExp(searchKeyword, 'i') }
+        ];
+      } else {
+        const matchingAccounts = await Account.find({
+          name: new RegExp(searchKeyword, 'i')
+        }).select('user_id').lean();
+        
+        const userIds = matchingAccounts.map(acc => acc.user_id);
+        mongoQuery.$or = [
+          { userId: { $in: userIds } },
+          { user_id: { $in: userIds } },
+          { full_name: new RegExp(searchKeyword, 'i') }
+        ];
       }
     }
 
@@ -609,18 +629,26 @@ const surveyService = {
 
     const result = [];
     for (const hist of rawHistory) {
-      let phoneNumber = 'Khách vãng lai';
-      if (hist.userId) {
-        const user = await Account.findOne({ user_id: hist.userId }).select('phone_number').lean();
+      let phoneNumber = hist.phone || 'Khách vãng lai';
+      let fullName = hist.full_name || '';
+      let isUser = hist.source === 'user' || !!hist.userId || !!hist.user_id;
+
+      if (hist.userId || hist.user_id) {
+        const uid = hist.userId || hist.user_id;
+        const user = await Account.findOne({ user_id: uid }).select('phone_number name').lean();
         if (user) {
           phoneNumber = user.phone_number;
+          fullName = user.name;
         }
       }
 
       result.push({
         _id: hist._id,
-        userId: hist.userId,
+        userId: hist.userId || hist.user_id || null,
+        user_id: hist.user_id || hist.userId || null,
         phoneNumber,
+        fullName,
+        source: isUser ? 'user' : 'guest',
         answers: hist.answers || {},
         filters: hist.filters || {},
         recommendedPackages: hist.recommendedPackages || [],

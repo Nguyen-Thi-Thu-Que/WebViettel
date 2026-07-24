@@ -437,8 +437,12 @@ export const transactionApi = {
 
 // 5. Chatbot APIs
 export const chatbotApi = {
-  sendMessage: async (message: string): Promise<{ text: string; suggestedAction?: any; packages?: Package[]; recommendedPackages?: Package[] }> => {
-    const response = await axiosInstance.post<{ success: boolean; message: string; data: any }>('/api/chatbot/message', { message });
+  sendMessage: async (message: string, sessionId?: string | null, guestInfo?: any): Promise<{ text: string; suggestedAction?: any; packages?: Package[]; recommendedPackages?: Package[] }> => {
+    const response = await axiosInstance.post<{ success: boolean; message: string; data: any }>('/api/chatbot/message', { 
+      message, 
+      sessionId, 
+      guestInfo 
+    });
 
     const rawData = response.data.data;
     // Backend trả data là string thô (reply từ Ollama) hoặc object { text, suggestedAction, packages }
@@ -473,6 +477,37 @@ export const chatbotApi = {
   clearHistory: async (): Promise<boolean> => {
     const response = await axiosInstance.delete<{ success: boolean }>('/api/chatbot/history');
     return response.data.success;
+  },
+
+  getAdminHistory: async (params?: { 
+    page?: number; 
+    limit?: number; 
+    search?: string; 
+    source?: string; 
+    startDate?: string; 
+    endDate?: string; 
+  }): Promise<{ 
+    data: any[]; 
+    pagination: { total: number; page: number; limit: number; pages: number } 
+  }> => {
+    const response = await axiosInstance.get<{ success: boolean; data: any[]; pagination: any }>('/api/chatbot/admin/history', { params });
+    const formattedData = (response.data.data || []).map(item => ({
+      ...item,
+      packages: (item.packages || []).map(toVietnamesePackage)
+    }));
+    return {
+      data: formattedData,
+      pagination: response.data.pagination
+    };
+  },
+
+  getAdminSessionDetails: async (params: { sessionId?: string; userId?: string }): Promise<any[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/chatbot/admin/history/details', { params });
+    const formattedData = (response.data.data || []).map(item => ({
+      ...item,
+      packages: (item.packages || []).map(toVietnamesePackage)
+    }));
+    return formattedData;
   }
 };
 

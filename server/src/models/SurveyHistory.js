@@ -6,6 +6,27 @@ const surveyHistorySchema = new mongoose.Schema({
     required: false,
     index: true
   },
+  user_id: {
+    type: Number,
+    required: false,
+    default: null,
+    index: true
+  },
+  phone: {
+    type: String,
+    required: false,
+    default: ''
+  },
+  full_name: {
+    type: String,
+    required: false,
+    default: ''
+  },
+  source: {
+    type: String,
+    enum: ['user', 'guest'],
+    default: 'guest'
+  },
   answers: {
     type: mongoose.Schema.Types.Mixed,
     required: true

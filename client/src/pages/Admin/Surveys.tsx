@@ -16,7 +16,10 @@ import { TableRowSkeleton } from '../../components/Skeleton';
 interface SurveyHistoryRecord {
   _id: string;
   userId: number | null;
+  user_id?: number | null;
   phoneNumber: string;
+  fullName?: string;
+  source?: 'user' | 'guest';
   answers: Record<string, any>;
   filters: Record<string, any>;
   recommendedPackages: Array<{
@@ -211,15 +214,33 @@ export default function AdminSurveys() {
 
                     {/* Người thực hiện */}
                     <td className="p-4">
-                      {hist.userId ? (
-                        <div className="flex items-center text-slate-900 font-bold">
-                          <UserCheck className="w-3.5 h-3.5 text-emerald-600 mr-1 shrink-0" />
-                          <span className="font-mono">{hist.phoneNumber}</span>
+                      {hist.userId || hist.user_id ? (
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center text-slate-900 font-bold text-xs">
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-600 mr-1 shrink-0" />
+                            <span>{hist.fullName || 'Thành viên'}</span>
+                          </div>
+                          <span className="font-mono text-slate-500 font-medium pl-5">{hist.phoneNumber}</span>
+                          <div className="pl-5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
+                              Thành viên
+                            </span>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center text-slate-400 font-bold">
-                          <UserX className="w-3.5 h-3.5 text-slate-400 mr-1 shrink-0" />
-                          <span>Khách vãng lai</span>
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center text-slate-700 font-bold text-xs">
+                            <UserX className="w-3.5 h-3.5 text-slate-400 mr-1 shrink-0" />
+                            <span>{hist.fullName || 'Khách vãng lai'}</span>
+                          </div>
+                          {hist.phoneNumber && hist.phoneNumber !== 'Khách vãng lai' && (
+                            <span className="font-mono text-slate-500 font-medium pl-5">{hist.phoneNumber}</span>
+                          )}
+                          <div className="pl-5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wider">
+                              Khách vãng lai
+                            </span>
+                          </div>
                         </div>
                       )}
                     </td>

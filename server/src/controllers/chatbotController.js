@@ -17,6 +17,7 @@ const { buildPrompt } = require('../services/chatbot/promptBuilder');
 const { generateContent } = require('../services/ai/ai.service');
 const chatbotService = require('../services/chatbotService');
 const ChatHistory = require('../models/ChatHistory');
+const Account = require('../models/Account');
 
 // ─── Constant messages ────────────────────────────────────────────────────────
 
@@ -59,18 +60,21 @@ function detectSuggestedAction(replyText) {
 }
 
 /**
- * Lưu một tin nhắn vào ChatHistory (chỉ khi user đã đăng nhập).
- * Đảm bảo trường `packages` lưu đầy đủ thông tin để Frontend render PackageCard.
+ * Lưu một tin nhắn vào ChatHistory.
+ * Đảm bảo hỗ trợ cả user đã đăng nhập và khách vãng lai.
  */
-async function saveChatHistory(userId, sender, text, suggestedAction, packages) {
-  if (!userId) return;
+async function saveChatHistory(userId, sender, text, suggestedAction, packages, sessionId = null, guestInfo = null) {
   try {
+    const source = userId ? 'user' : 'guest';
     await ChatHistory.create({
-      userId,
+      userId: userId || null,
       sender,
       text,
       suggestedAction: suggestedAction || null,
-      packages: packages || []
+      packages: packages || [],
+      sessionId: userId ? null : sessionId,
+      guestInfo: guestInfo || { phone: '', fullName: '' },
+      source
     });
   } catch (err) {
     console.error('[ChatHistory] Lỗi lưu lịch sử:', err.message);
@@ -119,8 +123,13 @@ const chatbotController = {
 
   // ── Xử lý tin nhắn chat chính (6 bước RAG cứng) ───────────────────────────
   processMessage: async (req, res, next) => {
-    const { message } = req.body;
+    const { message, guestInfo: bodyGuestInfo } = req.body;
     const userId = req.user ? req.user._id : null;
+    const sessionId = req.body.sessionId || req.headers['x-session-id'] || req.headers['session-id'] || null;
+    const guestInfo = bodyGuestInfo || {
+      phone: req.body.phone || '',
+      fullName: req.body.fullName || req.body.full_name || ''
+    };
 
     try {
       // Validate input
@@ -134,17 +143,12 @@ const chatbotController = {
       const trimmedMessage = message.trim();
 
       // ── Lưu tin nhắn người dùng vào lịch sử ─────────────────────────────
-      await saveChatHistory(userId, 'user', trimmedMessage, null, []);
+      await saveChatHistory(userId, 'user', trimmedMessage, null, [], sessionId, guestInfo);
 
       // ── B1: Phân tích intent ──────────────────────────────────────────────────
-      // console.time('[RAG] Total');
-      // console.log('[RAG] B1 - Intent parsing:', trimmedMessage);
-
       const intent = intentParser(trimmedMessage);
 
       // ── B0: Kiểm tra Lạc ĐỀ — NGUYÊN TẮC: không gọi DB hay AI ────────────────
-      // Nếu intent hoàn toàn trống rỗng (không giá, không chu kỳ, không mạng, không app, không gói, không feature)
-      // → người dùng đang hỏi lạc đề
       const cycle = intent.cycleFilter || {};
       const hasCycleFilter = (cycle.cycleDays != null || cycle.isLongTerm != null);
 
@@ -164,7 +168,7 @@ const chatbotController = {
       if (isOffTopic) {
         console.log('[DEBUG Controller] Off-topic detected → returning static refusal');
 
-        await saveChatHistory(userId, 'bot', OFF_TOPIC_TEXT, null, []);
+        await saveChatHistory(userId, 'bot', OFF_TOPIC_TEXT, null, [], sessionId, guestInfo);
 
         return res.status(200).json({
           success: true,
@@ -189,16 +193,15 @@ const chatbotController = {
 
       // ── B3: ZERO-MATCH — Trả về văn bản tĩnh, TUYỆT ĐỐI không gọi AI ────
       if (matchResult.noMatchFound) {
-        // console.log('[RAG] B3 - Zero match → skipping AI call (returning static text)');
-        // console.timeEnd('[RAG] Total');
-
         // Lưu reply no-match vào lịch sử
         await saveChatHistory(
           userId,
           'bot',
           NO_MATCH_TEXT,
           null,
-          []
+          [],
+          sessionId,
+          guestInfo
         );
 
         return res.status(200).json({
@@ -217,17 +220,14 @@ const chatbotController = {
       const matchedPackages = matchResult.packages; // Tối đa 3 gói
 
       // ── B4: Dựng prompt XML với System Prompt mệnh lệnh tuyệt đối ─────────
-      // console.log('[RAG] B4 - Building XML prompt with', matchedPackages.length, 'packages');
       const prompt = buildPrompt(trimmedMessage, matchedPackages, intent);
 
       // ── B5: Gọi LLM — Groq (llama-3.1-8b-instant) → Ollama fallback ──────
-      // console.log('[RAG] B5 - Calling AI (Groq → Ollama fallback)...');
       let replyText;
       try {
         replyText = await generateContent(prompt);
       } catch (aiError) {
         console.error('[RAG] B5 - AI error:', aiError.message);
-        // Fallback tối giản: liệt kê gói mà không có AI narrative
         replyText =
           'Dạ, dưới đây là các gói cước phù hợp với yêu cầu của bạn:\n' +
           matchedPackages
@@ -237,22 +237,19 @@ const chatbotController = {
             .join('\n');
       }
 
-      // console.timeEnd('[RAG] Total');
-
-      // Phát hiện suggestedAction — mặc định null nếu không có từ khóa khảo sát
       const suggestedAction = detectSuggestedAction(replyText);
 
       // ── B6: Lưu lịch sử bot reply với đầy đủ packages ─────────────────────
-      // Trường `packages` lưu toàn bộ thông tin để Frontend render PackageCard
       await saveChatHistory(
         userId,
         'bot',
         replyText,
         suggestedAction,
-        matchedPackages
+        matchedPackages,
+        sessionId,
+        guestInfo
       );
 
-      // ── Trả về response ───────────────────────────────────────────────────
       return res.status(200).json({
         success: true,
         message: 'Xử lý tin nhắn thành công.',
@@ -266,8 +263,173 @@ const chatbotController = {
       });
 
     } catch (error) {
-      console.timeEnd('[RAG] Total');
       console.error('[RAG] Unhandled error:', error);
+      next(error);
+    }
+  },
+
+  // ── Admin: Lấy danh sách hội thoại/tin nhắn Chatbot ─────────────────────────
+  getAdminChatHistory: async (req, res, next) => {
+    try {
+      const { 
+        page = 1, 
+        limit = 10, 
+        search = '', 
+        source = 'all', 
+        startDate, 
+        endDate 
+      } = req.query;
+
+      const pageNum = parseInt(page, 10) || 1;
+      const limitNum = parseInt(limit, 10) || 10;
+      const skipNum = (pageNum - 1) * limitNum;
+
+      // Base query for user messages
+      let query = { sender: 'user' };
+
+      // Filter by source
+      if (source === 'user') {
+        query.source = 'user';
+      } else if (source === 'guest') {
+        query.source = 'guest';
+      }
+
+      // Filter by date range
+      if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) {
+          query.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+
+      // If search keyword is provided
+      if (search.trim()) {
+        const searchKeyword = search.trim();
+        
+        // Find matching Accounts
+        const matchingAccounts = await Account.find({
+          $or: [
+            { fullname: new RegExp(searchKeyword, 'i') },
+            { phone_number: new RegExp(searchKeyword, 'i') }
+          ]
+        }).select('_id').lean();
+        
+        const accountIds = matchingAccounts.map(acc => acc._id);
+
+        query.$or = [
+          { text: new RegExp(searchKeyword, 'i') },
+          { sessionId: new RegExp(searchKeyword, 'i') },
+          { userId: { $in: accountIds } },
+          { 'guestInfo.phone': new RegExp(searchKeyword, 'i') },
+          { 'guestInfo.fullName': new RegExp(searchKeyword, 'i') }
+        ];
+      }
+
+      // Get total count
+      const totalCount = await ChatHistory.countDocuments(query);
+
+      // Get user messages
+      const userMessages = await ChatHistory.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skipNum)
+        .limit(limitNum)
+        .lean();
+
+      const data = [];
+      for (const msg of userMessages) {
+        let botQuery = { 
+          sender: 'bot',
+          createdAt: { $gte: msg.createdAt }
+        };
+        
+        if (msg.source === 'user' && msg.userId) {
+          botQuery.userId = msg.userId;
+        } else if (msg.source === 'guest' && msg.sessionId) {
+          botQuery.sessionId = msg.sessionId;
+        }
+
+        const botReply = await ChatHistory.findOne(botQuery)
+          .sort({ createdAt: 1 })
+          .lean();
+
+        let senderInfo = {
+          fullName: 'Khách vãng lai',
+          phone: '',
+          role: 'guest'
+        };
+
+        if (msg.source === 'user' && msg.userId) {
+          const user = await Account.findById(msg.userId).select('fullname phone_number').lean();
+          if (user) {
+            senderInfo.fullName = user.fullname;
+            senderInfo.phone = user.phone_number;
+            senderInfo.role = 'user';
+          }
+        } else if (msg.source === 'guest') {
+          senderInfo.fullName = msg.guestInfo?.fullName || 'Khách vãng lai';
+          senderInfo.phone = msg.guestInfo?.phone || '';
+          senderInfo.role = 'guest';
+        }
+
+        data.push({
+          _id: msg._id,
+          sessionId: msg.sessionId,
+          senderInfo,
+          source: msg.source,
+          question: msg.text,
+          answer: botReply ? botReply.text : 'Không có phản hồi',
+          packages: botReply ? (botReply.packages || []) : [],
+          createdAt: msg.createdAt
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data,
+        pagination: {
+          total: totalCount,
+          page: pageNum,
+          limit: limitNum,
+          pages: Math.ceil(totalCount / limitNum)
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // ── Admin: Lấy chi tiết đoạn chat theo sessionId hoặc userId ─────────────────
+  getAdminSessionDetails: async (req, res, next) => {
+    try {
+      const { sessionId, userId } = req.query;
+      
+      let query = {};
+      if (sessionId) {
+        query.sessionId = sessionId;
+      } else if (userId) {
+        query.userId = userId;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu thông tin sessionId hoặc userId để lấy chi tiết phiên chat.'
+        });
+      }
+
+      // Query all messages, sorted by time
+      const messages = await ChatHistory.find(query)
+        .sort({ createdAt: 1 })
+        .lean();
+
+      return res.status(200).json({
+        success: true,
+        data: messages
+      });
+    } catch (error) {
       next(error);
     }
   }

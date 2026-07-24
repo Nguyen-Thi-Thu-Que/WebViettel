@@ -25,9 +25,16 @@ module.exports = {
   submitAnswers: async (req, res, next) => {
     try {
       const userId = req.user ? req.user.user_id : null;
-      const { answers } = req.body;
+      const { answers, phone, full_name, fullName } = req.body;
+      const finalPhone = phone || (answers ? (answers.phone || answers.phoneNumber) : '');
+      const finalFullName = full_name || fullName || (answers ? (answers.full_name || answers.fullName || answers.name) : '');
 
-      const result = await surveyService.submitSurveyAnswers(userId, answers || {});
+      const result = await surveyService.submitSurveyAnswers(
+        userId, 
+        answers || {}, 
+        finalPhone, 
+        finalFullName
+      );
 
       res.status(200).json({
         success: true,

@@ -30,6 +30,7 @@ const AdminUsers = lazy(() => import('./pages/Admin/Users'));
 const AdminDeposits = lazy(() => import('./pages/Admin/Deposits'));
 const AdminContacts = lazy(() => import('./pages/Admin/Contacts'));
 const AdminSurveys = lazy(() => import('./pages/Admin/Surveys'));
+const AdminChatHistory = lazy(() => import('./pages/Admin/ChatHistory'));
 
 const PageLoader = () => (
   <div className="flex flex-col items-center justify-center min-h-[300px] text-xs font-semibold text-slate-500 space-y-4">
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="deposits" element={<AdminDeposits />} />
             <Route path="contacts" element={<AdminContacts />} />
             <Route path="surveys" element={<AdminSurveys />} />
+            <Route path="chatbot" element={<AdminChatHistory />} />
           </Route>
 
           {/* Fallback 404 Route */}

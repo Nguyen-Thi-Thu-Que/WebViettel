@@ -776,7 +776,16 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
     set(state => ({ messages: [...state.messages, userMsg] }));
 
     try {
-      const botResponse = await chatbotApi.sendMessage(text);
+      let sessionId = null;
+      const currentUser = useAuthStore.getState().currentUser;
+      if (!currentUser) {
+        sessionId = localStorage.getItem('chatbot_session_id');
+        if (!sessionId) {
+          sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+          localStorage.setItem('chatbot_session_id', sessionId);
+        }
+      }
+      const botResponse = await chatbotApi.sendMessage(text, sessionId, null);
       const botMsg: ChatMessage = {
         id: `msg_${Date.now()}_bot`,
         sender: 'bot',

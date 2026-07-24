@@ -18,4 +18,8 @@ router.delete('/history', authenticateToken, chatHistoryController.deleteHistory
 router.get('/config', authenticateToken, requireRole(['admin']), chatbotController.getConfig);
 router.put('/config', authenticateToken, requireRole(['admin']), chatbotController.updateConfig);
 
+// ── Admin: Lịch sử Chatbot toàn hệ thống ─────────────────────────────────────────
+router.get('/admin/history', authenticateToken, requireRole(['admin']), chatbotController.getAdminChatHistory);
+router.get('/admin/history/details', authenticateToken, requireRole(['admin']), chatbotController.getAdminSessionDetails);
+
 module.exports = router;
