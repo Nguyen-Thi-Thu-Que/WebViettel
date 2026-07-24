@@ -27,11 +27,8 @@ export const web3Service = {
   async getConnectedAccounts(): Promise<string[]> {
     if (!this.isMetaMaskInstalled()) return [];
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner().catch(() => null);
-      if (!signer) return [];
-      const address = await signer.getAddress();
-      return [address];
+      const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
+      return accounts || [];
     } catch (err) {
       console.error('Error getting connected accounts:', err);
       return [];
@@ -51,7 +48,7 @@ export const web3Service = {
 
   async connect(): Promise<string> {
     if (!this.isMetaMaskInstalled()) {
-      throw new Error('Chưa cài đặt MetaMask. Vui lòng cài đặt tiện ích mở rộng MetaMask để tiếp tục.');
+      throw new Error('Vui lòng cài đặt tiện ích mở rộng MetaMask để thực hiện giao dịch');
     }
     
     // Request accounts

@@ -72,11 +72,11 @@ export default function Contact() {
       newErrors.fullName = 'Họ và tên là bắt buộc.';
     }
 
-    const phoneRegex = /^[0-9]{10,11}$/;
+    const phoneRegex = /^0[0-9]{9}$/;
     if (!phone.trim()) {
       newErrors.phone = 'Số điện thoại là bắt buộc.';
     } else if (!phoneRegex.test(phone.trim())) {
-      newErrors.phone = 'Số điện thoại không hợp lệ (phải từ 10-11 chữ số).';
+      newErrors.phone = 'Số điện thoại phải bao gồm 10 chữ số và bắt đầu bằng số 0.';
     }
 
     if (!message.trim()) {
@@ -143,9 +143,9 @@ export default function Contact() {
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPhone = lookupPhone.trim();
-    const phoneRegex = /^[0-9]{10,11}$/;
+    const phoneRegex = /^0[0-9]{9}$/;
     if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
-      showToast('error', 'Vui lòng nhập số điện thoại hợp lệ (10-11 chữ số) để tra cứu.');
+      showToast('error', 'Vui lòng nhập số điện thoại hợp lệ (bao gồm 10 chữ số và bắt đầu bằng số 0) để tra cứu.');
       return;
     }
 
@@ -348,9 +348,11 @@ export default function Contact() {
                 <div className="relative flex items-center">
                   <input
                     id="phone"
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="Nhập số điện thoại..."
                     className={`w-full h-11 bg-slate-50 border ${
                       errors.phone ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-primary/50'
@@ -527,10 +529,12 @@ export default function Contact() {
               <form onSubmit={handleLookup} className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1 flex items-center">
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={lookupPhone}
-                    onChange={(e) => setLookupPhone(e.target.value)}
-                    placeholder="Nhập số điện thoại tra cứu (10 - 11 chữ số)..."
+                    onChange={(e) => setLookupPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Nhập số điện thoại tra cứu (10 chữ số)..."
                     className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-primary/50 transition-all"
                   />
                   <Phone className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />

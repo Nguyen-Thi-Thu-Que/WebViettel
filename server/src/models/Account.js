@@ -4,6 +4,7 @@ const accountSchema = new mongoose.Schema({
   user_id: { type: Number, required: true, unique: true },
   fullname: { type: String, required: true },
   phone_number: { type: String, required: true, unique: true, index: true },
+  email: { type: String, default: '', lowercase: true, trim: true },
   password: { type: String, required: true },
   balance: { type: Number, default: 0 },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },

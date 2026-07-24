@@ -8,9 +8,8 @@ import { useAuthStore } from '../../store';
 
 const loginSchema = z.object({
   phoneNumber: z.string()
-    .min(10, { message: 'Số điện thoại phải có ít nhất 10 số' })
-    .max(11, { message: 'Số điện thoại không quá 11 số' })
-    .regex(/^0[0-9]{9,10}$/, { message: 'Số điện thoại không hợp lệ (phải bắt đầu bằng số 0)' }),
+    .length(10, { message: 'Số điện thoại phải có đúng 10 số' })
+    .regex(/^0[0-9]{9}$/, { message: 'Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có đúng 10 chữ số)' }),
   password: z.string().min(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' })
 });
 
@@ -26,6 +25,7 @@ export default function Login() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors }
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -98,10 +98,16 @@ export default function Login() {
           <div className="relative flex items-center">
             <input
               id="login-phone"
-              type="text"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               autoComplete="off"
               placeholder="Nhập số điện thoại Viettel..."
-              {...register('phoneNumber')}
+              {...register('phoneNumber', {
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                }
+              })}
               className={`w-full h-[48px] bg-slate-50 border ${
                 errors.phoneNumber 
                   ? 'border-red-400 focus:border-red-500 focus:ring-red-100' 
@@ -124,7 +130,11 @@ export default function Login() {
             <label htmlFor="login-password" className="text-[13px] font-semibold text-slate-500">
               Mật khẩu tài khoản
             </label>
-            <Link to="/forgot-password" className="text-[14px] text-[#EE0033] hover:text-[#D40032] hover:underline transition-colors font-bold">
+            <Link 
+              to="/forgot-password" 
+              state={{ phoneNumber: watch('phoneNumber') }} 
+              className="text-[14px] text-[#EE0033] hover:text-[#D40032] hover:underline transition-colors font-bold"
+            >
               Quên mật khẩu?
             </Link>
           </div>

@@ -212,8 +212,14 @@ export default function Profile() {
   };
 
   // Web3 MetaMask hook and integration states
-  const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia } = useWeb3();
+  const { isInstalled, isConnected, walletAddress, isSepolia, connect, switchToSepolia, checkConnection } = useWeb3();
   const { linkWalletAddress } = useAuthStore();
+
+  useEffect(() => {
+    if (activeTab === 'topup') {
+      checkConnection();
+    }
+  }, [activeTab, checkConnection]);
 
   // React Hook Forms (Declared at the top before any conditional returns to respect hook order)
   const { register: registerProfile, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm<ProfileFormValues>({

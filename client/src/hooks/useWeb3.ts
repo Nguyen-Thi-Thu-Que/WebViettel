@@ -40,8 +40,6 @@ export function useWeb3() {
   useEffect(() => {
     if (!web3Service.isMetaMaskInstalled()) return;
 
-    checkConnection();
-
     const handleAccountsChanged = (accounts: string[]) => {
       const isConnected = accounts.length > 0;
       const walletAddress = isConnected ? accounts[0] : null;
@@ -73,11 +71,14 @@ export function useWeb3() {
         ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [checkConnection]);
+  }, []);
 
   const connect = async () => {
     setState(prev => ({ ...prev, error: null }));
     try {
+      if (!web3Service.isMetaMaskInstalled()) {
+        throw new Error('Vui lòng cài đặt tiện ích mở rộng MetaMask để thực hiện giao dịch');
+      }
       const config = getBlockchainConfig();
       // Connect first
       const account = await web3Service.connect();
@@ -125,6 +126,7 @@ export function useWeb3() {
   return {
     ...state,
     connect,
+    connectWallet: connect,
     switchToSepolia,
     checkConnection,
   };

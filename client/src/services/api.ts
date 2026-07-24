@@ -258,6 +258,31 @@ export const authApi = {
     return response.data.success;
   },
 
+  sendForgotPasswordOTP: async (phoneNumber: string, email: string): Promise<boolean> => {
+    const response = await axiosInstance.post<{ success: boolean }>('/api/auth/forgot-password', {
+      phone_number: phoneNumber,
+      email
+    });
+    return response.data.success;
+  },
+
+  verifyForgotPasswordOTP: async (phoneNumber: string, otp: string): Promise<boolean> => {
+    const response = await axiosInstance.post<{ success: boolean }>('/api/auth/verify-otp', {
+      phone_number: phoneNumber,
+      otp
+    });
+    return response.data.success;
+  },
+
+  resetForgotPassword: async (phoneNumber: string, otp: string, newPassword?: string): Promise<boolean> => {
+    const response = await axiosInstance.post<{ success: boolean }>('/api/auth/reset-password', {
+      phone_number: phoneNumber,
+      otp,
+      new_password: newPassword
+    });
+    return response.data.success;
+  },
+
   deposit: async (amount: number, method: string): Promise<{ balance: number }> => {
     const response = await axiosInstance.post<{ success: boolean; data: { balance: number } }>('/api/auth/deposit', { amount, method });
     return response.data.data;

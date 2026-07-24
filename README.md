@@ -43,9 +43,12 @@ WebViettel/
 │   │   │   └── ClientLayout.tsx
 │   │   ├── pages/
 │   │   │   ├── Admin/
-│   │   │   │   ├── Chatbot.tsx
+│   │   │   │   ├── ChatHistory.tsx
+│   │   │   │   ├── Contacts.tsx
 │   │   │   │   ├── Dashboard.tsx
+│   │   │   │   ├── Deposits.tsx
 │   │   │   │   ├── Packages.tsx
+│   │   │   │   ├── Surveys.tsx
 │   │   │   │   └── Users.tsx
 │   │   │   ├── Auth/
 │   │   │   │   ├── ForgotPassword.tsx
@@ -57,12 +60,13 @@ WebViettel/
 │   │   │   ├── Home.tsx
 │   │   │   ├── PackageDetail.tsx
 │   │   │   ├── Packages.tsx
+│   │   │   ├── Privacy.tsx
 │   │   │   ├── Profile.tsx
-│   │   │   └── Survey.tsx
+│   │   │   ├── Survey.tsx
+│   │   │   └── Terms.tsx
 │   │   ├── services/
 │   │   │   ├── api.ts
 │   │   │   ├── axiosInstance.ts
-│   │   │   ├── compareAIService.ts (unused)
 │   │   │   └── web3Service.ts
 │   │   ├── store/
 │   │   │   └── index.ts
@@ -70,7 +74,6 @@ WebViettel/
 │   │   │   ├── index.ts
 │   │   │   └── web3.ts
 │   │   ├── utils/
-│   │   │   ├── chatbotEngine.ts (unused)
 │   │   │   ├── filterHelper.ts
 │   │   │   ├── permission.ts
 │   │   │   └── similarity.ts
@@ -151,18 +154,17 @@ WebViettel/
 │   │   │   │   └── scoring_config.json
 │   │   │   ├── authService.js
 │   │   │   ├── chatbotService.js
-161: │   │   │   ├── contactService.js
-162: │   │   │   ├── notificationService.js
-163: │   │   │   ├── subscriptionService.js
-164: │   │   │   ├── surveyService.js
-165: │   │   │   ├── transactionService.js
-166: │   │   │   └── userService.js
+│   │   │   ├── contactService.js
+│   │   │   ├── notificationService.js
+│   │   │   ├── subscriptionService.js
+│   │   │   ├── surveyService.js
+│   │   │   ├── transactionService.js
+│   │   │   └── userService.js
 │   │   ├── utils/
 │   │   │   ├── permission.js
 │   │   │   └── virtualTime.js
 │   │   ├── index.js
-│   │   ├── seed.js
-│   │   └── seed_extra.js (unused)
+│   │   └── seed.js
 │   ├── .env
 │   └── package.json
 ├── .gitignore
@@ -242,11 +244,15 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - Đăng nhập (Login.tsx)
   - Đăng ký tài khoản (Register.tsx)
   - Quên mật khẩu (ForgotPassword.tsx)
+- **Điều khoản Dịch vụ (Terms.tsx) & Chính sách Bảo mật (Privacy.tsx)**: Các trang điều khoản và chính sách bảo mật chi tiết của hệ thống ViettelAI, hỗ trợ tìm kiếm nội dung nhanh và mục lục tương tác mượt mà.
 - **Trang Quản trị (Admin Pages)**:
   - Báo cáo thống kê (Dashboard.tsx): Biểu thị số liệu tổng quan hệ thống, doanh thu thực tế và biểu đồ xu hướng dạng đường.
   - Quản lý gói cước (Packages.tsx): Giao diện CRUD gói cước di động với giao diện chia tab và giới hạn chiều cao Modal.
   - Quản lý người dùng di động (Users.tsx): Xem danh sách, cập nhật số dư qua modal nạp tiền an toàn (validate số âm), phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản thông qua kết nối API thật.
-  - Cấu hình Chatbot AI (Chatbot.tsx): Điều chỉnh System Prompt và CRUD các từ khóa rule-based cho chatbot đồng bộ với backend.
+  - Quản lý Lịch sử Chatbot AI (ChatHistory.tsx): Giao diện theo dõi danh sách lịch sử trò chuyện của người dùng/khách vãng lai với chatbot AI, hiển thị thông tin người gửi, câu hỏi, câu trả lời, mốc thời gian và các gói cước được đề xuất. Hỗ trợ xem chi tiết toàn bộ phiên đối thoại qua modal, lọc theo đối tượng/thời gian, tìm kiếm và thống kê tổng hợp (số lượt hỏi đáp trong ngày, tỷ lệ thành viên/khách vãng lai, nhu cầu quan tâm nhất).
+  - Yêu cầu Liên hệ & Hỗ trợ (Contacts.tsx): Giao diện tiếp nhận thông tin phản hồi từ người dùng (gửi qua form Liên hệ). Hỗ trợ tìm kiếm, lọc theo trạng thái phản hồi (Tất cả, Chưa phản hồi, Đã phản hồi), xem thông tin chi tiết qua modal và cho phép admin cập nhật nội dung phản hồi (`admin_note`).
+  - Lịch sử nạp tiền thuê bao (Deposits.tsx): Giao diện đối soát và quản lý giao dịch nạp tiền ví di động của người dùng qua MetaMask Blockchain (mạng Sepolia) hoặc VietQR, hiển thị mã giao dịch, số điện thoại, số tiền VND, số lượng ETH, mã băm blockchain (TxHash kết nối link Etherscan Sepolia Explorer) và trạng thái/thời gian. Hỗ trợ tìm kiếm theo SĐT/TxHash và lọc theo trạng thái (Tất cả, Thành công, Đang xử lý, Đã hủy).
+  - Lịch sử khảo sát người dùng (Surveys.tsx): Giao diện theo dõi các lượt thực hiện khảo sát chọn gói cước của người dùng di động (thông qua sơ đồ cây quyết định Decision Tree), hiển thị mã khảo sát, thông tin người thực hiện (thành viên/khách), các nhu cầu lựa chọn chi tiết và các gói cước được hệ thống đề xuất.
 
 ### Các thành phần giao diện chính (Components):
 
@@ -336,17 +342,17 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
     - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
     - Quản lý gói cước: CRUD gói cước di động trong MongoDB.
     - Quản lý người dùng di động: Xem danh sách, cập nhật số dư, phân loại thuê bao, khách hàng thân thiết và khóa/mở khóa tài khoản thông qua API kết nối thật.
-    - Cấu hình Chatbot: Chỉnh sửa System Prompt chỉ dẫn AI và cấu hình các từ khóa NLP rule-based, kết nối API thật.
+    - Quản lý lịch sử chatbot, tiếp nhận & phản hồi liên hệ hỗ trợ, đối soát giao dịch nạp tiền ví di động và phân tích lịch sử khảo sát người dùng thông qua kết nối API thật.
+13. **Phân tích nhận xét so sánh gói cước bằng AI (CompareAI)**:
+    - Panel "Gợi Ý Từ Trợ Lý Ảo" trên trang so sánh đã kết nối trực tiếp với API backend `/api/compare/ai-analyze`, tự động gửi danh sách mã gói cước được so sánh lên backend.
+    - Backend gọi dịch vụ AI (Groq/Ollama) phân tích logic dựa trên các thông số định lượng thực tế (data, giá cước, phút gọi...) để trả về phân tích động dưới dạng JSON (tóm tắt khác biệt, so sánh giá trị sử dụng và gợi ý định hướng cụ thể cho từng đối tượng).
 
 ### 🟡 Các chức năng đang dùng dữ liệu giả lập (Mock Data) / Chưa kết nối Backend:
 
 1. **Khôi phục mật khẩu qua OTP (ForgotPassword.tsx)**:
    - Giao diện gửi mã OTP và đổi mật khẩu hoạt động giả lập hoàn toàn ở phía client thông qua hàm `setTimeout`.
    - Chưa kết nối SMS Gateway gửi tin nhắn thực tế đến điện thoại và chưa gọi API Backend (mã OTP mặc định là `123456`).
-2. **Phân tích nhận xét trang So sánh (CompareAI)**:
-   - Panel "Gợi Ý Từ Trợ Lý Ảo" trên trang so sánh sử dụng logic phân tích quy tắc cứng được lập trình trực tiếp trong component `CompareAI.tsx` để hiển thị nhận xét về chi phí thấp nhất, data khủng nhất, gói nghe gọi nhiều, các tiện ích...
-   - Chưa gửi thông tin so sánh lên AI ở backend để sinh nhận xét động.
-3. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
+2. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
    - Backend có API `depositFiat` (tạo giao dịch giả lập loại VietQR) nhưng frontend chưa mở rộng giao diện nạp tiền VietQR. Hiện tại frontend hỗ trợ cổng nạp MetaMask Web3.
 
 ---
@@ -476,13 +482,7 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
 
 ## 6. Phân Tích Mã Nguồn Dư Thừa (Unused / Dead Files)
 
-Qua quá trình rà soát và kiểm toán toàn bộ mã nguồn của dự án, các file sau đây hiện tồn tại trong thư mục dự án nhưng **hoàn toàn không tham gia vào bất kỳ tác vụ hay luồng xử lý thực tế nào**:
+Qua quá trình rà soát và kiểm toán toàn bộ mã nguồn của dự án, các tệp sau đây hiện tồn tại trong thư mục dự án nhưng **hoàn toàn không tham gia vào bất kỳ tác vụ hay luồng xử lý thực tế nào**:
 
-1. **`client/src/services/compareAIService.ts`**:
-   - *Lý do*: Chứa các hàm hỗ trợ phân tích AI client-side cho tính năng so sánh gói cước. Tuy nhiên, component `client/src/components/CompareAI.tsx` đã trực tiếp triển khai logic phân tích quy tắc ngay bên trong component. Do đó, `compareAIService.ts` không còn được `import` hay sử dụng ở bất kỳ trang/component nào.
-2. **`client/src/utils/chatbotEngine.ts`**:
-   - *Lý do*: File xử lý logic chatbot giả lập offline phiên bản cũ ở client. Hiện tại, toàn bộ hội thoại chatbot được chuyển sang gọi API trực tiếp với backend AI (`/api/chatbot/chat`). `chatbotEngine.ts` là mã nguồn cũ còn sót lại và không có liên kết nào đến nó.
-3. **`server/src/seed_extra.js`**:
-   - *Lý do*: Kịch bản khởi tạo dữ liệu mở rộng riêng lẻ được tạo trong giai đoạn thử nghiệm ban đầu. Hiện tại, toàn bộ logic seed dữ liệu chuẩn đã được tích hợp tập trung vào `server/src/seed.js` (tự động chạy khi khởi động server), làm cho `seed_extra.js` trở thành file dư thừa không được thực thi.
-4. **`client/src/assets/react.svg` và `client/src/assets/vite.svg`**:
+1. **`client/src/assets/react.svg` và `client/src/assets/vite.svg`**:
    - *Lý do*: Các file hình ảnh icon mặc định được tạo tự động bởi công cụ Vite khi khởi tạo dự án React. Chúng không được render hoặc sử dụng trong bất kỳ component nào của ứng dụng WebViettel.

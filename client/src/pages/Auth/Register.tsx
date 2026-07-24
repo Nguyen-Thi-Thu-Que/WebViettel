@@ -3,14 +3,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { Phone, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Phone, Lock, User, Mail, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../../store';
 
 const registerSchema = z.object({
   name: z.string().min(2, { message: 'Họ tên phải chứa ít nhất 2 ký tự' }),
   phoneNumber: z.string()
-    .length(10, { message: 'Số điện thoại phải chứa đúng 10 chữ số' })
-    .regex(/^(086|096|097|098|032|033|034|035|036|037|038|039)[0-9]{7}$/, { message: 'Chỉ hỗ trợ đăng ký bằng số điện thoại Viettel.' }),
+    .length(10, { message: 'Số điện thoại phải có đúng 10 số' })
+    .regex(/^0[0-9]{9}$/, { message: 'Số điện thoại phải bao gồm 10 chữ số và bắt đầu bằng số 0' }),
+  email: z.string().min(1, { message: 'Email là bắt buộc' }).email({ message: 'Địa chỉ email không hợp lệ' }),
   password: z.string().min(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' }),
   confirmPassword: z.string().min(6, { message: 'Xác nhận mật khẩu là bắt buộc' }),
   subscription_type: z.enum(['tra_truoc', 'tra_sau'])
@@ -48,7 +49,7 @@ export default function Register() {
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      const success = await registerUser(data.name, data.phoneNumber, '', data.password, data.subscription_type);
+      const success = await registerUser(data.name, data.phoneNumber, data.email, data.password, data.subscription_type);
       setIsSubmitting(false);
       if (success) {
         setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...');
@@ -117,11 +118,10 @@ export default function Register() {
               autoComplete="off"
               placeholder="Ví dụ: Nguyễn Văn A"
               {...register('name')}
-              className={`w-full h-[48px] bg-slate-50 border ${
-                errors.name 
-                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100' 
+              className={`w-full h-[48px] bg-slate-50 border ${errors.name
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
                   : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
-              } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
             />
             <User className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
           </div>
@@ -141,15 +141,20 @@ export default function Register() {
           <div className="relative flex items-center">
             <input
               id="reg-phone"
-              type="text"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               autoComplete="off"
               placeholder="Nhập số điện thoại Viettel..."
-              {...register('phoneNumber')}
-              className={`w-full h-[48px] bg-slate-50 border ${
-                errors.phoneNumber 
-                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100' 
+              {...register('phoneNumber', {
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                }
+              })}
+              className={`w-full h-[48px] bg-slate-50 border ${errors.phoneNumber
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
                   : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
-              } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
             />
             <Phone className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
           </div>
@@ -161,6 +166,33 @@ export default function Register() {
           )}
         </div>
 
+        {/* Email Input */}
+        <div className="flex flex-col space-y-1">
+          <label htmlFor="reg-email" className="text-[13px] font-semibold text-slate-500 pl-0.5">
+            Địa chỉ Email
+          </label>
+          <div className="relative flex items-center">
+            <input
+              id="reg-email"
+              type="email"
+              autoComplete="off"
+              placeholder="Ví dụ: example@gmail.com"
+              {...register('email')}
+              className={`w-full h-[48px] bg-slate-50 border ${errors.email
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+                  : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
+                } rounded-xl pl-11 pr-4 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
+            />
+            <Mail className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
+          </div>
+          {errors.email && (
+            <p className="text-[13px] text-red-500 flex items-center mt-0.5 font-medium pl-0.5 animate-fade-in">
+              <AlertCircle className="w-3.5 h-3.5 mr-1" />
+              {errors.email.message}
+            </p>
+          )}
+        </div>
+
         {/* Subscription Type Selector (Modern Segmented Control) */}
         <div className="flex flex-col space-y-1">
           <label htmlFor="subscription_type_container" className="text-[13px] font-semibold text-slate-500 pl-0.5">
@@ -168,11 +200,10 @@ export default function Register() {
           </label>
           <div id="subscription_type_container" className="relative flex p-1 bg-slate-100 rounded-xl border border-slate-200/50 w-full h-[48px]">
             {/* Prepaid Tab Label */}
-            <label className={`relative flex-grow flex items-center justify-center cursor-pointer text-[13px] sm:text-[14px] font-bold rounded-lg transition-all duration-200 select-none ${
-              activeSubscriptionType === 'tra_truoc'
+            <label className={`relative flex-grow flex items-center justify-center cursor-pointer text-[13px] sm:text-[14px] font-bold rounded-lg transition-all duration-200 select-none ${activeSubscriptionType === 'tra_truoc'
                 ? 'bg-white text-[#EE0033] shadow-sm border border-slate-200/20'
                 : 'text-slate-500 hover:text-slate-800'
-            }`}>
+              }`}>
               <input
                 type="radio"
                 value="tra_truoc"
@@ -183,11 +214,10 @@ export default function Register() {
             </label>
 
             {/* Postpaid Tab Label */}
-            <label className={`relative flex-grow flex items-center justify-center cursor-pointer text-[13px] sm:text-[14px] font-bold rounded-lg transition-all duration-200 select-none ${
-              activeSubscriptionType === 'tra_sau'
+            <label className={`relative flex-grow flex items-center justify-center cursor-pointer text-[13px] sm:text-[14px] font-bold rounded-lg transition-all duration-200 select-none ${activeSubscriptionType === 'tra_sau'
                 ? 'bg-white text-[#EE0033] shadow-sm border border-slate-200/20'
                 : 'text-slate-500 hover:text-slate-800'
-            }`}>
+              }`}>
               <input
                 type="radio"
                 value="tra_sau"
@@ -210,11 +240,10 @@ export default function Register() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Tối thiểu 6 ký tự..."
               {...register('password')}
-              className={`w-full h-[48px] bg-slate-50 border ${
-                errors.password 
-                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100' 
+              className={`w-full h-[48px] bg-slate-50 border ${errors.password
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
                   : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
-              } rounded-xl pl-11 pr-11 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
+                } rounded-xl pl-11 pr-11 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
             />
             <Lock className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
 
@@ -247,11 +276,10 @@ export default function Register() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Nhập lại mật khẩu..."
               {...register('confirmPassword')}
-              className={`w-full h-[48px] bg-slate-50 border ${
-                errors.confirmPassword 
-                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100' 
+              className={`w-full h-[48px] bg-slate-50 border ${errors.confirmPassword
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
                   : 'border-slate-200 focus:border-[#EE0033] focus:ring-[#EE0033]/10'
-              } rounded-xl pl-11 pr-11 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
+                } rounded-xl pl-11 pr-11 text-[15px] font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all duration-200`}
             />
             <Lock className="absolute left-3.5 w-[18px] h-[18px] text-slate-400 pointer-events-none" />
           </div>

@@ -130,7 +130,83 @@ const authController = {
         data: { user: updatedUser }
       });
     } catch (error) {
-      res.status(400).json({
+      res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+  sendForgotPasswordOTP: async (req, res, next) => {
+    try {
+      const { phone_number, phoneNumber, email } = req.body;
+      const finalPhone = phone_number || phoneNumber;
+      if (!finalPhone || !email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điện thoại và Email là bắt buộc.'
+        });
+      }
+
+      const result = await authService.sendOTP(finalPhone, email);
+      return res.status(200).json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+  verifyForgotPasswordOTP: async (req, res, next) => {
+    try {
+      const { phone_number, phoneNumber, otp, otpCode } = req.body;
+      const finalPhone = phone_number || phoneNumber;
+      const finalOtp = otp || otpCode;
+
+      if (!finalPhone || !finalOtp) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điện thoại và mã OTP là bắt buộc.'
+        });
+      }
+
+      const result = await authService.verifyOTP(finalPhone, finalOtp);
+      return res.status(200).json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+  resetForgotPassword: async (req, res, next) => {
+    try {
+      const { phone_number, phoneNumber, otp, otpCode, new_password, newPassword } = req.body;
+      const finalPhone = phone_number || phoneNumber;
+      const finalOtp = otp || otpCode;
+      const finalPassword = new_password || newPassword;
+
+      if (!finalPhone || !finalOtp || !finalPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điện thoại, mã OTP và mật khẩu mới là bắt buộc.'
+        });
+      }
+
+      const result = await authService.resetPassword(finalPhone, finalOtp, finalPassword);
+      return res.status(200).json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      res.status(error.statusCode || 400).json({
         success: false,
         message: error.message
       });
