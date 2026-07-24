@@ -141,8 +141,8 @@ export interface Contact {
   full_name: string;
   phone: string;
   message: string;
-  topic?: string;
-  status: 'NEW' | 'READ' | 'PROCESSING' | 'DONE' | 'CLOSED';
+  topic: string;
+  status: 'NEW' | 'DONE';
   source: 'guest' | 'user';
   created_at?: string;
   updated_at?: string;
@@ -156,7 +156,7 @@ export interface Notification {
   userId: number;
   title: string;
   content: string;
-  type: 'SUBSCRIPTION' | 'TRANSACTION' | 'SYSTEM';
+  type: 'SUBSCRIPTION' | 'TRANSACTION' | 'SYSTEM' | 'SUPPORT';
   status: 'UNREAD' | 'READ';
   link?: string;
   isDeleted: boolean;

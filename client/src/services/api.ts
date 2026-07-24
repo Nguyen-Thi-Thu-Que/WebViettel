@@ -608,6 +608,11 @@ export const contactApi = {
     return response.data.data;
   },
 
+  replyContact: async (contactId: string, admin_note: string): Promise<Contact> => {
+    const response = await axiosInstance.patch<{ success: boolean; data: Contact }>(`/api/contact/${contactId}/reply`, { admin_note });
+    return response.data.data;
+  },
+
   getAdminContacts: async (params?: { status?: string; search?: string }): Promise<Contact[]> => {
     const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact', { params });
     return response.data.data;

@@ -5,20 +5,21 @@ const contactSchema = new mongoose.Schema({
   user_id: { type: Number, default: null },
   full_name: { type: String, required: true },
   phone: { type: String, required: true },
+  topic: { type: String, required: true },
   message: { type: String, required: true },
   status: {
     type: String,
-    enum: ['NEW', 'READ', 'PROCESSING', 'DONE', 'CLOSED'],
+    enum: ['NEW', 'DONE'],
     default: 'NEW'
   },
   source: {
     type: String,
     enum: ['guest', 'user'],
-    required: true
+    default: 'guest'
   },
-  handled_by: { type: Number, default: null },
+  admin_note: { type: String, default: "" },
   handled_at: { type: Date, default: null },
-  admin_note: { type: String, default: '' }
+  handled_by: { type: Number, default: null }
 }, {
   collection: 'contacts',
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

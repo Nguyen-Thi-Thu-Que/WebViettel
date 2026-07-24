@@ -64,9 +64,10 @@ app.use('/api/', apiRateLimiter);
 
 // Standard CORS configuration
 app.use(cors({
-  origin: '*', // We can change this to front-end origin if desired
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 app.use(express.json());

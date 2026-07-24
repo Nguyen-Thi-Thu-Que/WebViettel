@@ -1,6 +1,20 @@
 const Contact = require('../models/Contact');
 const crypto = require('crypto');
 
+const normalizeContact = async (contact) => {
+  if (!contact) return contact;
+  const message = contact.message || '';
+  const match = message.match(/^\[Chủ đề:\s*(.*?)\]\s*([\s\S]*)$/i) || message.match(/^\[(.*?)\]\s*([\s\S]*)$/);
+  if (match) {
+    const extractedTopic = match[1].trim();
+    const extractedMessage = match[2].trim();
+    contact.topic = extractedTopic;
+    contact.message = extractedMessage;
+    await Contact.updateOne({ _id: contact._id }, { $set: { topic: extractedTopic, message: extractedMessage } });
+  }
+  return contact;
+};
+
 const contactService = {
   createContact: async (contactData) => {
     const contact_id = 'CT' + Date.now() + crypto.randomInt(1000, 9999);
@@ -24,10 +38,16 @@ const contactService = {
       mongoQuery.$or = [
         { full_name: searchRegex },
         { phone: searchRegex },
-        { contact_id: searchRegex }
+        { contact_id: searchRegex },
+        { topic: searchRegex }
       ];
     }
-    return await Contact.find(mongoQuery).sort({ created_at: -1 });
+    const contacts = await Contact.find(mongoQuery).sort({ created_at: -1 });
+    const normalized = [];
+    for (const c of contacts) {
+      normalized.push(await normalizeContact(c));
+    }
+    return normalized;
   },
 
   getContactById: async (contactId) => {
@@ -35,7 +55,7 @@ const contactService = {
     if (!contact) {
       throw new Error(`Không tìm thấy liên hệ với ID ${contactId}`);
     }
-    return contact;
+    return await normalizeContact(contact);
   },
 
   updateContactStatus: async (contactId, status, adminUserId) => {
@@ -45,16 +65,21 @@ const contactService = {
       throw new Error('Trạng thái không hợp lệ.');
     }
 
-    const contact = await Contact.findOne({ contact_id: contactId });
-    if (!contact) {
+    const savedContact = await Contact.findOneAndUpdate(
+      { contact_id: contactId },
+      {
+        $set: {
+          status,
+          handled_by: adminUserId,
+          handled_at: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!savedContact) {
       throw new Error(`Không tìm thấy liên hệ với ID ${contactId}`);
     }
-
-    contact.status = status;
-    contact.handled_by = adminUserId;
-    contact.handled_at = new Date();
-
-    const savedContact = await contact.save();
 
     if (savedContact.user_id) {
       try {
@@ -75,16 +100,58 @@ const contactService = {
   },
 
   updateContactNote: async (contactId, adminNote, adminUserId) => {
-    const contact = await Contact.findOne({ contact_id: contactId });
-    if (!contact) {
+    const savedContact = await Contact.findOneAndUpdate(
+      { contact_id: contactId },
+      {
+        $set: {
+          admin_note: adminNote,
+          handled_by: adminUserId,
+          handled_at: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!savedContact) {
       throw new Error(`Không tìm thấy liên hệ với ID ${contactId}`);
     }
 
-    contact.admin_note = adminNote;
-    contact.handled_by = adminUserId;
-    contact.handled_at = new Date();
+    return savedContact;
+  },
 
-    return await contact.save();
+  replyContact: async (contactId, adminNote, adminUserId) => {
+    const savedContact = await Contact.findOneAndUpdate(
+      { contact_id: contactId },
+      {
+        $set: {
+          admin_note: adminNote,
+          status: 'DONE',
+          handled_by: adminUserId,
+          handled_at: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!savedContact) {
+      throw new Error(`Không tìm thấy liên hệ với ID ${contactId}`);
+    }
+
+    if (savedContact.user_id !== null && savedContact.user_id !== undefined) {
+      try {
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          userId: savedContact.user_id,
+          title: "CSKH Viettel phản hồi yêu cầu hỗ trợ",
+          content: adminNote,
+          type: "SYSTEM"
+        });
+      } catch (err) {
+        console.error("Failed to create contact reply notification:", err);
+      }
+    }
+
+    return savedContact;
   }
 };
 

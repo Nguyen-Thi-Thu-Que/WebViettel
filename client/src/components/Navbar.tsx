@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Bell, User, LogOut, Shield, CreditCard, Menu, X, ChevronDown, Lock, History, FileText } from 'lucide-react';
+import { Search, Bell, User, LogOut, Shield, CreditCard, Menu, X, ChevronDown, Lock, History, FileText, Headphones } from 'lucide-react';
 import { useAuthStore } from '../store';
 
 export default function Navbar() {
@@ -226,19 +226,26 @@ export default function Navbar() {
                             setIsNotificationOpen(false);
                             if (n.link) {
                               navigate(n.link);
+                            } else if (n.type === 'SUPPORT' || n.title.includes('CSKH Viettel')) {
+                              navigate('/contact');
                             }
                           }}
                           className={`px-4 py-3 flex items-start space-x-3 transition-all cursor-pointer hover:bg-slate-50/70 ${isUnread ? 'bg-red-50/10 font-semibold' : ''
                             }`}
                         >
                           {/* Notification Type Icon */}
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${n.type === 'TRANSACTION'
-                              ? 'bg-emerald-50 text-emerald-600'
-                              : n.type === 'SUBSCRIPTION'
-                                ? 'bg-blue-50 text-blue-600'
-                                : 'bg-amber-50 text-amber-600'
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            n.type === 'SUPPORT' || n.title.includes('CSKH Viettel')
+                              ? 'bg-red-50 text-primary'
+                              : n.type === 'TRANSACTION'
+                                ? 'bg-emerald-50 text-emerald-600'
+                                : n.type === 'SUBSCRIPTION'
+                                  ? 'bg-blue-50 text-blue-600'
+                                  : 'bg-amber-50 text-amber-600'
                             }`}>
-                            {n.type === 'TRANSACTION' ? (
+                            {n.type === 'SUPPORT' || n.title.includes('CSKH Viettel') ? (
+                              <Headphones className="w-4 h-4" />
+                            ) : n.type === 'TRANSACTION' ? (
                               <CreditCard className="w-4 h-4" />
                             ) : n.type === 'SUBSCRIPTION' ? (
                               <FileText className="w-4 h-4" />
