@@ -1,4 +1,9 @@
-import { Mail, Phone, User, Send, Clock, MapPin, Headphones, HelpCircle, Calendar, CheckCircle, Search } from 'lucide-react';
+import {
+  Phone, Mail, MapPin, Send, CheckCircle,
+  Search, Headphones, Loader2, XCircle, Clock,
+  Package2, Wallet, UserRound, MessageCircleWarning,
+  LifeBuoy, ChevronRight,
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store';
@@ -6,668 +11,910 @@ import { contactApi } from '../services/api';
 import SEO from '../components/SEO';
 import type { Contact as ContactType } from '../types';
 
+/* ────────────────────────── constants ────────────────────────── */
+const TOPICS = [
+  {
+    id: 'register',
+    label: 'Đăng ký gói cước',
+    sub: 'Tư vấn & đăng ký gói mới',
+    Icon: Package2,
+    accent: '#3b82f6',
+    bg: '#eff6ff',
+  },
+  {
+    id: 'topup',
+    label: 'Nạp tiền & Số dư',
+    sub: 'Sự cố thanh toán, số dư ví',
+    Icon: Wallet,
+    accent: '#7c3aed',
+    bg: '#f5f3ff',
+  },
+  {
+    id: 'account',
+    label: 'Tài khoản thuê bao',
+    sub: 'Quản lý thông tin tài khoản',
+    Icon: UserRound,
+    accent: '#0891b2',
+    bg: '#ecfeff',
+  },
+  {
+    id: 'complaint',
+    label: 'Góp ý & Khiếu nại',
+    sub: 'Phản ánh chất lượng dịch vụ',
+    Icon: MessageCircleWarning,
+    accent: '#d97706',
+    bg: '#fffbeb',
+  },
+  {
+    id: 'other',
+    label: 'Vấn đề khác',
+    sub: 'Hỗ trợ tổng hợp',
+    Icon: LifeBuoy,
+    accent: '#4b5563',
+    bg: '#f9fafb',
+  },
+] as const;
+
+const TOPIC_VALUE: Record<string, string> = {
+  register: 'Tư vấn & Đăng ký gói cước',
+  topup: 'Sự cố Nạp tiền & Số dư ví',
+  account: 'Quản lý tài khoản thuê bao',
+  complaint: 'Góp ý & Khiếu nại dịch vụ',
+  other: 'Khác',
+};
+
+/* ────────────────────────── component ────────────────────────── */
 export default function Contact() {
   const { currentUser } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
 
-  // Form states
+  // form state
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [topic, setTopic] = useState('Tư vấn & Đăng ký gói cước');
+  const [topicId, setTopicId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitDone, setSubmitDone] = useState(false);
 
-  // History / Lookup states
+  // history state
   const [historyContacts, setHistoryContacts] = useState<ContactType[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [lookupPhone, setLookupPhone] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
-  const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
-  // Sync tab selection from query params
+  /* ── sync effects ── */
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'history') {
-      setActiveTab('history');
-    } else {
-      setActiveTab('new');
-    }
+    setActiveTab(searchParams.get('tab') === 'history' ? 'history' : 'new');
   }, [searchParams]);
 
-  // Autofill if user is logged in
   useEffect(() => {
-    if (currentUser) {
-      setFullName(currentUser.name || '');
-      setPhone(currentUser.phoneNumber || '');
-    } else {
-      setFullName('');
-      setPhone('');
-    }
+    if (currentUser) { setFullName(currentUser.name || ''); setPhone(currentUser.phoneNumber || ''); }
+    else { setFullName(''); setPhone(''); }
   }, [currentUser]);
 
-  // Handle textarea auto-resize
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const scrollHeight = textarea.scrollHeight;
-      textarea.style.height = `${Math.min(Math.max(scrollHeight, 140), 380)}px`;
-    }
+    const ta = textareaRef.current;
+    if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(Math.max(ta.scrollHeight, 110), 320)}px`; }
   }, [message]);
 
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMsg({ type, text });
-    setTimeout(() => setToastMsg(null), 3500);
+  useEffect(() => {
+    if (activeTab === 'history' && currentUser) fetchMemberHistory();
+  }, [activeTab, currentUser]);
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id && !historyLoading && historyContacts.length > 0) {
+      const el = document.getElementById(`ct-${id}`);
+      if (el) {
+        const t1 = setTimeout(() => { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedId(id); }, 300);
+        const t2 = setTimeout(() => setHighlightedId(null), 3300);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+      }
+    }
+  }, [searchParams, historyLoading, historyContacts]);
+
+  /* ── topic select: scroll into form ── */
+  useEffect(() => {
+    if (topicId && formRef.current) {
+      setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+    }
+  }, [topicId]);
+
+  /* ── helpers ── */
+  const showToast = (type: 'ok' | 'err', text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 3800);
   };
 
+  const topic = TOPIC_VALUE[topicId ?? 'other'] ?? 'Khác';
+
   const validate = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!fullName.trim()) {
-      newErrors.fullName = 'Họ và tên là bắt buộc.';
-    }
-
-    const phoneRegex = /^0[0-9]{9}$/;
-    if (!phone.trim()) {
-      newErrors.phone = 'Số điện thoại là bắt buộc.';
-    } else if (!phoneRegex.test(phone.trim())) {
-      newErrors.phone = 'Số điện thoại phải bao gồm 10 chữ số và bắt đầu bằng số 0.';
-    }
-
-    if (!message.trim()) {
-      newErrors.message = 'Nội dung liên hệ là bắt buộc.';
-    } else if (message.trim().length < 10) {
-      newErrors.message = 'Nội dung liên hệ phải có ít nhất 10 ký tự.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e: Record<string, string> = {};
+    if (!fullName.trim()) e.fullName = 'Vui lòng nhập họ và tên.';
+    if (!phone.trim()) e.phone = 'Vui lòng nhập số điện thoại.';
+    else if (!/^0[0-9]{9}$/.test(phone.trim())) e.phone = '10 chữ số, bắt đầu bằng 0.';
+    if (!message.trim()) e.message = 'Vui lòng nhập nội dung.';
+    else if (message.trim().length < 10) e.message = 'Tối thiểu 10 ký tự.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
     setIsSubmitting(true);
     try {
-      const response = await contactApi.createContact({
-        full_name: fullName.trim(),
-        phone: phone.trim(),
-        topic: topic,
-        message: `[Chủ đề: ${topic}]\n${message.trim()}`
+      const res = await contactApi.createContact({
+        full_name: fullName.trim(), phone: phone.trim(), topic,
+        message: `[Chủ đề: ${topic}]\n${message.trim()}`,
       });
-
-      if (response.success) {
-        showToast('success', 'Gửi yêu cầu hỗ trợ thành công! Đội ngũ CSKH Viettel sẽ liên hệ sớm nhất.');
-        setMessage('');
-        if (!currentUser) {
-          setFullName('');
-          setPhone('');
-        }
-      } else {
-        showToast('error', response.message || 'Gửi yêu cầu hỗ trợ thất bại.');
-      }
+      if (res.success) {
+        setSubmitDone(true); setMessage('');
+        if (!currentUser) { setFullName(''); setPhone(''); }
+        showToast('ok', 'Đã gửi thành công! CSKH Viettel sẽ liên hệ sớm.');
+        setTimeout(() => setSubmitDone(false), 6000);
+      } else { showToast('err', res.message || 'Gửi thất bại.'); }
     } catch (err: any) {
-      showToast('error', err.response?.data?.message || 'Có lỗi xảy ra khi kết nối máy chủ.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      showToast('err', err.response?.data?.message || 'Lỗi kết nối máy chủ.');
+    } finally { setIsSubmitting(false); }
   };
 
-  // Fetch Member History
   const fetchMemberHistory = async () => {
     setHistoryLoading(true);
-    try {
-      const data = await contactApi.getMyRequests();
-      setHistoryContacts(data || []);
-    } catch (err) {
-      console.error("Lỗi khi tải lịch sử liên hệ:", err);
-      showToast('error', 'Không thể tải lịch sử liên hệ.');
-    } finally {
-      setHistoryLoading(false);
-    }
+    try { const data = await contactApi.getMyRequests(); setHistoryContacts(data || []); }
+    catch { showToast('err', 'Không thể tải lịch sử.'); }
+    finally { setHistoryLoading(false); }
   };
 
-  useEffect(() => {
-    if (activeTab === 'history' && currentUser) {
-      fetchMemberHistory();
-    }
-  }, [activeTab, currentUser]);
-
-  // Guest lookup handler
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = lookupPhone.trim();
-    const phoneRegex = /^0[0-9]{9}$/;
-    if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
-      showToast('error', 'Vui lòng nhập số điện thoại hợp lệ (bao gồm 10 chữ số và bắt đầu bằng số 0) để tra cứu.');
-      return;
-    }
+    const cp = lookupPhone.trim();
+    if (!cp || !/^0[0-9]{9}$/.test(cp)) { showToast('err', 'Số điện thoại không hợp lệ.'); return; }
+    setHistoryLoading(true); setHasSearched(true);
+    try { const data = await contactApi.lookupContacts(cp); setHistoryContacts(data || []); }
+    catch { showToast('err', 'Tra cứu thất bại.'); }
+    finally { setHistoryLoading(false); }
+  };
 
-    setHistoryLoading(true);
-    setHasSearched(true);
+  const isRecentlyHandled = (t?: string | null) =>
+    !!t && new Date(t).getTime() > Date.now() - 86400000;
+
+  const fmtDate = (v?: any) => {
+    if (!v) return '—';
+    try { return new Date(v).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+    catch { return String(v); }
+  };
+
+  const fmtReply = (v?: any) => {
+    if (!v) return '—';
     try {
-      const data = await contactApi.lookupContacts(cleanPhone);
-      setHistoryContacts(data || []);
-    } catch (err) {
-      console.error("Lỗi khi tra cứu lịch sử liên hệ:", err);
-      showToast('error', 'Tra cứu thất bại. Vui lòng thử lại sau.');
-    } finally {
-      setHistoryLoading(false);
-    }
+      const d = new Date(v); const p = (n: number) => String(n).padStart(2, '0');
+      return `${p(d.getHours())}:${p(d.getMinutes())} · ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+    } catch { return String(v); }
   };
 
-  // Auto-scroll and Highlight when card ID is passed in URL
-  useEffect(() => {
-    const contactIdParam = searchParams.get('id');
-    if (contactIdParam && !historyLoading && historyContacts.length > 0) {
-      const element = document.getElementById(`contact-card-${contactIdParam}`);
-      if (element) {
-        const timer1 = setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          setHighlightedId(contactIdParam);
-        }, 300);
-        const timer2 = setTimeout(() => {
-          setHighlightedId(null);
-        }, 3300);
-        return () => {
-          clearTimeout(timer1);
-          clearTimeout(timer2);
-        };
-      }
-    }
-  }, [searchParams, historyLoading, historyContacts]);
-
-  const isRecentlyHandled = (handledAt?: string | null) => {
-    if (!handledAt) return false;
-    const handledTime = new Date(handledAt).getTime();
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    return handledTime > oneDayAgo;
-  };
-
-  const formatDate = (dateInput?: any) => {
-    if (!dateInput) return '—';
-    try {
-      const date = new Date(dateInput);
-      return date.toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (e) {
-      return String(dateInput);
-    }
-  };
-
-  const formatResponseDate = (dateInput?: any) => {
-    if (!dateInput) return '—';
-    try {
-      const date = new Date(dateInput);
-      const pad = (num: number) => String(num).padStart(2, '0');
-      const hh = pad(date.getHours());
-      const mm = pad(date.getMinutes());
-      const dd = pad(date.getDate());
-      const MM = pad(date.getMonth() + 1);
-      const yyyy = date.getFullYear();
-      return `${hh}:${mm} - ${dd}/${MM}/${yyyy}`;
-    } catch (e) {
-      return String(dateInput);
-    }
-  };
+  const handleTabChange = (t: 'new' | 'history') => { setActiveTab(t); setSearchParams({ tab: t }); };
 
   const breadcrumbsSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Trang chủ",
-        "item": typeof window !== 'undefined' ? window.location.origin : ''
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "Liên hệ",
-        "item": typeof window !== 'undefined' ? `${window.location.origin}/contact` : ''
-      }
-    ]
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Trang chủ', item: typeof window !== 'undefined' ? window.location.origin : '' },
+      { '@type': 'ListItem', position: 2, name: 'Liên hệ', item: typeof window !== 'undefined' ? `${window.location.origin}/contact` : '' },
+    ],
   };
 
-  const handleTabChange = (tab: 'new' | 'history') => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
+  /* ────── selected topic meta ────── */
+  const activeTopic = TOPICS.find(t => t.id === topicId);
 
+  /* ══════════════════════════ RENDER ══════════════════════════ */
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-16 px-4 relative animate-fade-in text-xs font-semibold">
+    <>
       <SEO
         title="Liên Hệ Hỗ Trợ CSKH - Viettel Telecom"
         description="Gửi phản hồi, tư vấn gói cước di động và giải đáp thắc mắc dịch vụ tổng đài CSKH Viettel 24/7."
         schema={breadcrumbsSchema}
       />
 
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-xl shadow-lg border-l-4 text-xs font-bold bg-white text-slate-800 animate-slide-in ${
-          toastMsg.type === 'success' ? 'border-emerald-500' : 'border-red-500'
-        }`}>
-          {toastMsg.text}
+      {/* ── page-scoped styles ── */}
+      <style>{`
+        /* reset & tokens */
+        .sp { --red:#ee0033; --red-light:#fff1f3; --ink:#0a0a0a; --muted:#64748b;
+              --line:#e8eaed; --surface:#ffffff; --lift:#f7f8fa;
+              font-family:inherit; box-sizing:border-box; }
+
+        /* breakout: escape max-w-7xl main padding */
+        .sp-breakout {
+          margin-left: calc(-1rem);
+          margin-right: calc(-1rem);
+          margin-top: -2rem;
+        }
+        @media(min-width:768px){
+          .sp-breakout { margin-left:calc(-2rem); margin-right:calc(-2rem); }
+        }
+
+        /* toast */
+        .sp-toast {
+          position:fixed; bottom:28px; right:24px; z-index:9999;
+          display:flex; align-items:center; gap:10px;
+          padding:13px 18px; border-radius:14px;
+          font-size:13px; font-weight:600; max-width:360px;
+          box-shadow:0 8px 40px rgba(0,0,0,.15);
+          animation: sp-up .25s cubic-bezier(.16,1,.3,1) both;
+        }
+        @keyframes sp-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+        /* topbar */
+        .sp-bar {
+          position:relative;
+          display:flex; align-items:center; justify-content:space-between;
+          padding:0 32px; height:52px;
+          background:#fff;
+          border-bottom:1px solid var(--line);
+          border-top:1px solid var(--line);
+        }
+        .sp-brand { display:flex; align-items:center; gap:10px; }
+        .sp-brand-icon {
+          width:32px; height:32px; border-radius:9px;
+          background:var(--red); display:flex; align-items:center; justify-content:center;
+        }
+        .sp-brand-name { font-size:14px; font-weight:800; color:var(--ink); letter-spacing:-.01em; }
+        .sp-brand-tag {
+          font-size:10px; font-weight:700; color:var(--red); background:var(--red-light);
+          border:1px solid #fecdd3; border-radius:999px; padding:2px 8px; letter-spacing:.06em;
+        }
+        .sp-switcher {
+          display:flex; background:var(--lift); border:1px solid var(--line);
+          border-radius:10px; padding:3px; gap:2px;
+        }
+        .sp-sw-btn {
+          height:32px; padding:0 16px; border:none; border-radius:8px;
+          font-size:12px; font-weight:700; cursor:pointer; transition:all .15s;
+          background:transparent; color:var(--muted); font-family:inherit;
+        }
+        .sp-sw-btn.on {
+          background:var(--surface); color:var(--ink);
+          box-shadow:0 1px 4px rgba(0,0,0,.08);
+        }
+
+        /* workspace (new tab) */
+        .sp-workspace {
+          display:grid; grid-template-columns:1fr 360px;
+          gap:0; min-height:calc(100vh - 112px);
+        }
+
+        /* left zone */
+        .sp-left {
+          padding:52px 48px 80px; border-right:1px solid var(--line);
+          overflow-y:auto;
+        }
+        .sp-eyebrow {
+          font-size:10px; font-weight:800; color:var(--red);
+          text-transform:uppercase; letter-spacing:.12em; margin:0 0 12px;
+        }
+        .sp-headline {
+          font-size:clamp(26px,3.5vw,38px); font-weight:900; color:var(--ink);
+          letter-spacing:-.03em; line-height:1.15; margin:0 0 8px;
+        }
+        .sp-sub {
+          font-size:14px; color:var(--muted); font-weight:500;
+          margin:0 0 40px; line-height:1.6;
+        }
+
+        /* topic tiles */
+        .sp-topic-grid {
+          display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:40px;
+        }
+        .sp-topic-grid .sp-tile:last-child:nth-child(odd) {
+          grid-column:1 / -1;
+        }
+        .sp-tile {
+          display:flex; align-items:flex-start; gap:14px;
+          padding:18px 20px; border-radius:14px; border:1.5px solid var(--line);
+          background:var(--surface); cursor:pointer; text-align:left;
+          transition:all .18s cubic-bezier(.16,1,.3,1);
+          position:relative; overflow:hidden;
+        }
+        .sp-tile:hover { border-color:#d1d5db; box-shadow:0 4px 16px rgba(0,0,0,.06); transform:translateY(-1px); }
+        .sp-tile.sel { border-color:var(--tile-accent,var(--red)); background:var(--tile-bg,var(--red-light)); box-shadow:0 0 0 3px color-mix(in srgb, var(--tile-accent,var(--red)) 12%, transparent); }
+        .sp-tile-icon {
+          width:38px; height:38px; border-radius:10px; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center;
+          background:var(--tile-bg,#f1f5f9); transition:background .18s;
+        }
+        .sp-tile.sel .sp-tile-icon { background:color-mix(in srgb, var(--tile-accent,var(--red)) 15%, white); }
+        .sp-tile-label { font-size:13px; font-weight:800; color:var(--ink); margin:0 0 2px; line-height:1.3; }
+        .sp-tile-sub { font-size:11px; color:var(--muted); font-weight:500; margin:0; }
+        .sp-tile-check {
+          position:absolute; top:12px; right:12px; width:20px; height:20px;
+          border-radius:50%; background:var(--tile-accent,var(--red));
+          display:flex; align-items:center; justify-content:center;
+        }
+
+        /* form reveal */
+        .sp-form-zone {
+          animation: sp-up .3s cubic-bezier(.16,1,.3,1) both;
+          border-top:1px solid var(--line); padding-top:36px;
+        }
+        .sp-form-header {
+          display:flex; align-items:center; gap:10px; margin-bottom:28px;
+        }
+        .sp-form-badge {
+          display:inline-flex; align-items:center; gap:6px;
+          font-size:11px; font-weight:800; padding:5px 12px; border-radius:999px;
+          background:var(--tile-bg,var(--red-light));
+          color:var(--tile-accent,var(--red));
+          border:1px solid color-mix(in srgb, var(--tile-accent,var(--red)) 20%, transparent);
+        }
+        .sp-form-title { font-size:16px; font-weight:800; color:var(--ink); margin:0; }
+
+        /* fields */
+        .sp-fields { display:flex; flex-direction:column; gap:24px; }
+        .sp-field { display:flex; flex-direction:column; gap:7px; }
+        .sp-label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; }
+        .sp-input {
+          height:46px; padding:0 16px; border-radius:12px;
+          border:1.5px solid var(--line); background:var(--lift);
+          font-size:14px; font-weight:500; color:var(--ink); outline:none;
+          transition:all .15s; font-family:inherit; width:100%; box-sizing:border-box;
+        }
+        .sp-input:focus { border-color:var(--red); background:#fff; box-shadow:0 0 0 3px rgba(238,0,51,.08); }
+        .sp-input.err { border-color:#f87171; background:#fff5f5; }
+        .sp-textarea {
+          padding:14px 16px; border-radius:12px;
+          border:1.5px solid var(--line); background:var(--lift);
+          font-size:14px; font-weight:500; color:var(--ink); outline:none;
+          transition:all .15s; font-family:inherit; width:100%; box-sizing:border-box;
+          resize:none; min-height:110px; max-height:320px; overflow-y:auto;
+        }
+        .sp-textarea:focus { border-color:var(--red); background:#fff; box-shadow:0 0 0 3px rgba(238,0,51,.08); }
+        .sp-textarea.err { border-color:#f87171; background:#fff5f5; }
+        .sp-err-msg { font-size:11px; color:#ef4444; font-weight:600; }
+        .sp-row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        .sp-actions { display:flex; align-items:center; gap:16px; margin-top:8px; }
+        .sp-submit {
+          display:inline-flex; align-items:center; gap:8px;
+          height:48px; padding:0 28px; border-radius:12px; border:none;
+          background:var(--ink); color:#fff; font-size:13px; font-weight:800;
+          cursor:pointer; transition:all .2s; font-family:inherit; letter-spacing:.01em;
+        }
+        .sp-submit:hover:not(:disabled) { background:#1e293b; transform:translateY(-1px); box-shadow:0 6px 24px rgba(0,0,0,.18); }
+        .sp-submit:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+        .sp-submit-note { font-size:12px; color:#cbd5e1; font-weight:500; }
+
+        /* success state */
+        .sp-success {
+          display:flex; flex-direction:column; align-items:flex-start; gap:16px;
+          padding:32px; border-radius:20px;
+          background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);
+          border:1px solid #86efac;
+          animation: sp-up .3s cubic-bezier(.16,1,.3,1) both;
+        }
+        .sp-success-ico {
+          width:48px; height:48px; border-radius:14px; background:#dcfce7;
+          display:flex; align-items:center; justify-content:center;
+        }
+
+        /* right bento */
+        .sp-right {
+          padding:36px 28px; background:var(--lift);
+          display:flex; flex-direction:column; gap:12px;
+          overflow-y:auto;
+        }
+        .sp-bento-label {
+          font-size:10px; font-weight:800; color:#94a3b8;
+          text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px;
+        }
+
+        /* bento tiles */
+        .sp-bt {
+          border-radius:16px; padding:20px; border:1px solid var(--line);
+          background:var(--surface); transition:box-shadow .15s;
+        }
+        .sp-bt:hover { box-shadow:0 4px 16px rgba(0,0,0,.06); }
+        .sp-bt-phone {
+          background:var(--ink); color:#fff; border-color:transparent;
+          position:relative; overflow:hidden;
+        }
+        .sp-bt-phone-glow {
+          position:absolute; top:-40px; right:-40px;
+          width:120px; height:120px; border-radius:50%;
+          background:radial-gradient(circle,rgba(238,0,51,.3) 0%,transparent 70%);
+        }
+        .sp-bt-phone-eye { font-size:10px; font-weight:700; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.1em; margin:0 0 8px; }
+        .sp-bt-phone-num { font-size:32px; font-weight:900; color:#fff; margin:0; letter-spacing:-.02em; line-height:1; }
+        .sp-bt-phone-alt { font-size:12px; color:rgba(255,255,255,.5); font-weight:600; margin:6px 0 0; }
+        .sp-bt-phone-tag {
+          display:inline-flex; align-items:center; gap:5px;
+          margin-top:12px; font-size:11px; font-weight:700; color:#4ade80;
+          background:rgba(74,222,128,.12); border:1px solid rgba(74,222,128,.2);
+          border-radius:999px; padding:4px 10px;
+        }
+        .sp-bt-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .sp-bt-icon-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .sp-bt-icon-wrap {
+          width:28px; height:28px; border-radius:8px; background:var(--lift);
+          border:1px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+        }
+        .sp-bt-val { font-size:13px; font-weight:800; color:var(--ink); margin:0 0 2px; }
+        .sp-bt-note { font-size:11px; color:var(--muted); font-weight:500; margin:0; }
+        .sp-bt-status {
+          display:flex; align-items:center; gap:10px;
+          background:linear-gradient(135deg,#f0fdf4,#dcfce7); border-color:#bbf7d0;
+        }
+        .sp-pulse-wrap { position:relative; width:10px; height:10px; flex-shrink:0; }
+        .sp-pulse-dot { width:10px; height:10px; border-radius:50%; background:#22c55e; }
+        .sp-pulse-ring {
+          position:absolute; inset:0; border-radius:50%;
+          background:rgba(34,197,94,.3);
+          animation:sp-pulse 2s ease-out infinite;
+        }
+        @keyframes sp-pulse { 0%{transform:scale(1);opacity:.8} 100%{transform:scale(2.5);opacity:0} }
+        .sp-status-text { font-size:12px; font-weight:800; color:#16a34a; }
+        .sp-status-sub { font-size:11px; color:#4ade80; font-weight:500; }
+
+        /* history workspace */
+        .sp-history {
+          padding:48px 48px 80px; max-width:980px;
+        }
+        .sp-lookup-bar {
+          display:flex; align-items:center; gap:12px; margin-bottom:40px;
+          padding:14px 18px; border-radius:16px;
+          background:#fff; border:1.5px solid var(--line);
+          box-shadow:0 1px 4px rgba(0,0,0,.04);
+        }
+        .sp-lookup-input {
+          flex:1; border:none; outline:none; background:transparent;
+          font-size:14px; font-weight:500; color:var(--ink); font-family:inherit;
+        }
+        .sp-lookup-btn {
+          display:inline-flex; align-items:center; gap:6px;
+          height:36px; padding:0 16px; border-radius:9px; border:none;
+          background:var(--ink); color:#fff; font-size:12px; font-weight:700;
+          cursor:pointer; font-family:inherit; transition:all .15s;
+        }
+        .sp-lookup-btn:hover:not(:disabled) { background:#1e293b; }
+        .sp-lookup-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+        /* card board */
+        .sp-board { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+        .sp-hcard {
+          border-radius:20px; border:1.5px solid var(--line);
+          background:var(--surface); overflow:hidden;
+          transition:all .2s; position:relative;
+        }
+        .sp-hcard:hover { box-shadow:0 6px 24px rgba(0,0,0,.08); transform:translateY(-2px); }
+        .sp-hcard.lit { border-color:var(--red); box-shadow:0 0 0 3px rgba(238,0,51,.1); transform:scale(1.01); }
+        .sp-hcard-top {
+          padding:16px 20px; border-bottom:1px solid var(--lift);
+          display:flex; align-items:center; justify-content:space-between; gap:8px;
+        }
+        .sp-hcard-id { font-size:10px; font-weight:800; color:#94a3b8; font-family:monospace; letter-spacing:.05em; }
+        .sp-hcard-date { font-size:11px; color:#94a3b8; font-weight:500; }
+        .sp-hcard-status {
+          display:inline-flex; align-items:center; gap:5px;
+          font-size:11px; font-weight:800; padding:4px 10px;
+          border-radius:999px;
+        }
+        .sp-hcard-status.done { background:#f0fdf4; color:#16a34a; }
+        .sp-hcard-status.wait { background:#fffbeb; color:#b45309; }
+        .sp-hcard-body { padding:18px 20px; display:flex; flex-direction:column; gap:14px; }
+        .sp-hcard-topic {
+          display:inline-flex; font-size:11px; font-weight:700; color:#475569;
+          background:var(--lift); border:1px solid var(--line);
+          border-radius:7px; padding:3px 9px;
+        }
+        .sp-hcard-msglabel { font-size:10px; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:.07em; margin-bottom:5px; }
+        .sp-hcard-msg { font-size:13px; color:#475569; line-height:1.6; font-weight:500; white-space:pre-line; }
+        .sp-hcard-reply {
+          border-left:3px solid; padding-left:12px;
+        }
+        .sp-hcard-reply.done { border-color:#22c55e; }
+        .sp-hcard-reply.wait { border-color:#fbbf24; }
+        .sp-reply-head { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+        .sp-reply-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; }
+        .sp-hcard-reply.done .sp-reply-label { color:#16a34a; }
+        .sp-hcard-reply.wait .sp-reply-label { color:#b45309; }
+        .sp-reply-text { font-size:13px; color:#0f172a; font-weight:500; line-height:1.6; }
+        .sp-reply-time { font-size:11px; color:#94a3b8; font-weight:500; margin-top:6px; }
+        .sp-wait-msg { font-size:12px; font-weight:600; color:#92400e; }
+        .sp-new-badge {
+          position:absolute; top:0; right:0;
+          font-size:9px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+          color:#ee0033; background:#fff1f3; border:1px solid #fecdd3;
+          border-radius:0 20px 0 10px; padding:4px 10px;
+        }
+
+        /* blank */
+        .sp-blank {
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          padding:80px 24px; text-align:center; gap:12px;
+          border:1.5px dashed var(--line); border-radius:20px;
+          grid-column:1 / -1;
+        }
+        .sp-blank-ico {
+          width:52px; height:52px; border-radius:14px; background:var(--lift);
+          display:flex; align-items:center; justify-content:center; margin-bottom:4px;
+        }
+        .sp-blank-text { font-size:14px; font-weight:600; color:#94a3b8; max-width:280px; }
+
+        /* skeleton */
+        .sp-skel { border-radius:20px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:200% 100%; animation:sp-skel 1.4s infinite; }
+        @keyframes sp-skel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        /* responsive */
+        @media(max-width:900px){
+          .sp-workspace{grid-template-columns:1fr;}
+          .sp-right{border-top:1px solid var(--line);}
+          .sp-board{grid-template-columns:1fr;}
+        }
+        @media(max-width:640px){
+          .sp-left,.sp-history{padding:28px 20px 60px;}
+          .sp-bar{padding:0 16px;}
+          .sp-topic-grid{grid-template-columns:1fr;}
+          .sp-tile:last-child:nth-child(odd){grid-column:auto;}
+          .sp-row2{grid-template-columns:1fr;}
+        }
+      `}</style>
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div className="sp-toast" style={{
+          background: toast.type === 'ok' ? '#0a0a0a' : '#fff',
+          color: toast.type === 'ok' ? '#fff' : '#be123c',
+          border: toast.type === 'ok' ? 'none' : '1px solid #fecdd3',
+        }}>
+          {toast.type === 'ok'
+            ? <CheckCircle size={15} style={{ color: '#4ade80', flexShrink: 0 }} />
+            : <XCircle size={15} style={{ color: '#f43f5e', flexShrink: 0 }} />}
+          {toast.text}
         </div>
       )}
 
-      {/* Main Page Title */}
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center space-x-2 bg-red-50 border border-red-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-primary mx-auto">
-          <Headphones className="w-3.5 h-3.5 text-primary" />
-          <span>TỔNG ĐÀI CHĂM SÓC KHÁCH HÀNG VIETTEL</span>
-        </div>
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Trung Tâm Hỗ Trợ & Liên Hệ</h1>
-        <p className="text-slate-500 text-xs max-w-lg mx-auto font-medium">
-          Viettel Telecom luôn sẵn sàng phục vụ và giải đáp thắc mắc từ Quý khách hàng 24/7.
-        </p>
-      </div>
+      {/* breakout wrapper — escapes <main> padding */}
+      <div className="sp-breakout sp">
 
-      {/* Tabs Selector Navigation */}
-      <div className="flex border-b border-slate-200 max-w-lg mx-auto">
-        <button
-          onClick={() => handleTabChange('new')}
-          className={`flex-1 py-3 text-center border-b-2 font-bold transition-all text-xs uppercase tracking-wider cursor-pointer focus:outline-none ${
-            activeTab === 'new'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-400 hover:text-slate-700'
-          }`}
-        >
-          Gửi Yêu Cầu Mới
-        </button>
-        <button
-          onClick={() => handleTabChange('history')}
-          className={`flex-1 py-3 text-center border-b-2 font-bold transition-all text-xs uppercase tracking-wider cursor-pointer focus:outline-none ${
-            activeTab === 'history'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-400 hover:text-slate-700'
-          }`}
-        >
-          Lịch Sử Yêu Cầu & Phản Hồi
-        </button>
-      </div>
-
-      {/* Tab Contents */}
-      {activeTab === 'new' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start animate-fade-in">
-          {/* COLUMN 1: Form Gửi Phản Hồi */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 text-left">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
-                <Mail className="w-4 h-4 text-primary" />
-                <span>Gửi Yêu Cầu Hỗ Trợ</span>
-              </h2>
-              <p className="text-slate-400 text-[11px] font-medium mt-1">
-                Vui lòng nhập thông tin liên hệ và nội dung cần hỗ trợ.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Full Name Input */}
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="fullName" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-0.5">
-                  Họ và tên <span className="text-primary">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    id="fullName"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Nhập họ và tên của bạn..."
-                    className={`w-full h-11 bg-slate-50 border ${
-                      errors.fullName ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-primary/50'
-                    } rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white transition-all`}
-                  />
-                  <User className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-                {errors.fullName && (
-                  <p className="text-[11px] text-red-500 mt-0.5 font-medium pl-0.5">
-                    {errors.fullName}
-                  </p>
-                )}
-              </div>
-
-              {/* Phone Number Input */}
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="phone" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-0.5">
-                  Số điện thoại liên hệ <span className="text-primary">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    id="phone"
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="Nhập số điện thoại..."
-                    className={`w-full h-11 bg-slate-50 border ${
-                      errors.phone ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-primary/50'
-                    } rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white transition-all`}
-                  />
-                  <Phone className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-                {errors.phone && (
-                  <p className="text-[11px] text-red-500 mt-0.5 font-medium pl-0.5">
-                    {errors.phone}
-                  </p>
-                )}
-              </div>
-
-              {/* Topic Dropdown */}
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="topic" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-0.5">
-                  Chủ đề hỗ trợ <span className="text-primary">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <select
-                    id="topic"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    className="w-full h-11 bg-slate-50 border border-slate-200 focus:border-primary/50 rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 focus:outline-none focus:bg-white transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="Tư vấn & Đăng ký gói cước">Tư vấn & Đăng ký gói cước</option>
-                    <option value="Sự cố Nạp tiền & Số dư ví">Sự cố Nạp tiền & Số dư ví</option>
-                    <option value="Quản lý tài khoản thuê bao">Quản lý tài khoản thuê bao</option>
-                    <option value="Góp ý & Khiếu nại dịch vụ">Góp ý & Khiếu nại dịch vụ</option>
-                    <option value="Khác">Khác</option>
-                  </select>
-                  <HelpCircle className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <div className="absolute right-3.5 pointer-events-none text-slate-400 text-[10px]">▼</div>
-                </div>
-              </div>
-
-              {/* Message Textarea */}
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="message" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-0.5">
-                  Nội dung chi tiết <span className="text-primary">*</span>
-                </label>
-                <textarea
-                  id="message"
-                  ref={textareaRef}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Mô tả cụ thể yêu cầu của bạn..."
-                  style={{ minHeight: '140px', maxHeight: '380px' }}
-                  className={`w-full bg-slate-50 border ${
-                    errors.message ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-primary/50'
-                  } rounded-xl p-3.5 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white transition-all overflow-y-auto resize-none`}
-                />
-                {errors.message && (
-                  <p className="text-[11px] text-red-500 mt-0.5 font-medium pl-0.5">
-                    {errors.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full h-11 bg-primary hover:bg-[#D40032] hover:shadow-[0_4px_15px_rgba(238,0,51,0.2)] active:translate-y-0 transform transition-all duration-200 text-white font-bold rounded-xl text-xs uppercase tracking-wider disabled:opacity-50 focus:outline-none cursor-pointer flex items-center justify-center space-x-2 mt-2"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center space-x-2">
-                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Đang gửi yêu cầu...</span>
-                  </span>
-                ) : (
-                  <>
-                    <span>Gửi yêu cầu hỗ trợ</span>
-                    <Send className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
+      {/* ── Top Bar ── */}
+      <header className="sp-bar sp">
+        <div className="sp-brand">
+          <div className="sp-brand-icon">
+            <Headphones size={16} style={{ color: '#fff' }} />
           </div>
-
-          {/* COLUMN 2: Thông Tin CSKH Viettel Trực Tiếp */}
-          <div className="space-y-6 text-left">
-            <div className="bg-slate-900 text-white border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden space-y-6">
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-red-600/20 rounded-full blur-2xl pointer-events-none" />
-
-              <div className="border-b border-slate-800 pb-4">
-                <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">THÔNG TIN CHÍNH THỨC</span>
-                <h2 className="text-lg font-extrabold text-white mt-1">Tổng Đài CSKH Viettel</h2>
-                <p className="text-slate-400 text-xs mt-1 font-medium">
-                  Kết nối trực tiếp với đội ngũ tư vấn viên Chăm sóc Khách hàng.
-                </p>
-              </div>
-
-              <div className="space-y-5">
-                <div className="flex items-start space-x-3.5">
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 shrink-0 mt-0.5">
-                    <Phone className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tổng đài CSKH 24/7</h3>
-                    <p className="text-base font-extrabold text-white mt-0.5">
-                      198 <span className="text-slate-400 font-medium text-xs">hoặc</span> 1800 8098
-                    </p>
-                    <p className="text-emerald-400 text-[11px] font-semibold mt-0.5">
-                      ✓ Hỗ trợ 24/7 - Miễn phí cước gọi
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3.5">
-                  <div className="p-2.5 bg-slate-800 border border-slate-700/60 rounded-2xl text-slate-300 shrink-0 mt-0.5">
-                    <Mail className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Email Tiếp Nhận Phản Hồi</h3>
-                    <a
-                      href="mailto:cskh@viettel.com.vn"
-                      className="text-sm font-bold text-white hover:text-red-400 transition-colors mt-0.5 block"
-                    >
-                      cskh@viettel.com.vn
-                    </a>
-                    <p className="text-slate-400 text-[11px] font-medium mt-0.5">
-                      Phản hồi trong vòng 24 giờ làm việc
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3.5">
-                  <div className="p-2.5 bg-slate-800 border border-slate-700/60 rounded-2xl text-slate-300 shrink-0 mt-0.5">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Thời Gian Làm Việc</h3>
-                    <p className="text-xs font-bold text-white mt-0.5">
-                      24/7 (Tất cả các ngày trong tuần, kể cả Lễ/Tết)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3.5 pt-2 border-t border-slate-800">
-                  <div className="p-2.5 bg-slate-800 border border-slate-700/60 rounded-2xl text-slate-300 shrink-0 mt-0.5">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Trụ Sở Chính</h3>
-                    <p className="text-xs font-extrabold text-white mt-0.5">
-                      Tòa nhà Viettel Cần Thơ, số 210, Trần Phú, Cái Khế, Ninh Kiều, Cần Thơ
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <span className="sp-brand-name">Viettel Support</span>
+          <span className="sp-brand-tag">CSKH 24/7</span>
         </div>
-      ) : (
-        <div className="space-y-6 animate-fade-in max-w-3xl mx-auto py-6 px-4">
-          {/* Lookup Input for Guest Users */}
-          {!currentUser && (
-            <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 text-left">
-              <div>
-                <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2">
-                  <Search className="w-4 h-4 text-primary" />
-                  <span>Tra cứu lịch sử liên hệ</span>
-                </h2>
-                <p className="text-slate-400 text-[11px] font-medium mt-1">
-                  Nhập số điện thoại đã dùng để gửi yêu cầu hỗ trợ để kiểm tra tình trạng phản hồi.
-                </p>
-              </div>
+        <div className="sp-switcher">
+          <button className={`sp-sw-btn ${activeTab === 'new' ? 'on' : ''}`} onClick={() => handleTabChange('new')}>
+            Yêu cầu mới
+          </button>
+          <button className={`sp-sw-btn ${activeTab === 'history' ? 'on' : ''}`} onClick={() => handleTabChange('history')}>
+            Lịch sử phản hồi
+          </button>
+        </div>
+      </header>
 
-              <form onSubmit={handleLookup} className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1 flex items-center">
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={lookupPhone}
-                    onChange={(e) => setLookupPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="Nhập số điện thoại tra cứu (10 chữ số)..."
-                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-primary/50 transition-all"
-                  />
-                  <Phone className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-                <button
-                  type="submit"
-                  disabled={historyLoading}
-                  className="h-11 px-6 bg-primary hover:bg-[#D40032] active:translate-y-0 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center space-x-1.5"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>Tra cứu</span>
-                </button>
-              </form>
-            </div>
-          )}
+      {/* ════════════ NEW REQUEST ════════════ */}
+      {activeTab === 'new' && (
+        <div className="sp-workspace sp">
+          {/* ── Left: Intent + Form ── */}
+          <div className="sp-left">
+            <p className="sp-eyebrow">Trung tâm hỗ trợ</p>
+            <h1 className="sp-headline">Chúng tôi có thể<br />giúp gì cho bạn?</h1>
+            <p className="sp-sub">Chọn vấn đề phù hợp bên dưới. Đội ngũ CSKH sẽ phản hồi trong 24 giờ.</p>
 
-          {/* History Results View */}
-          {historyLoading ? (
-            <div className="space-y-4 text-left">
-              {Array.from({ length: 3 }).map((_, idx) => (
-                <div key={idx} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3 animate-pulse">
-                  <div className="h-4 bg-slate-150 rounded w-1/3" />
-                  <div className="h-3 bg-slate-150 rounded w-1/2" />
-                  <div className="h-12 bg-slate-50 rounded" />
-                </div>
-              ))}
-            </div>
-          ) : !currentUser && !hasSearched ? (
-            <div className="bg-slate-50/50 border border-slate-150 border-dashed rounded-3xl p-12 text-center text-slate-400 font-medium">
-              Vui lòng nhập số điện thoại để tra cứu lịch sử yêu cầu của bạn.
-            </div>
-          ) : historyContacts.length === 0 ? (
-            <div className="bg-slate-50/50 border border-slate-150 border-dashed rounded-3xl p-12 text-center text-slate-400 font-medium">
-              {currentUser ? 'Bạn chưa gửi yêu cầu hỗ trợ nào.' : 'Không tìm thấy yêu cầu hỗ trợ nào cho số điện thoại này.'}
-            </div>
-          ) : (
-            <div className="space-y-4 text-left">
-              {historyContacts.map((item) => {
-                const hasResponse = item.status === 'DONE' || (item.admin_note && item.admin_note.trim());
-                const isHighlighted = highlightedId === item.contact_id;
+            {/* Topic tiles */}
+            <div className="sp-topic-grid">
+              {TOPICS.map((t) => {
+                const sel = topicId === t.id;
                 return (
-                  <div
-                    key={item.contact_id}
-                    id={`contact-card-${item.contact_id}`}
-                    className={`bg-white rounded-2xl border p-5 relative overflow-hidden transition-all duration-500 ${
-                      isHighlighted
-                        ? 'ring-2 ring-red-500 shadow-lg animate-pulse border-red-500 scale-[1.02]'
-                        : 'border-slate-100 shadow-sm hover:shadow-md'
-                    }`}
+                  <button
+                    key={t.id}
+                    className={`sp-tile${sel ? ' sel' : ''}`}
+                    style={{ '--tile-accent': t.accent, '--tile-bg': t.bg } as React.CSSProperties}
+                    onClick={() => setTopicId(t.id)}
+                    type="button"
                   >
-                    {/* Recently Handled Red Badge */}
-                    {isRecentlyHandled(item.handled_at) && (
-                      <span className="absolute top-0 right-0 bg-red-600 text-white font-extrabold text-[8px] uppercase tracking-wider px-2.5 py-0.5 rounded-bl-lg select-none z-10 animate-fade-in shadow-sm">
-                        MỚI PHẢN HỒI
-                      </span>
-                    )}
-
-                    {/* Header */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                      <div className="flex flex-col space-y-1">
-                        <span className="font-mono text-slate-400 text-xs font-medium">Mã YC: #{item.contact_id}</span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          {formatDate(item.created_at)}
-                        </span>
-                      </div>
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border select-none ${
-                        hasResponse
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
-                          : 'bg-amber-50 text-amber-700 border-amber-200/60'
-                      }`}>
-                        {hasResponse ? (
-                          <>
-                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span>Đã phản hồi</span>
-                          </>
-                        ) : (
-                          <>
-                            <Clock className="w-3 h-3 text-amber-600 shrink-0 animate-pulse" />
-                            <span>Chưa phản hồi</span>
-                          </>
-                        )}
-                      </span>
+                    <div className="sp-tile-icon">
+                      <t.Icon size={19} style={{ color: sel ? t.accent : '#64748b' }} />
                     </div>
-
-                    {/* Question Content */}
-                    <div className="mt-4 text-left space-y-2">
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Chủ đề hỗ trợ</span>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-50 border border-slate-200 text-slate-600">
-                          {item.topic}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Chi tiết yêu cầu</span>
-                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50/60 p-3 rounded-xl border border-slate-100/80 whitespace-pre-line">
-                          {item.message}
-                        </p>
-                      </div>
+                    <div style={{ flex: 1 }}>
+                      <p className="sp-tile-label">{t.label}</p>
+                      <p className="sp-tile-sub">{t.sub}</p>
                     </div>
-
-                    {/* Admin Answer */}
-                    {item.admin_note && item.admin_note.trim() ? (
-                      <div className={`mt-3 p-4 rounded-xl bg-red-50/40 border-l-4 ${
-                        item.status === 'DONE' ? 'border-emerald-500' : 'border-red-500'
-                      } space-y-1.5 animate-fade-in`}>
-                        <div className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                          <Headphones className="w-4 h-4 text-primary shrink-0" />
-                          <span>CSKH Viettel Phản Hồi</span>
-                        </div>
-                        <p className="text-sm text-slate-700 mt-1.5 leading-relaxed">
-                          {item.admin_note}
-                        </p>
-                        {item.handled_at && (
-                          <div className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>Đã phản hồi lúc: {formatResponseDate(item.handled_at)}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 flex items-center gap-2 mt-2">
-                        <Clock className="w-4 h-4 shrink-0 text-amber-600 animate-pulse" />
-                        <span>Yêu cầu của bạn đang được chuyển đến bộ phận CSKH Viettel để xử lý. Vui lòng chờ phản hồi trực tiếp hoặc tại đây.</span>
+                    {sel && (
+                      <div className="sp-tile-check">
+                        <CheckCircle size={12} style={{ color: '#fff' }} />
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
-          )}
+
+            {/* Form — reveals after topic selected */}
+            {topicId && (
+              <div className="sp-form-zone" ref={formRef}>
+                {submitDone ? (
+                  <div className="sp-success">
+                    <div className="sp-success-ico">
+                      <CheckCircle size={24} style={{ color: '#16a34a' }} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>Đã gửi thành công!</p>
+                      <p style={{ fontSize: 13, color: '#4b5563', margin: '0 0 16px', fontWeight: 500, lineHeight: 1.6 }}>
+                        CSKH Viettel đã nhận yêu cầu về chủ đề <strong>{activeTopic?.label}</strong>.
+                        Chúng tôi sẽ liên hệ trong 24 giờ làm việc.
+                      </p>
+                      <button
+                        className="sp-sw-btn on"
+                        style={{ border: '1px solid #86efac', background: '#fff', color: '#16a34a', fontWeight: 700, cursor: 'pointer' }}
+                        onClick={() => { setSubmitDone(false); handleTabChange('history'); }}
+                      >
+                        Xem lịch sử phản hồi <ChevronRight size={13} style={{ display: 'inline' }} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="sp-form-header">
+                      {activeTopic && (
+                        <div
+                          className="sp-form-badge"
+                          style={{ '--tile-accent': activeTopic.accent, '--tile-bg': activeTopic.bg } as React.CSSProperties}
+                        >
+                          <activeTopic.Icon size={12} />
+                          {activeTopic.label}
+                        </div>
+                      )}
+                      <p className="sp-form-title">Điền thông tin liên hệ</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                      <div className="sp-fields">
+                        <div className="sp-row2">
+                          <div className="sp-field">
+                            <label className="sp-label">Họ và tên *</label>
+                            <input
+                              className={`sp-input${errors.fullName ? ' err' : ''}`}
+                              type="text" placeholder="Nguyễn Văn A"
+                              value={fullName} onChange={e => setFullName(e.target.value)}
+                            />
+                            {errors.fullName && <span className="sp-err-msg">{errors.fullName}</span>}
+                          </div>
+                          <div className="sp-field">
+                            <label className="sp-label">Số điện thoại *</label>
+                            <input
+                              className={`sp-input${errors.phone ? ' err' : ''}`}
+                              type="tel" inputMode="numeric" maxLength={10}
+                              placeholder="0xxxxxxxxx"
+                              value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                            />
+                            {errors.phone && <span className="sp-err-msg">{errors.phone}</span>}
+                          </div>
+                        </div>
+
+                        <div className="sp-field">
+                          <label className="sp-label">Nội dung chi tiết *</label>
+                          <textarea
+                            ref={textareaRef}
+                            className={`sp-textarea${errors.message ? ' err' : ''}`}
+                            placeholder="Mô tả vấn đề bạn đang gặp phải..."
+                            value={message} onChange={e => setMessage(e.target.value)}
+                          />
+                          {errors.message && <span className="sp-err-msg">{errors.message}</span>}
+                        </div>
+
+                        <div className="sp-actions">
+                          <button type="submit" disabled={isSubmitting} className="sp-submit">
+                            {isSubmitting
+                              ? <><Loader2 size={15} style={{ animation: 'spin .8s linear infinite' }} />Đang gửi…</>
+                              : <><Send size={14} />Gửi yêu cầu</>}
+                          </button>
+                          <span className="sp-submit-note">Phản hồi trong 24 giờ</span>
+                        </div>
+                      </div>
+                    </form>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right: Bento Info ── */}
+          <aside className="sp-right sp">
+            <p className="sp-bento-label">Liên hệ trực tiếp</p>
+
+            {/* Phone — hero tile */}
+            <div className="sp-bt sp-bt-phone">
+              <div className="sp-bt-phone-glow" />
+              <p className="sp-bt-phone-eye">Tổng đài CSKH · Miễn phí</p>
+              <p className="sp-bt-phone-num">198</p>
+              <p className="sp-bt-phone-alt">hoặc 1800 8098</p>
+              <div className="sp-bt-phone-tag">
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80' }} />
+                Miễn cước gọi 24/7
+              </div>
+            </div>
+
+            {/* Email + Hours row */}
+            <div className="sp-bt-row">
+              <div className="sp-bt">
+                <div className="sp-bt-icon-row">
+                  <div className="sp-bt-icon-wrap"><Mail size={13} style={{ color: '#64748b' }} /></div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.07em' }}>Email</span>
+                </div>
+                <p className="sp-bt-val" style={{ fontSize: 11, wordBreak: 'break-all' }}>cskh@viettel.com.vn</p>
+                <p className="sp-bt-note">Phản hồi trong 24h</p>
+              </div>
+              <div className="sp-bt">
+                <div className="sp-bt-icon-row">
+                  <div className="sp-bt-icon-wrap"><Clock size={13} style={{ color: '#64748b' }} /></div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.07em' }}>Giờ</span>
+                </div>
+                <p className="sp-bt-val">24/7</p>
+                <p className="sp-bt-note">Kể cả Lễ / Tết</p>
+              </div>
+            </div>
+
+            {/* Live status */}
+            <div className="sp-bt sp-bt-status">
+              <div className="sp-pulse-wrap">
+                <div className="sp-pulse-dot" />
+                <div className="sp-pulse-ring" />
+              </div>
+              <div>
+                <p className="sp-status-text">Đang hoạt động</p>
+                <p className="sp-status-sub">Sẵn sàng tiếp nhận hỗ trợ</p>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="sp-bt" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div className="sp-bt-icon-wrap" style={{ flexShrink: 0, marginTop: 2 }}><MapPin size={13} style={{ color: '#64748b' }} /></div>
+              <div>
+                <p className="sp-bt-val">Tòa nhà Viettel Cần Thơ</p>
+                <p className="sp-bt-note">210 Trần Phú, Ninh Kiều, Cần Thơ</p>
+              </div>
+            </div>
+
+            {/* CTA hint */}
+            <div style={{ marginTop: 'auto', padding: '16px 20px', background: '#fff8f0', border: '1px solid #fed7aa', borderRadius: 14 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#9a3412', margin: '0 0 4px' }}>💡 Cần hỗ trợ nhanh?</p>
+              <p style={{ fontSize: 12, color: '#c2410c', margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
+                Gọi <strong>198</strong> để được kết nối ngay với tư vấn viên — không cần chờ.
+              </p>
+            </div>
+          </aside>
         </div>
       )}
-    </div>
+
+      {/* ════════════ HISTORY ════════════ */}
+      {activeTab === 'history' && (
+        <div className="sp-history sp">
+          <p className="sp-eyebrow">Theo dõi yêu cầu</p>
+          <h1 className="sp-headline" style={{ fontSize: 'clamp(22px,3vw,32px)', marginBottom: 8 }}>
+            {currentUser ? `Yêu cầu của ${currentUser.name}` : 'Tra cứu yêu cầu hỗ trợ'}
+          </h1>
+          <p className="sp-sub">
+            {currentUser
+              ? 'Tất cả yêu cầu bạn đã gửi và phản hồi từ đội ngũ CSKH Viettel.'
+              : 'Nhập số điện thoại để kiểm tra tình trạng xử lý yêu cầu.'}
+          </p>
+
+          {/* Guest lookup */}
+          {!currentUser && (
+            <form onSubmit={handleLookup} className="sp-lookup-bar">
+              <Search size={16} style={{ color: '#94a3b8', flexShrink: 0 }} />
+              <input
+                className="sp-lookup-input"
+                type="tel" inputMode="numeric" maxLength={10}
+                placeholder="Nhập số điện thoại (10 chữ số)..."
+                value={lookupPhone}
+                onChange={e => setLookupPhone(e.target.value.replace(/[^0-9]/g, ''))}
+              />
+              <button type="submit" disabled={historyLoading} className="sp-lookup-btn">
+                {historyLoading ? <Loader2 size={13} style={{ animation: 'spin .8s linear infinite' }} /> : <Search size={13} />}
+                Tra cứu
+              </button>
+            </form>
+          )}
+
+          {/* Board */}
+          <div className="sp-board">
+            {historyLoading ? (
+              <>
+                {[120, 160, 140].map((h, i) => (
+                  <div key={i} className="sp-skel" style={{ height: h, borderRadius: 20 }} />
+                ))}
+              </>
+            ) : !currentUser && !hasSearched ? (
+              <div className="sp-blank">
+                <div className="sp-blank-ico"><Search size={22} style={{ color: '#cbd5e1' }} /></div>
+                <p className="sp-blank-text">Nhập số điện thoại bên trên để tra cứu lịch sử yêu cầu.</p>
+              </div>
+            ) : historyContacts.length === 0 ? (
+              <div className="sp-blank">
+                <div className="sp-blank-ico"><Phone size={22} style={{ color: '#cbd5e1' }} /></div>
+                <p className="sp-blank-text">
+                  {currentUser ? 'Bạn chưa gửi yêu cầu hỗ trợ nào.' : 'Không tìm thấy yêu cầu nào cho số điện thoại này.'}
+                </p>
+              </div>
+            ) : (
+              historyContacts.map((item) => {
+                const done = item.status === 'DONE' || !!item.admin_note?.trim();
+                const pinned = isRecentlyHandled(item.handled_at);
+                const lit = highlightedId === item.contact_id;
+                return (
+                  <div
+                    key={item.contact_id}
+                    id={`ct-${item.contact_id}`}
+                    className={`sp-hcard${lit ? ' lit' : ''}`}
+                  >
+                    {pinned && <div className="sp-new-badge">Nova</div>}
+
+                    {/* Card top */}
+                    <div className="sp-hcard-top">
+                      <div>
+                        <p className="sp-hcard-id">#{item.contact_id}</p>
+                        <p className="sp-hcard-date">{fmtDate(item.created_at)}</p>
+                      </div>
+                      <div className={`sp-hcard-status ${done ? 'done' : 'wait'}`}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#22c55e' : '#fbbf24', display: 'inline-block' }} />
+                        {done ? 'Đã phản hồi' : 'Đang xử lý'}
+                      </div>
+                    </div>
+
+                    {/* Card body */}
+                    <div className="sp-hcard-body">
+                      <span className="sp-hcard-topic">{item.topic}</span>
+
+                      <div>
+                        <p className="sp-hcard-msglabel">Nội dung yêu cầu</p>
+                        <p className="sp-hcard-msg">{item.message}</p>
+                      </div>
+
+                      {item.admin_note?.trim() ? (
+                        <div className={`sp-hcard-reply ${done ? 'done' : 'wait'}`}>
+                          <div className="sp-reply-head">
+                            <Headphones size={12} style={{ color: done ? '#16a34a' : '#d97706' }} />
+                            <span className="sp-reply-label">Phản hồi từ CSKH</span>
+                          </div>
+                          <p className="sp-reply-text">{item.admin_note}</p>
+                          {item.handled_at && (
+                            <p className="sp-reply-time">{fmtReply(item.handled_at)}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className={`sp-hcard-reply wait`}>
+                          <div className="sp-reply-head">
+                            <Clock size={12} style={{ color: '#d97706' }} />
+                            <span className="sp-reply-label">Đang xử lý</span>
+                          </div>
+                          <p className="sp-wait-msg">
+                            Yêu cầu đang được chuyển đến bộ phận xử lý. Vui lòng chờ phản hồi trong vòng 24 giờ.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      </div>{/* end sp-breakout */}
+
+      <style>{`
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+      `}</style>
+    </>
   );
 }
