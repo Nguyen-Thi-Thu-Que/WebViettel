@@ -142,13 +142,15 @@ export interface Contact {
   phone: string;
   message: string;
   topic: string;
-  status: 'NEW' | 'DONE';
+  status: 'NEW' | 'READ' | 'PROCESSING' | 'DONE' | 'CLOSED';
   source: 'guest' | 'user';
   created_at?: string;
   updated_at?: string;
   handled_by?: number | null;
   handled_at?: string | null;
   admin_note?: string;
+  is_deleted_by_user?: boolean;
+  deleted_at_by_user?: string | null;
 }
 
 export interface Notification {

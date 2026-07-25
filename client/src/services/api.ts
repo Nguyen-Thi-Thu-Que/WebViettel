@@ -683,9 +683,31 @@ export const contactApi = {
     return response.data.data;
   },
 
-  lookupContacts: async (phone: string): Promise<Contact[]> => {
+  getUserContactHistory: async (): Promise<Contact[]> => {
+    const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact/user-history');
+    return response.data.data;
+  },
+
+  getGuestContactHistory: async (params: { contact_ids?: string[]; contact_id?: string; phone?: string }): Promise<Contact[]> => {
+    const response = await axiosInstance.post<{ success: boolean; data: Contact[] }>('/api/contact/guest-history', params);
+    return response.data.data;
+  },
+
+  softDeleteContact: async (id: string): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>(`/api/contact/history/${id}`);
+    return response.data.success;
+  },
+
+  softDeleteAllContacts: async (contact_ids?: string[]): Promise<boolean> => {
+    const response = await axiosInstance.delete<{ success: boolean }>('/api/contact/history-all', {
+      data: { contact_ids }
+    });
+    return response.data.success;
+  },
+
+  lookupContacts: async (phone: string, contactId?: string): Promise<Contact[]> => {
     const response = await axiosInstance.get<{ success: boolean; data: Contact[] }>('/api/contact/lookup', {
-      params: { phone }
+      params: { phone, contact_id: contactId }
     });
     return response.data.data;
   }

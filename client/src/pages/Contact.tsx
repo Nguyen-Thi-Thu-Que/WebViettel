@@ -10,6 +10,8 @@ import { useAuthStore } from '../store';
 import { contactApi } from '../services/api';
 import SEO from '../components/SEO';
 import type { Contact as ContactType } from '../types';
+import ContactHistoryTab from '../components/ContactHistoryTab';
+import { saveGuestContactId } from '../utils/guestContactTracker';
 
 /* ────────────────────────── constants ────────────────────────── */
 const TOPICS = [
@@ -78,13 +80,6 @@ export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
 
-  // history state
-  const [historyContacts, setHistoryContacts] = useState<ContactType[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [lookupPhone, setLookupPhone] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -103,22 +98,6 @@ export default function Contact() {
     const ta = textareaRef.current;
     if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(Math.max(ta.scrollHeight, 110), 320)}px`; }
   }, [message]);
-
-  useEffect(() => {
-    if (activeTab === 'history' && currentUser) fetchMemberHistory();
-  }, [activeTab, currentUser]);
-
-  useEffect(() => {
-    const id = searchParams.get('id');
-    if (id && !historyLoading && historyContacts.length > 0) {
-      const el = document.getElementById(`ct-${id}`);
-      if (el) {
-        const t1 = setTimeout(() => { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedId(id); }, 300);
-        const t2 = setTimeout(() => setHighlightedId(null), 3300);
-        return () => { clearTimeout(t1); clearTimeout(t2); };
-      }
-    }
-  }, [searchParams, historyLoading, historyContacts]);
 
   /* ── topic select: scroll into form ── */
   useEffect(() => {
@@ -156,6 +135,9 @@ export default function Contact() {
         message: `[Chủ đề: ${topic}]\n${message.trim()}`,
       });
       if (res.success) {
+        if (!currentUser && res.data?.contact_id) {
+          saveGuestContactId(res.data.contact_id, phone.trim());
+        }
         setSubmitDone(true); setMessage('');
         if (!currentUser) { setFullName(''); setPhone(''); }
         showToast('ok', 'Đã gửi thành công! CSKH Viettel sẽ liên hệ sớm.');
@@ -164,40 +146,6 @@ export default function Contact() {
     } catch (err: any) {
       showToast('err', err.response?.data?.message || 'Lỗi kết nối máy chủ.');
     } finally { setIsSubmitting(false); }
-  };
-
-  const fetchMemberHistory = async () => {
-    setHistoryLoading(true);
-    try { const data = await contactApi.getMyRequests(); setHistoryContacts(data || []); }
-    catch { showToast('err', 'Không thể tải lịch sử.'); }
-    finally { setHistoryLoading(false); }
-  };
-
-  const handleLookup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cp = lookupPhone.trim();
-    if (!cp || !/^0[0-9]{9}$/.test(cp)) { showToast('err', 'Số điện thoại không hợp lệ.'); return; }
-    setHistoryLoading(true); setHasSearched(true);
-    try { const data = await contactApi.lookupContacts(cp); setHistoryContacts(data || []); }
-    catch { showToast('err', 'Tra cứu thất bại.'); }
-    finally { setHistoryLoading(false); }
-  };
-
-  const isRecentlyHandled = (t?: string | null) =>
-    !!t && new Date(t).getTime() > Date.now() - 86400000;
-
-  const fmtDate = (v?: any) => {
-    if (!v) return '—';
-    try { return new Date(v).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
-    catch { return String(v); }
-  };
-
-  const fmtReply = (v?: any) => {
-    if (!v) return '—';
-    try {
-      const d = new Date(v); const p = (n: number) => String(n).padStart(2, '0');
-      return `${p(d.getHours())}:${p(d.getMinutes())} · ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
-    } catch { return String(v); }
   };
 
   const handleTabChange = (t: 'new' | 'history') => { setActiveTab(t); setSearchParams({ tab: t }); };
@@ -796,117 +744,11 @@ export default function Contact() {
 
       {/* ════════════ HISTORY ════════════ */}
       {activeTab === 'history' && (
-        <div className="sp-history sp">
-          <p className="sp-eyebrow">Theo dõi yêu cầu</p>
-          <h1 className="sp-headline" style={{ fontSize: 'clamp(22px,3vw,32px)', marginBottom: 8 }}>
-            {currentUser ? `Yêu cầu của ${currentUser.name}` : 'Tra cứu yêu cầu hỗ trợ'}
-          </h1>
-          <p className="sp-sub">
-            {currentUser
-              ? 'Tất cả yêu cầu bạn đã gửi và phản hồi từ đội ngũ CSKH Viettel.'
-              : 'Nhập số điện thoại để kiểm tra tình trạng xử lý yêu cầu.'}
-          </p>
-
-          {/* Guest lookup */}
-          {!currentUser && (
-            <form onSubmit={handleLookup} className="sp-lookup-bar">
-              <Search size={16} style={{ color: '#94a3b8', flexShrink: 0 }} />
-              <input
-                className="sp-lookup-input"
-                type="tel" inputMode="numeric" maxLength={10}
-                placeholder="Nhập số điện thoại (10 chữ số)..."
-                value={lookupPhone}
-                onChange={e => setLookupPhone(e.target.value.replace(/[^0-9]/g, ''))}
-              />
-              <button type="submit" disabled={historyLoading} className="sp-lookup-btn">
-                {historyLoading ? <Loader2 size={13} style={{ animation: 'spin .8s linear infinite' }} /> : <Search size={13} />}
-                Tra cứu
-              </button>
-            </form>
-          )}
-
-          {/* Board */}
-          <div className="sp-board">
-            {historyLoading ? (
-              <>
-                {[120, 160, 140].map((h, i) => (
-                  <div key={i} className="sp-skel" style={{ height: h, borderRadius: 20 }} />
-                ))}
-              </>
-            ) : !currentUser && !hasSearched ? (
-              <div className="sp-blank">
-                <div className="sp-blank-ico"><Search size={22} style={{ color: '#cbd5e1' }} /></div>
-                <p className="sp-blank-text">Nhập số điện thoại bên trên để tra cứu lịch sử yêu cầu.</p>
-              </div>
-            ) : historyContacts.length === 0 ? (
-              <div className="sp-blank">
-                <div className="sp-blank-ico"><Phone size={22} style={{ color: '#cbd5e1' }} /></div>
-                <p className="sp-blank-text">
-                  {currentUser ? 'Bạn chưa gửi yêu cầu hỗ trợ nào.' : 'Không tìm thấy yêu cầu nào cho số điện thoại này.'}
-                </p>
-              </div>
-            ) : (
-              historyContacts.map((item) => {
-                const done = item.status === 'DONE' || !!item.admin_note?.trim();
-                const pinned = isRecentlyHandled(item.handled_at);
-                const lit = highlightedId === item.contact_id;
-                return (
-                  <div
-                    key={item.contact_id}
-                    id={`ct-${item.contact_id}`}
-                    className={`sp-hcard${lit ? ' lit' : ''}`}
-                  >
-                    {pinned && <div className="sp-new-badge">Nova</div>}
-
-                    {/* Card top */}
-                    <div className="sp-hcard-top">
-                      <div>
-                        <p className="sp-hcard-id">#{item.contact_id}</p>
-                        <p className="sp-hcard-date">{fmtDate(item.created_at)}</p>
-                      </div>
-                      <div className={`sp-hcard-status ${done ? 'done' : 'wait'}`}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#22c55e' : '#fbbf24', display: 'inline-block' }} />
-                        {done ? 'Đã phản hồi' : 'Đang xử lý'}
-                      </div>
-                    </div>
-
-                    {/* Card body */}
-                    <div className="sp-hcard-body">
-                      <span className="sp-hcard-topic">{item.topic}</span>
-
-                      <div>
-                        <p className="sp-hcard-msglabel">Nội dung yêu cầu</p>
-                        <p className="sp-hcard-msg">{item.message}</p>
-                      </div>
-
-                      {item.admin_note?.trim() ? (
-                        <div className={`sp-hcard-reply ${done ? 'done' : 'wait'}`}>
-                          <div className="sp-reply-head">
-                            <Headphones size={12} style={{ color: done ? '#16a34a' : '#d97706' }} />
-                            <span className="sp-reply-label">Phản hồi từ CSKH</span>
-                          </div>
-                          <p className="sp-reply-text">{item.admin_note}</p>
-                          {item.handled_at && (
-                            <p className="sp-reply-time">{fmtReply(item.handled_at)}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className={`sp-hcard-reply wait`}>
-                          <div className="sp-reply-head">
-                            <Clock size={12} style={{ color: '#d97706' }} />
-                            <span className="sp-reply-label">Đang xử lý</span>
-                          </div>
-                          <p className="sp-wait-msg">
-                            Yêu cầu đang được chuyển đến bộ phận xử lý. Vui lòng chờ phản hồi trong vòng 24 giờ.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+        <div className="p-4 sm:p-8 max-w-6xl mx-auto">
+          <ContactHistoryTab
+            onNavigateToNew={() => handleTabChange('new')}
+            highlightedId={searchParams.get('id')}
+          />
         </div>
       )}
 
