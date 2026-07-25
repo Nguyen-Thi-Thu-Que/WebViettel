@@ -65,11 +65,25 @@ const contactController = {
 
   getAdminContacts: async (req, res, next) => {
     try {
-      const { status, search } = req.query;
+      const { status, search, source, is_deleted_by_user } = req.query;
       const mongoQuery = {};
 
-      if (status) {
-        mongoQuery.status = status;
+      if (status && status !== 'ALL') {
+        if (status === 'PENDING') {
+          mongoQuery.status = { $in: ['NEW', 'READ', 'PROCESSING'] };
+        } else {
+          mongoQuery.status = status;
+        }
+      }
+
+      if (source && source !== 'ALL') {
+        mongoQuery.source = source;
+      }
+
+      if (is_deleted_by_user === 'true') {
+        mongoQuery.is_deleted_by_user = true;
+      } else if (is_deleted_by_user === 'false') {
+        mongoQuery.is_deleted_by_user = { $ne: true };
       }
 
       if (search && search.trim()) {
@@ -78,7 +92,8 @@ const contactController = {
           { full_name: searchRegex },
           { phone: searchRegex },
           { contact_id: searchRegex },
-          { topic: searchRegex }
+          { topic: searchRegex },
+          { message: searchRegex }
         ];
       }
 
@@ -102,27 +117,31 @@ const contactController = {
   updateContactReply: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { admin_note } = req.body;
+      const { admin_note, status } = req.body;
 
-      if (admin_note === undefined || typeof admin_note !== 'string' || !admin_note.trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Nội dung phản hồi không được để trống.'
-        });
+      const updateData = {
+        handled_at: new Date()
+      };
+
+      if (admin_note !== undefined) {
+        updateData.admin_note = admin_note.trim();
       }
 
-      const adminUserId = req.user ? (req.user.user_id || req.user.id || 1) : 1;
+      if (status) {
+        updateData.status = status;
+      } else if (admin_note && admin_note.trim()) {
+        updateData.status = 'DONE';
+      }
+
+      if (req.user) {
+        updateData.handled_by = req.user.user_id || req.user.id || 1;
+      }
+
+      const query = id.startsWith('CT') ? { contact_id: id } : { _id: id };
 
       const updatedContact = await Contact.findOneAndUpdate(
-        { contact_id: id },
-        {
-          $set: {
-            admin_note: admin_note.trim(),
-            status: 'DONE',
-            handled_by: adminUserId,
-            handled_at: new Date()
-          }
-        },
+        query,
+        { $set: updateData },
         { new: true }
       );
 
@@ -133,7 +152,7 @@ const contactController = {
         });
       }
 
-      if (updatedContact.user_id !== null && updatedContact.user_id !== undefined) {
+      if (updatedContact.user_id !== null && updatedContact.user_id !== undefined && admin_note && admin_note.trim()) {
         try {
           const notificationService = require('../services/notificationService');
           await notificationService.createNotification({
@@ -150,7 +169,7 @@ const contactController = {
 
       return res.status(200).json({
         success: true,
-        message: "Phản hồi thành công",
+        message: "Cập nhật phản hồi thành công",
         data: updatedContact
       });
     } catch (error) {
