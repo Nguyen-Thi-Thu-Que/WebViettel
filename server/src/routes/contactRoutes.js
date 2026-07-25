@@ -6,7 +6,11 @@ const { authenticateToken, requireRole, decodeTokenOptional } = require('../midd
 // Public routes / member routes
 router.post('/', decodeTokenOptional, contactController.createContact);
 router.get('/my-requests', authenticateToken, contactController.getMyRequests);
+router.get('/user-history', authenticateToken, contactController.getUserHistory);
+router.post('/guest-history', contactController.getGuestHistory);
 router.get('/lookup', contactController.lookupContacts);
+router.delete('/history-all', decodeTokenOptional, contactController.softDeleteAllHistory);
+router.delete('/history/:id', decodeTokenOptional, contactController.softDeleteHistory);
 
 // Admin-only routes
 router.get('/', authenticateToken, requireRole(['admin']), contactController.getAdminContacts);

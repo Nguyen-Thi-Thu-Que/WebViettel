@@ -19,7 +19,9 @@ const contactSchema = new mongoose.Schema({
   },
   admin_note: { type: String, default: "" },
   handled_at: { type: Date, default: null },
-  handled_by: { type: Number, default: null }
+  handled_by: { type: Number, default: null },
+  is_deleted_by_user: { type: Boolean, default: false },
+  deleted_at_by_user: { type: Date, default: null }
 }, {
   collection: 'contacts',
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

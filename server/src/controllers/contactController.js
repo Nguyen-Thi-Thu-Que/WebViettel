@@ -161,7 +161,63 @@ const contactController = {
   getMyRequests: async (req, res, next) => {
     try {
       const userId = req.user.user_id;
-      const contacts = await Contact.find({ user_id: userId }).sort({ created_at: -1 });
+      const contacts = await Contact.find({ user_id: userId, is_deleted_by_user: { $ne: true } }).sort({ created_at: -1 });
+
+      const normalized = [];
+      for (const contact of contacts) {
+        normalized.push(await normalizeContact(contact));
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: normalized
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getUserHistory: async (req, res, next) => {
+    try {
+      const userId = req.user.user_id;
+      const contacts = await Contact.find({ user_id: userId, is_deleted_by_user: { $ne: true } }).sort({ created_at: -1 });
+
+      const normalized = [];
+      for (const contact of contacts) {
+        normalized.push(await normalizeContact(contact));
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: normalized
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getGuestHistory: async (req, res, next) => {
+    try {
+      const { contact_ids, contact_id, phone } = req.body;
+      let query = { is_deleted_by_user: { $ne: true } };
+
+      if (Array.isArray(contact_ids) && contact_ids.length > 0) {
+        query.contact_id = { $in: contact_ids };
+      } else if (contact_id && phone) {
+        query.contact_id = contact_id.trim();
+        query.phone = phone.trim();
+      } else if (contact_id) {
+        query.contact_id = contact_id.trim();
+      } else if (phone) {
+        query.phone = phone.trim();
+      } else {
+        return res.status(200).json({
+          success: true,
+          data: []
+        });
+      }
+
+      const contacts = await Contact.find(query).sort({ created_at: -1 });
 
       const normalized = [];
       for (const contact of contacts) {
@@ -179,15 +235,24 @@ const contactController = {
 
   lookupContacts: async (req, res, next) => {
     try {
-      const { phone } = req.query;
-      if (!phone || !phone.trim()) {
+      const { phone, contact_id } = req.query;
+      let query = { is_deleted_by_user: { $ne: true } };
+
+      if (contact_id && phone) {
+        query.contact_id = contact_id.trim();
+        query.phone = phone.trim();
+      } else if (phone) {
+        query.phone = phone.trim();
+      } else if (contact_id) {
+        query.contact_id = contact_id.trim();
+      } else {
         return res.status(400).json({
           success: false,
-          message: 'Số điện thoại tra cứu là bắt buộc.'
+          message: 'Cần truyền số điện thoại hoặc mã yêu cầu để tra cứu.'
         });
       }
 
-      const contacts = await Contact.find({ phone: phone.trim() }).sort({ created_at: -1 });
+      const contacts = await Contact.find(query).sort({ created_at: -1 });
 
       const normalized = [];
       for (const contact of contacts) {
@@ -197,6 +262,69 @@ const contactController = {
       return res.status(200).json({
         success: true,
         data: normalized
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  softDeleteHistory: async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const mongoose = require('mongoose');
+
+      let updated = await Contact.findOneAndUpdate(
+        { contact_id: id },
+        { $set: { is_deleted_by_user: true, deleted_at_by_user: new Date() } },
+        { new: true }
+      );
+
+      if (!updated && mongoose.Types.ObjectId.isValid(id)) {
+        updated = await Contact.findOneAndUpdate(
+          { _id: id },
+          { $set: { is_deleted_by_user: true, deleted_at_by_user: new Date() } },
+          { new: true }
+        );
+      }
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ cần xóa.' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Ẩn lịch sử phản hồi thành công.',
+        data: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  softDeleteAllHistory: async (req, res, next) => {
+    try {
+      const { contact_ids } = req.body;
+      let filter = {};
+
+      if (req.user && req.user.user_id) {
+        filter.user_id = req.user.user_id;
+      } else if (Array.isArray(contact_ids) && contact_ids.length > 0) {
+        filter.contact_id = { $in: contact_ids };
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Không có danh sách yêu cầu để xóa.'
+        });
+      }
+
+      await Contact.updateMany(
+        filter,
+        { $set: { is_deleted_by_user: true, deleted_at_by_user: new Date() } }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Đã xóa tất cả lịch sử phản hồi.'
       });
     } catch (error) {
       next(error);
