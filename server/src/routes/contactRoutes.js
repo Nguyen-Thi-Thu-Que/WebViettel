@@ -8,6 +8,7 @@ router.post('/', decodeTokenOptional, contactController.createContact);
 router.get('/my-requests', authenticateToken, contactController.getMyRequests);
 router.get('/user-history', authenticateToken, contactController.getUserHistory);
 router.post('/guest-history', contactController.getGuestHistory);
+router.post('/guest-lookup', contactController.guestLookup);
 router.get('/lookup', contactController.lookupContacts);
 router.delete('/history-all', decodeTokenOptional, contactController.softDeleteAllHistory);
 router.delete('/history/:id', decodeTokenOptional, contactController.softDeleteHistory);

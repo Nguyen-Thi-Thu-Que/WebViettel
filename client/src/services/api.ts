@@ -710,6 +710,14 @@ export const contactApi = {
       params: { phone, contact_id: contactId }
     });
     return response.data.data;
+  },
+
+  guestLookup: async (phone: string, contactId?: string): Promise<Contact[]> => {
+    const response = await axiosInstance.post<{ success: boolean; data: Contact[] }>('/api/contact/guest-lookup', {
+      phone,
+      contact_id: contactId
+    });
+    return response.data.data;
   }
 };
 

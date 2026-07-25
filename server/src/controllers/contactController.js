@@ -268,24 +268,51 @@ const contactController = {
     }
   },
 
+  guestLookup: async (req, res, next) => {
+    try {
+      const { phone, contact_id } = req.body;
+      if (!phone || !phone.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điện thoại tra cứu là bắt buộc.'
+        });
+      }
+
+      const query = {
+        phone: phone.trim(),
+        is_deleted_by_user: { $ne: true }
+      };
+
+      if (contact_id && contact_id.trim()) {
+        query.contact_id = contact_id.trim();
+      }
+
+      const results = await Contact.find(query).sort({ created_at: -1 });
+
+      const normalized = [];
+      for (const contact of results) {
+        normalized.push(await normalizeContact(contact));
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: normalized
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   softDeleteHistory: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const mongoose = require('mongoose');
+      const query = id.startsWith('CT') ? { contact_id: id } : { _id: id };
 
-      let updated = await Contact.findOneAndUpdate(
-        { contact_id: id },
+      const updated = await Contact.findOneAndUpdate(
+        query,
         { $set: { is_deleted_by_user: true, deleted_at_by_user: new Date() } },
         { new: true }
       );
-
-      if (!updated && mongoose.Types.ObjectId.isValid(id)) {
-        updated = await Contact.findOneAndUpdate(
-          { _id: id },
-          { $set: { is_deleted_by_user: true, deleted_at_by_user: new Date() } },
-          { new: true }
-        );
-      }
 
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ cần xóa.' });
