@@ -18,6 +18,7 @@ const { generateContent } = require('../services/ai/ai.service');
 const chatbotService = require('../services/chatbotService');
 const ChatHistory = require('../models/ChatHistory');
 const Account = require('../models/Account');
+const mongoose = require('mongoose');
 
 // ─── Constant messages ────────────────────────────────────────────────────────
 
@@ -360,7 +361,8 @@ const chatbotController = {
         let senderInfo = {
           fullName: 'Khách vãng lai',
           phone: '',
-          role: 'guest'
+          role: 'guest',
+          userId: msg.userId ? String(msg.userId) : null
         };
 
         if (msg.source === 'user' && msg.userId) {
@@ -369,6 +371,7 @@ const chatbotController = {
             senderInfo.fullName = user.fullname;
             senderInfo.phone = user.phone_number;
             senderInfo.role = 'user';
+            senderInfo.userId = String(user._id);
           }
         } else if (msg.source === 'guest') {
           senderInfo.fullName = msg.guestInfo?.fullName || 'Khách vãng lai';
@@ -407,12 +410,43 @@ const chatbotController = {
   getAdminSessionDetails: async (req, res, next) => {
     try {
       const { sessionId, userId } = req.query;
-      
+      const cleanSessionId = sessionId && String(sessionId).trim() !== '' ? String(sessionId).trim() : null;
+      const cleanUserId = userId && String(userId).trim() !== '' ? String(userId).trim() : null;
+
       let query = {};
-      if (sessionId) {
-        query.sessionId = sessionId;
-      } else if (userId) {
-        query.userId = userId;
+      if (cleanSessionId) {
+        query.sessionId = cleanSessionId;
+      } else if (cleanUserId) {
+        // Ep kieu & lookup tai khoan an toan cho userId
+        const isValidObjectId = mongoose.Types.ObjectId.isValid(cleanUserId);
+        let foundAccount = null;
+
+        if (isValidObjectId) {
+          foundAccount = await Account.findById(cleanUserId).lean();
+        }
+
+        if (!foundAccount) {
+          const numericUserId = parseInt(cleanUserId, 10);
+          foundAccount = await Account.findOne({
+            $or: [
+              { phone_number: cleanUserId },
+              ...(isNaN(numericUserId) ? [] : [{ user_id: numericUserId }]),
+              { email: cleanUserId.toLowerCase() }
+            ]
+          }).lean();
+        }
+
+        if (foundAccount) {
+          query.userId = foundAccount._id;
+        } else if (isValidObjectId) {
+          query.userId = cleanUserId;
+        } else {
+          // Tra cứu fallback theo SĐT khách vãng lai hoặc nội dung
+          query.$or = [
+            { 'guestInfo.phone': cleanUserId },
+            { sessionId: cleanUserId }
+          ];
+        }
       } else {
         return res.status(400).json({
           success: false,

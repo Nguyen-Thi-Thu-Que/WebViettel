@@ -124,8 +124,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('chatbot_session_id');
+    localStorage.removeItem('guestId');
+    localStorage.removeItem('sessionId');
     set({ currentUser: null, authChecked: true, transactions: [], activeSubscriptions: [], subscriptionHistory: [], notifications: [], unreadCount: 0 });
-    // Automatically reset survey state to clean initial state
+    // Reset chatbot state & survey state to clean initial state
+    useChatbotStore.getState().resetChatbotSession();
     useSurveyStore.getState().resetSurvey().catch(() => { });
   },
 
@@ -750,6 +754,7 @@ interface ChatbotState {
   sendMessage: (text: string) => Promise<void>;
   clearHistory: () => Promise<void>;
   hydrateHistory: () => Promise<void>;
+  resetChatbotSession: () => void;
 }
 
 const INITIAL_WELCOME_MSG: ChatMessage = {
@@ -764,6 +769,13 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
   isOpen: false,
 
   setIsOpen: (isOpen) => set({ isOpen }),
+
+  resetChatbotSession: () => {
+    localStorage.removeItem('chatbot_session_id');
+    localStorage.removeItem('guestId');
+    localStorage.removeItem('sessionId');
+    set({ messages: [INITIAL_WELCOME_MSG] });
+  },
 
   sendMessage: async (text) => {
     const userMsg: ChatMessage = {
@@ -807,7 +819,6 @@ export const useChatbotStore = create<ChatbotState>((set) => ({
       set(state => ({ messages: [...state.messages, botMsg] }));
     }
   },
-
 
   clearHistory: async () => {
     const currentUser = useAuthStore.getState().currentUser;

@@ -29,6 +29,7 @@ interface ChatLogRecord {
     fullName: string;
     phone: string;
     role: 'user' | 'guest';
+    userId?: string | null;
   };
   source: 'user' | 'guest';
   question: string;
@@ -197,7 +198,7 @@ export default function AdminChatHistory() {
     try {
       const messages = await chatbotApi.getAdminSessionDetails({
         sessionId: log.source === 'guest' ? log.sessionId || undefined : undefined,
-        userId: log.source === 'user' ? String(log.senderInfo.phone) : undefined // Search by phone or userId in backend
+        userId: log.source === 'user' ? (log.senderInfo.userId || log.senderInfo.phone || undefined) : undefined
       });
       // Fallback: If no session history details found, simulate it from the row data
       if (messages.length === 0) {
@@ -465,9 +466,9 @@ export default function AdminChatHistory() {
                         </div>
                         {log.packages && log.packages.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {log.packages.map((pkg) => (
+                            {log.packages.map((pkg, idx) => (
                               <span 
-                                key={pkg.id || pkg.ma_goi} 
+                                key={`${pkg.id || pkg.ma_goi || 'pkg'}-${idx}`} 
                                 className="inline-flex items-center space-x-0.5 px-2 py-0.5 rounded font-mono font-bold text-[9px] bg-red-50 border border-red-100 text-primary uppercase"
                               >
                                 <Layers className="w-2.5 h-2.5 text-primary shrink-0" />
@@ -602,9 +603,9 @@ export default function AdminChatHistory() {
                             <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
                               <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gói cước gợi ý trong phiên chat:</p>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                {msg.packages.map((pkg) => (
+                                {msg.packages.map((pkg, idx) => (
                                   <div 
-                                    key={pkg.id || pkg.ma_goi}
+                                    key={`${pkg.id || pkg.ma_goi || 'pkg'}-${idx}`}
                                     className="p-3 bg-red-50/40 border border-red-100 rounded-xl flex flex-col justify-between"
                                   >
                                     <div>

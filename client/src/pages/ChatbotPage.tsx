@@ -117,6 +117,10 @@ export default function ChatbotPage() {
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    useChatbotStore.getState().hydrateHistory();
+  }, [currentUser]);
+
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
     const el = messagesContainerRef.current;
@@ -276,7 +280,7 @@ export default function ChatbotPage() {
                 {msg.sender === 'bot' && (msg.recommendedPackages || msg.packages) && (msg.recommendedPackages || msg.packages)!.length > 0 && (
                   <div className="flex overflow-x-auto gap-3 pb-2 mt-2 snap-x scrollbar-hide max-w-full">
                     {(msg.recommendedPackages || msg.packages)!.map((pkg, index) => (
-                      <div key={index} className="min-w-[220px] max-w-[250px] snap-start text-xs font-semibold">
+                      <div key={`${pkg.id || pkg.ma_goi || 'pkg'}-${index}`} className="min-w-[220px] max-w-[250px] snap-start text-xs font-semibold">
                         <PackageCard pkg={pkg} onSubscribe={handleSubscribeOpen} /> 
                       </div>
                     ))}

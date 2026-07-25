@@ -28,15 +28,6 @@ const packageSchema = new mongoose.Schema({
   do_uu_tien: { type: String, default: '1' },
   goi_thay_the: { type: String, default: '' },
   
-  // Hỗ trợ thêm các trường từ CSV nếu có
-  loai: { type: String },
-  loai_mang: { type: String },
-  dulieu: { type: String },
-  thoai: { type: String },
-  noidung: { type: String },
-  uudaingoai: { type: String },
-  thoigian: { type: String },
-  tang: { type: String },
   taggoiy: { type: String },
   Nhom_Goi: { type: String },
   cycle_type: { type: String, default: '' },

@@ -527,7 +527,11 @@ export const chatbotApi = {
   },
 
   getAdminSessionDetails: async (params: { sessionId?: string; userId?: string }): Promise<any[]> => {
-    const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/chatbot/admin/history/details', { params });
+    const cleanParams: Record<string, string> = {};
+    if (params.sessionId && params.sessionId.trim()) cleanParams.sessionId = params.sessionId.trim();
+    if (params.userId && params.userId.trim()) cleanParams.userId = params.userId.trim();
+
+    const response = await axiosInstance.get<{ success: boolean; data: any[] }>('/api/chatbot/admin/history/details', { params: cleanParams });
     const formattedData = (response.data.data || []).map(item => ({
       ...item,
       packages: (item.packages || []).map(toVietnamesePackage)

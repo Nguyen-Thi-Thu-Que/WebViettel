@@ -13,11 +13,6 @@ const depositSchema = new mongoose.Schema({
   status: { type: String, required: true, default: 'pending' },
   walletAddress: { type: String, required: true },
 
-  // Legacy fields for backward compatibility
-  amount: { type: mongoose.Schema.Types.Decimal128 },
-  fiat_equivalent: { type: mongoose.Schema.Types.Decimal128 },
-  tx_hash: { type: String },
-
   created_at: { type: String, default: () => new Date().toISOString() },
   isDeleted: { type: Boolean, default: false, index: true },
   deletedAt: { type: Date, default: null }
