@@ -124,6 +124,7 @@ WebViettel/
 │   │   │   ├── Contact.js
 │   │   │   ├── Deposit.js
 │   │   │   ├── Notification.js
+│   │   │   ├── OtpCode.js
 │   │   │   ├── Package.js
 │   │   │   ├── PackageFeature.js
 │   │   │   ├── SurveyConfig.js
@@ -191,8 +192,8 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `.env`: Chứa các biến môi trường cấu hình kết nối API và Blockchain của frontend.
   - `.oxlintrc.json`: Cấu hình linter Oxlint cho kiểm tra mã nguồn nhanh.
 - **Thư mục Backend (`server/`)**:
-  - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express. Gồm: `express`, `mongoose`, `bcryptjs`, `cors`, `dotenv`, `ethers`, `@google/generative-ai`, `csv-parser`.
-  - `.env`: Chứa cấu hình cổng chạy, DB MongoDB, xác thực JWT, địa chỉ ví nhận, tỷ giá quy đổi ETH/VND, RPC URL và API key của AI chatbot.
+  - `package.json`: Danh sách phụ thuộc và script khởi chạy server Node/Express. Gồm: `express`, `mongoose`, `bcryptjs`, `cors`, `dotenv`, `ethers`, `@google/generative-ai`, `csv-parser`, `nodemailer`.
+  - `.env`: Chứa cấu hình cổng chạy, DB MongoDB, xác thực JWT, địa chỉ ví nhận, tỷ giá quy đổi ETH/VND, RPC URL, API key của AI chatbot và cấu hình Mailtrap SMTP gửi email OTP.
   - `src/services/chatbot/scoring_config.json`: Cấu hình hệ số điểm khớp gói cước của chatbot.
 
 ### Chi tiết cấu hình biến môi trường (`.env`):
@@ -209,6 +210,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
   - `GROQ_MODEL`: Mô hình ngôn ngữ lớn Groq sử dụng (mặc định `llama-3.1-8b-instant`).
   - `OLLAMA_MODEL`: Mô hình ngôn ngữ lớn Ollama dùng khi fallback (mặc định `qwen2.5:3b`, hỗ trợ tùy chỉnh qua biến môi trường).
   - `OLLAMA_HOST`: URL host của dịch vụ Ollama (mặc định `http://127.0.0.1:11434`, hỗ trợ tùy chỉnh qua biến môi trường).
+  - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM`: Cấu hình dịch vụ gửi email SMTP (Mailtrap Sandbox) phục vụ gửi mã OTP khôi phục mật khẩu.
 - **Cấu hình Frontend (`client/.env`)**:
   - `VITE_API_URL`: URL API Backend (mặc định `http://localhost:5000`).
   - `VITE_NETWORK_NAME`: Tên mạng blockchain thử nghiệm (mặc định `Sepolia`).
@@ -243,7 +245,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 - **Hệ thống xác thực tài khoản (Auth)**:
   - Đăng nhập (Login.tsx)
   - Đăng ký tài khoản (Register.tsx)
-  - Quên mật khẩu (ForgotPassword.tsx)
+  - Quên mật khẩu (ForgotPassword.tsx): Quy trình 3 bước (Nhập SĐT & Email liên kết -> Nhập mã OTP 6 chữ số gửi về email -> Đổi mật khẩu mới).
 - **Điều khoản Dịch vụ (Terms.tsx) & Chính sách Bảo mật (Privacy.tsx)**: Các trang điều khoản và chính sách bảo mật chi tiết của hệ thống ViettelAI, hỗ trợ tìm kiếm nội dung nhanh và mục lục tương tác mượt mà.
 - **Trang Quản trị (Admin Pages)**:
   - Báo cáo thống kê (Dashboard.tsx): Biểu thị số liệu tổng quan hệ thống, doanh thu thực tế và biểu đồ xu hướng dạng đường.
@@ -346,20 +348,22 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 13. **Phân tích nhận xét so sánh gói cước bằng AI (CompareAI)**:
     - Panel "Gợi Ý Từ Trợ Lý Ảo" trên trang so sánh đã kết nối trực tiếp với API backend `/api/compare/ai-analyze`, tự động gửi danh sách mã gói cước được so sánh lên backend.
     - Backend gọi dịch vụ AI (Groq/Ollama) phân tích logic dựa trên các thông số định lượng thực tế (data, giá cước, phút gọi...) để trả về phân tích động dưới dạng JSON (tóm tắt khác biệt, so sánh giá trị sử dụng và gợi ý định hướng cụ thể cho từng đối tượng).
+14. **Khôi phục mật khẩu qua mã xác thực OTP gửi qua Email (ForgotPassword.tsx)**:
+    - Người dùng nhập Số điện thoại và Email liên kết để yêu cầu khôi phục mật khẩu.
+    - Backend kiểm tra tài khoản, tự động tạo mã OTP 6 chữ số và lưu trữ vào MongoDB (collection `otp_codes`, tự động hết hạn sau 5 phút qua TTL Index).
+    - Hệ thống gửi email chứa mã OTP trực tiếp tới người dùng thông qua dịch vụ Mailtrap SMTP (kết nối thư viện Nodemailer).
+    - Người dùng xác thực mã OTP thành công sẽ thiết lập mật khẩu mới và cập nhật trực tiếp vào cơ sở dữ liệu MongoDB.
 
 ### 🟡 Các chức năng đang dùng dữ liệu giả lập (Mock Data) / Chưa kết nối Backend:
 
-1. **Khôi phục mật khẩu qua OTP (ForgotPassword.tsx)**:
-   - Giao diện gửi mã OTP và đổi mật khẩu hoạt động giả lập hoàn toàn ở phía client thông qua hàm `setTimeout`.
-   - Chưa kết nối SMS Gateway gửi tin nhắn thực tế đến điện thoại và chưa gọi API Backend (mã OTP mặc định là `123456`).
-2. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
+1. **Nạp tiền ví bằng cổng thanh toán truyền thống (fiat)**:
    - Backend có API `depositFiat` (tạo giao dịch giả lập loại VietQR) nhưng frontend chưa mở rộng giao diện nạp tiền VietQR. Hiện tại frontend hỗ trợ cổng nạp MetaMask Web3.
 
 ---
 
 ## 5. Cơ Sở Dữ Liệu Hiện Có (Database Schema & Collections)
 
-Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
+Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
 
 1. **`accounts` (Thông tin tài khoản)**:
    - `user_id` (Number, unique): ID định danh người dùng.
@@ -477,6 +481,11 @@ Cơ sở dữ liệu gồm 12 collection chính trong MongoDB:
     - `subscriptionId` (ObjectId, ref: `UserSubscription`): ID lượt đăng ký gói tương ứng.
     - `isDeleted` (Boolean, default `false`): Đánh dấu xóa mềm.
     - `createdAt` (Date): Thời điểm tạo thông báo.
+13. **`otp_codes` (Mã xác thực OTP khôi phục mật khẩu)**:
+    - `phone_number` (String, required): Số điện thoại thuê bao yêu cầu khôi phục mật khẩu.
+    - `email` (String, required): Địa chỉ email liên kết nhận mã OTP.
+    - `code` (String, required): Mã xác thực OTP 6 chữ số.
+    - `created_at` (Date, default `Date.now`, index expires 300s): Thời điểm sinh mã OTP, tự động hết hạn và xóa bản ghi sau 5 phút qua TTL Index MongoDB.
 
 ---
 
