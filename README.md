@@ -6,19 +6,15 @@
 WebViettel/
 ├── client/
 │   ├── public/
-│   │   ├── favicon.svg
-│   │   └── icons.svg
+│   │   └── favicon.svg
 │   ├── src/
-│   │   ├── assets/
-│   │   │   ├── hero.png
-│   │   │   ├── react.svg (unused)
-│   │   │   └── vite.svg (unused)
 │   │   ├── components/
 │   │   │   ├── AdvancedFilter.tsx
 │   │   │   ├── Breadcrumb.tsx
 │   │   │   ├── Chatbot.tsx
 │   │   │   ├── CompareAI.tsx
 │   │   │   ├── CompareDrawer.tsx
+│   │   │   ├── ContactHistoryTab.tsx
 │   │   │   ├── DevTimeWidget.tsx
 │   │   │   ├── EmptyState.tsx
 │   │   │   ├── Footer.tsx
@@ -75,6 +71,7 @@ WebViettel/
 │   │   │   └── web3.ts
 │   │   ├── utils/
 │   │   │   ├── filterHelper.ts
+│   │   │   ├── guestContactTracker.ts
 │   │   │   ├── permission.ts
 │   │   │   └── similarity.ts
 │   │   ├── App.css
@@ -155,7 +152,6 @@ WebViettel/
 │   │   │   │   └── scoring_config.json
 │   │   │   ├── authService.js
 │   │   │   ├── chatbotService.js
-│   │   │   ├── contactService.js
 │   │   │   ├── notificationService.js
 │   │   │   ├── subscriptionService.js
 │   │   │   ├── surveyService.js
@@ -239,9 +235,11 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
     - *📜 LỊCH SỬ GIAO DỊCH GÓI CƯỚC*: Bảng lịch sử các lượt đăng ký cùng nút "Xóa tất cả lịch sử đã hủy/hết hạn" (Xóa mềm). **Bảng lịch sử được cấu hình khung chứa cuộn giới hạn chiều cao tối đa `485px` (tương đương 10 dòng bản ghi đầu), hỗ trợ thanh cuộn dọc tùy chỉnh siêu mảnh (`custom-scrollbar`) và cố định tiêu đề bảng (`sticky top-0 z-10 bg-gray-50`) có nền xám để tránh lộ chữ khi trượt.**
   - **Lịch sử giao dịch**: Bảng tổng hợp siêu gọn gàng 5 cột (`Thời gian`, `Loại giao dịch`, `Mô tả`, `Số tiền`, `Trạng thái`), chống rớt dòng (`whitespace-nowrap`). Hỗ trợ bộ lọc chip (*Tất cả*, *Nạp tiền (+)*, *Trừ tiền (-)*, *Đã hủy*). Click trực tiếp vào dòng mở Modal xem đầy đủ chi tiết giao dịch kèm nút **"Hủy lệnh nạp này"** cho giao dịch đang xử lý (`PENDING`). Bổ sung nút "Xóa tất cả lịch sử giao dịch" (Xóa mềm).
   - **Đổi mật khẩu**: Thay đổi mật khẩu tài khoản trực tiếp (xác thực mật khẩu cũ).
-- **Trang Liên hệ hỗ trợ (Contact.tsx)**: Giao diện Layout 2 cột truyền thống cân đối (`grid grid-cols-1 md:grid-cols-2 gap-8`):
-  - *Cột trái*: Form nhập thông tin liên hệ (Họ và tên, Số điện thoại, Dropdown Chủ đề hỗ trợ ["Tư vấn & Đăng ký gói cước", "Sự cố Nạp tiền & Số dư ví", "Quản lý tài khoản thuê bao", "Góp ý & Khiếu nại dịch vụ", "Khác"], Nội dung chi tiết).
-  - *Cột phải*: Thẻ thông tin CSKH Viettel chính thức (Tổng đài `198` / `1800 8098` 24/7 miễn phí, email `cskh@viettel.com.vn`, giờ làm việc 24/7, trụ sở Tòa nhà Viettel Cần Thơ). Loại bỏ hoàn toàn các nút/gợi ý liên quan tới AI.
+- **Trang Liên hệ hỗ trợ (Contact.tsx)**: Giao diện phân làm 2 tab chính ("Yêu cầu mới" và "Lịch sử phản hồi"):
+  - **Tab Yêu cầu mới**: Phân chia thành 2 cột:
+    - *Cột trái*: Chọn chủ đề hỗ trợ (Đăng ký gói cước, Nạp tiền & Số dư, Tài khoản thuê bao, Góp ý & Khiếu nại, Vấn đề khác), tự động hiển thị form điền thông tin (Họ và tên, Số điện thoại, Nội dung chi tiết).
+    - *Cột phải*: Thẻ thông tin CSKH Viettel chính thức (Tổng đài `198` / `1800 8098` 24/7 miễn phí, email `cskh@viettel.com.vn`, giờ làm việc 24/7, trụ sở Tòa nhà Viettel Cần Thơ). Loại bỏ hoàn toàn các nút/gợi ý liên quan tới AI.
+  - **Tab Lịch sử phản hồi**: Tích hợp component `ContactHistoryTab.tsx` quản lý và tra cứu lịch sử tương tác với CSKH Viettel.
 - **Hệ thống xác thực tài khoản (Auth)**:
   - Đăng nhập (Login.tsx)
   - Đăng ký tài khoản (Register.tsx)
@@ -271,6 +269,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
 - `CompareDrawer`: Khay trượt chứa danh sách các gói cước đang chọn so sánh nằm cố định bên dưới màn hình.
 - `SEO`: Thành phần cấu hình thẻ tiêu đề, mô tả và cấu trúc Schema JSON-LD hỗ trợ chuẩn hóa SEO cho từng trang.
 - `Breadcrumb`: Thanh dẫn hướng đường dẫn giúp xác định vị trí trang hiện tại.
+- `ContactHistoryTab`: Thành phần giao diện quản lý và tra cứu lịch sử phản hồi yêu cầu hỗ trợ CSKH Viettel. Hỗ trợ hiển thị thống kê, bộ lọc từ khóa/trạng thái/chủ đề và xóa mềm cho Thành viên đã đăng nhập; đồng thời cung cấp form tra cứu bằng SĐT/Mã yêu cầu cho Khách vãng lai.
 - Các thành phần skeleton (`Skeleton`, `LoadingSkeleton`): Hiển thị trạng thái tải dữ liệu cho các thẻ gói cước và bảng biểu.
 
 ### Trạng thái trực quan (Responsive):
@@ -324,7 +323,7 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
    - **Bật/Tắt gia hạn tự động từ người dùng (Bước 3)**: Gửi thông báo `"Đã bật tự động gia hạn"` hoặc `"Đã tắt tự động gia hạn"` tương ứng kèm mốc ngày hết hạn dự kiến.
    - **Các thông báo nạp tiền/đăng ký khác**: Tự động thông báo khi có giao dịch blockchain thành công/bị hủy, hoặc đăng ký gói thành công/thất bại từ API.
 7. **Cơ chế Xóa Mềm (Soft Delete) Lịch Sử**:
-   - Tất cả các thao tác xóa lịch sử gói cước (`DELETE /api/subscriptions/history`) và xóa lịch sử giao dịch (`DELETE /api/transactions`) đều áp dụng cơ chế Xóa Mềm (Soft Delete): cập nhật `isDeleted: true` và `deletedAt: Date` trong DB MongoDB, tuyệt đối không xóa cứng bản ghi. Các API truy vấn chỉ trả về dữ liệu `{ isDeleted: { $ne: true } }`.
+   - Tất cả các thao tác xóa lịch sử gói cước (`DELETE /api/subscriptions/history`), xóa lịch sử giao dịch (`DELETE /api/transactions`) và xóa lịch sử yêu cầu liên hệ (`DELETE /api/contact/history/:id` hoặc `DELETE /api/contact/history/all`) đều áp dụng cơ chế Xóa Mềm (Soft Delete): cập nhật `isDeleted: true` và `deletedAt: Date` trong DB MongoDB, tuyệt đối không xóa cứng bản ghi. Các API truy vấn chỉ trả về dữ liệu `{ isDeleted: { $ne: true } }`.
 8. **Trình Điều Khiển Thời Gian Hệ Thống Toàn Cục (Global Virtual Time Controller)**:
    - Toàn bộ backend sử dụng mô-đun `server/src/utils/virtualTime.js` (`getVirtualDate()`) cho mọi tính toán mốc thời gian (hết hạn gói, tự động gia hạn, tua thời gian).
    - Widget nổi `DevTimeWidget.tsx` cho phép admin/dev nhảy thời gian (+1 ngày, +7 ngày, +30 ngày, +90 ngày), nhập ngày tùy chọn hoặc reset thời gian. Khi tua thời gian, hệ thống tự động chạy **Tiến trình quét hai giai đoạn (Phase 1: Reminder Sweep và Phase 2: Renewal Execution Sweep)** để đảm bảo tạo thông báo nhắc nhở gia hạn trước (Bước 1), sau đó mới thực hiện gia hạn/hủy gói và tạo thông báo kết quả (Bước 2) theo đúng thứ tự thời gian.
@@ -337,9 +336,10 @@ Hệ thống sử dụng các file cấu hình và các biến môi trường sa
     - Câu hỏi khảo sát hiển thị động theo thuật toán Decision Tree từ backend.
     - Kết quả đề xuất gói cước (tối đa 3) được tính toán và khớp tại Backend thông qua `surveyService`.
     - Lưu trữ lịch sử khảo sát và kết quả vào MongoDB (collection `survey_histories`).
-11. **Trang Liên hệ hỗ trợ (Contact.tsx)**:
+11. **Trang Liên hệ hỗ trợ & Tra cứu phản hồi CSKH (Contact.tsx & ContactHistoryTab.tsx)**:
     - Form nhập thông tin liên hệ (Họ tên, Số điện thoại, Dropdown Chủ đề hỗ trợ, Nội dung) kết nối trực tiếp API Backend `/api/contact`.
     - Tự động điền thông tin họ tên và số điện thoại nếu người dùng đã đăng nhập.
+    - Quản lý và tra cứu lịch sử phản hồi từ CSKH Viettel: Thành viên theo dõi trạng thái xử lý, xem phản hồi chính thức, xem thống kê tổng quan và sử dụng các bộ lọc nâng cao; Khách vãng lai tra cứu nhanh thông qua SĐT và Mã yêu cầu. Hỗ trợ xóa mềm từng bản ghi hoặc toàn bộ lịch sử.
 12. **Bảng điều khiển Quản trị (Admin Panel)**:
     - Dashboard: Báo cáo số liệu tổng quan về tổng người dùng, tổng gói cước, số lượt đăng ký và tổng doanh thu thực tế từ cơ sở dữ liệu.
     - Quản lý gói cước: CRUD gói cước di động trong MongoDB.
@@ -459,7 +459,11 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
    - `phone` (String): Số điện thoại liên hệ.
    - `topic` (String): Chủ đề hỗ trợ yêu cầu.
    - `message` (String): Nội dung yêu cầu liên hệ.
+   - `admin_note` (String): Nội dung phản hồi từ bộ phận CSKH Viettel.
+   - `handled_at` (Date): Thời điểm admin thực hiện phản hồi.
    - `status` (String, enum: `['NEW', 'READ', 'PROCESSING', 'DONE', 'CLOSED']`): Trạng thái xử lý.
+   - `is_deleted` (Boolean, default `false`): Đánh dấu xóa mềm.
+   - `deleted_at` (Date, default `null`): Thời điểm xóa mềm.
    - `created_at`, `updated_at` (Date): Timestamps.
 9. **`package_features` (Đặc trưng gói cước cho gợi ý khảo sát)**:
    - `package_id` (Number, unique, index): ID gói cước tương ứng.
@@ -491,7 +495,4 @@ Cơ sở dữ liệu gồm 13 collection chính trong MongoDB:
 
 ## 6. Phân Tích Mã Nguồn Dư Thừa (Unused / Dead Files)
 
-Qua quá trình rà soát và kiểm toán toàn bộ mã nguồn của dự án, các tệp sau đây hiện tồn tại trong thư mục dự án nhưng **hoàn toàn không tham gia vào bất kỳ tác vụ hay luồng xử lý thực tế nào**:
-
-1. **`client/src/assets/react.svg` và `client/src/assets/vite.svg`**:
-   - *Lý do*: Các file hình ảnh icon mặc định được tạo tự động bởi công cụ Vite khi khởi tạo dự án React. Chúng không được render hoặc sử dụng trong bất kỳ component nào của ứng dụng WebViettel.
+Qua quá trình rà soát và kiểm toán toàn bộ mã nguồn của dự án, hiện tại hệ thống không còn duy trì các tệp tài nguyên SVG mặc định không sử dụng trong thư mục `client/src/assets/`. Toàn bộ cấu trúc cây thư mục đã được tinh gọn và đồng bộ chính xác với mã nguồn thực tế đang hoạt động.
