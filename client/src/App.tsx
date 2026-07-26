@@ -5,6 +5,7 @@ import { useAuthStore } from './store';
 import ClientLayout from './layouts/ClientLayout';
 import AuthLayout from './layouts/AuthLayout';
 import AdminLayout from './layouts/AdminLayout';
+import ScrollToTop from './components/ScrollToTop';
 
 // Lazy loading customer pages
 const Home = lazy(() => import('./pages/Home'));
@@ -52,6 +53,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Customer Routing */}
